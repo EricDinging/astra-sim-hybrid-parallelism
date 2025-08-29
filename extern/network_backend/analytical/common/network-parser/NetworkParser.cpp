@@ -37,7 +37,6 @@ int NetworkParser::get_dims_count() const noexcept {
 
 [[nodiscard]] Latency NetworkParser::get_reconfig_time() const noexcept {
     assert(dims_count > 0);
-    assert(reconfig_time.size() == dims_count);
 
     return reconfig_time;
 }

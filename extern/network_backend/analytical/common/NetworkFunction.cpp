@@ -9,7 +9,7 @@ LICENSE file in the root directory of this source tree.
 using namespace NetworkAnalytical;
 
 Bandwidth NetworkAnalytical::bw_GBps_to_Bpns(const Bandwidth bw_GBps) noexcept {
-    assert(bw_GBps > 0);
+    assert(bw_GBps >= 0);
 
     // 1 GB is 2^30 B
     // 1 s is 10^9 ns

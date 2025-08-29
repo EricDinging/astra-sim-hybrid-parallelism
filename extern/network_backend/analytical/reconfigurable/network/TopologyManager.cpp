@@ -104,6 +104,9 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
         event_queue->proceed();
     }
 
+    printf("Devuces count: %d, NPUs count: %d\n", devices_count, npus_count);
+    printf("bandwidths size: %zu, latencies size: %zu\n", bandwidths.size(), latencies.size());
+
     assert(bandwidths.size() == devices_count);
     assert(latencies.size() == devices_count);
     assert(!reconfiguring);

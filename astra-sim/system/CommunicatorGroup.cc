@@ -29,7 +29,7 @@ CommunicatorGroup::~CommunicatorGroup() {
 }
 
 void CommunicatorGroup::set_id(int id) {
-    assert(id > 0);
+    assert(id > -1);
     this->id = id;
     this->num_streams = id * 1000000;
 }
