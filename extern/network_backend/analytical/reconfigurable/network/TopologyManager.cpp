@@ -85,26 +85,25 @@ void TopologyManager::increment_callback() noexcept {
     // All links have been drained, increment the topology iteration
     std::cout << "Drained Network, reconfiguring to TOPO #" << topology_iteration << std::endl;
 
+
+
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
         std::vector<Route> routes;
         // Create a route for each device
-        for (int j = 0; j < devices_count; ++j) {
-            routes.push_back(route(i, j));
-        }
-        device->reconfigure(this->bandwidths[i], routes, this->latencies[i], reconfig_time);
+        device->reconfigure(this->bandwidths[i], precomputed_routes[i], this->latencies[i], reconfig_time);
     }
 }
 
 void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
                                std::vector<std::vector<Latency>> latencies, Latency reconfig_time) noexcept {
-    // Validate the new matrices
+
 
     while (is_reconfiguring() && !event_queue->finished()) {
         event_queue->proceed();
     }
 
-    printf("Devuces count: %d, NPUs count: %d\n", devices_count, npus_count);
+    printf("Devices count: %d, NPUs count: %d\n", devices_count, npus_count);
     printf("bandwidths size: %zu, latencies size: %zu\n", bandwidths.size(), latencies.size());
 
     assert(bandwidths.size() == devices_count);
@@ -123,6 +122,8 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     this->latencies = std::move(latencies);
     this->reconfig_time = reconfig_time;
 
+    precomputeRoutes();
+
     printf("Reconfiguring topology with %d devices and %d NPUs.\n", devices_count, npus_count);
 
     reconfiguring = true;
@@ -130,9 +131,70 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     drain_network();
 }
 
+void TopologyManager::precomputeRoutes() noexcept {
+
+    // Adjacency list
+    std::vector<std::vector<int>> adj(devices_count);
+    for (int i = 0; i < devices_count; ++i) {
+        for (int j = 0; j < devices_count; ++j) {
+            if (i != j && bandwidths[i][j] > 0) adj[i].push_back(j);
+        }
+    }
+
+    for (auto& v : adj) {
+        sort(v.begin(), v.end());
+        v.erase(unique(v.begin(), v.end()), v.end());
+    }
+
+
+    precomputed_routes = std::vector<std::vector<Route>>(devices_count, std::vector<Route>(devices_count));
+
+    // BFS
+    const int INF = 1e9;
+    std::vector<int> dist(devices_count), parent(devices_count);
+    std::queue<int> q;
+
+    for (int s = 0; s < devices_count; ++s) {
+        // BFS init
+        fill(dist.begin(), dist.end(), INF);
+        fill(parent.begin(), parent.end(), -1);
+        while (!q.empty()) q.pop();
+        dist[s] = 0;
+        q.push(s);
+
+        // BFS
+        while (!q.empty()) {
+            int u = q.front(); q.pop();
+            for (int v : adj[u]) {
+                if (dist[v] == INF) {
+                    dist[v] = dist[u] + 1;
+                    parent[v] = u;
+                    q.push(v);
+                }
+            }
+        }
+
+        // Reconstruct a path s -> t for all t
+        for (int t = 0; t < devices_count; ++t) {
+            if (s == t) {
+                precomputed_routes[s][t] = {topology->get_device(s)};
+            } else if (parent[t] == -1) {
+                precomputed_routes[s][t] = {topology->get_device(s), topology->get_device(t)}; // Unreachable, stub route
+            } else {
+                Route path;
+                for (int cur = t; cur != -1; cur = parent[cur]) path.push_back(topology->get_device(cur));
+                reverse(path.begin(), path.end());
+                precomputed_routes[s][t] = move(path);
+            }
+        }
+    }
+}
+
 void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
     assert(chunk != nullptr);
     assert(chunk->current_device() != nullptr);
+
+    printf("Sending chunk from %d to %d\n", chunk->current_device()->get_id(), chunk->next_device()->get_id());
 
     // chunk->update_route(route(chunk->current_device()->get_id(), chunk->next_device()->get_id()), topology_iteration);
 

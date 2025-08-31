@@ -67,22 +67,26 @@ int main() {
     const auto event_queue = std::make_shared<EventQueue>();
     Topology::set_event_queue(event_queue);
 
-    // Parse network config and create topology
-    const auto network_parser = NetworkParser("../input/Spine.yml");
-    const auto topology = construct_topology(network_parser);
+    auto topology = std::make_shared<Topology>(3, 3);
     const auto npus_count = topology->get_npus_count();
     const auto devices_count = topology->get_devices_count();
 
-    TopologyManager tm(npus_count, devices_count);
-
-    // event_queue->schedule_event(10000, reschedule_callback, static_cast<void*>(topology.get()));
+    TopologyManager tm(npus_count, devices_count, event_queue.get());
 
     // message settings
     const auto chunk_size = 1'048'576;  // 1 MB
     
     tm.reconfigure(
-        {{0, Bandwidth(200)}, {Bandwidth(200), 0}},  // bandwidths
-        {{Latency(10), Latency(20)}, {Latency(20), Latency(10)}},            // latencies
+        {
+            {0, 100, 0},
+            {100, 0, 100},
+            {0, 100, 0},
+        },  // bandwidths
+        {
+            {10, 10, 10},
+            {10, 10, 10},
+            {10, 10, 10}
+        },            // latencies
         Latency(500)                                                         // reconfiguration time
     );
 
@@ -104,29 +108,37 @@ int main() {
     }
 
 
-    tm.reconfigure(
-        {{0, Bandwidth(20)}, {Bandwidth(20), 0}},  // bandwidths
-        {{Latency(10), Latency(20)}, {Latency(20), Latency(10)}},            // latencies
-        Latency(500)                                                         // reconfiguration time
-    );
+    // tm.reconfigure(
+    //     {
+    //         {0, 100, 0},
+    //         {100, 0, 100},
+    //         {0, 100, 0},
+    //     },  // bandwidths
+    //     {
+    //         {10, 10, 10},
+    //         {10, 10, 10},
+    //         {10, 10, 10}
+    //     },            // latencies
+    //     Latency(500)                                                         // reconfiguration time
+    // );
 
-    // event_queue->schedule_event(1000, reschedule_callback, static_cast<void*>(&tm));
+    // // event_queue->schedule_event(1000, reschedule_callback, static_cast<void*>(&tm));
 
-    for (int i = 0; i < npus_count; i++) {
-        for (int j = 0; j < npus_count; j++) {
-            if (i == j) {
-                continue;
-            }
+    // for (int i = 0; i < npus_count; i++) {
+    //     for (int j = 0; j < npus_count; j++) {
+    //         if (i == j) {
+    //             continue;
+    //         }
 
-            // create a chunk
-            auto route = tm.route(i, j);
-            auto* event_queue_ptr = static_cast<void*>(event_queue.get());
-            auto chunk = std::make_unique<Chunk>(chunk_size, route, chunk_arrived_callback, event_queue_ptr,-1);
+    //         // create a chunk
+    //         auto route = tm.route(i, j);
+    //         auto* event_queue_ptr = static_cast<void*>(event_queue.get());
+    //         auto chunk = std::make_unique<Chunk>(chunk_size, route, chunk_arrived_callback, event_queue_ptr,-1);
 
-            // send a chunk
-            tm.send(std::move(chunk));
-        }
-    }
+    //         // send a chunk
+    //         tm.send(std::move(chunk));
+    //     }
+    // }
 
     // Run simulation
     while (!event_queue->finished()) {

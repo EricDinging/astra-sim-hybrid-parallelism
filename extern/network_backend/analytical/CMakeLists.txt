@@ -135,7 +135,7 @@ if (BUILDTARGET STREQUAL "all" OR BUILDTARGET STREQUAL "reconfigurable")
         )
     else ()
         add_executable(Analytical_Reconfigurable ${srcs_reconfigurable} ${srcs_common})
-        target_sources(Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reconfigurable/AllReduce.cpp)
+        target_sources(Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reconfigurable/example.cpp)
     
         # Properties
         set_target_properties(Analytical_Reconfigurable

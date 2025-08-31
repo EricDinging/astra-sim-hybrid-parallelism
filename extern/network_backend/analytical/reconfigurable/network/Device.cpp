@@ -96,6 +96,14 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     // assert the chunk hasn't arrived its final destination yet
     assert(!chunk->arrived_dest());
 
+    // Print out the route
+    for (const auto& [id, route] : routes) {
+        std::cout << "Route to device " << id << ": ";
+        for (const auto& hop : route) {
+            std::cout << hop->get_id() << " ";
+        }
+        std::cout << std::endl;
+    }
     chunk->update_route(routes[chunk->next_device()->get_id()], chunk->get_topology_iteration());
 
     // get next dest

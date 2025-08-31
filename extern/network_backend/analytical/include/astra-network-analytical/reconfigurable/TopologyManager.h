@@ -36,6 +36,10 @@ class TopologyManager {
     void reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
                      std::vector<std::vector<Latency>> latencies, Latency reconfig_time) noexcept;
 
+    void precomputeRoutes() noexcept;
+
+    void precomputeSingleRoute(DeviceId src, DeviceId dst) noexcept;
+
     void drain_network() noexcept;
 
     void increment_callback() noexcept;
@@ -105,6 +109,8 @@ class TopologyManager {
 
     /// latency matrix
     std::vector<std::vector<Latency>> latencies;
+
+    std::vector<std::vector<Route>> precomputed_routes;
 };
 
 }  // namespace NetworkAnalyticalReconfigurable

@@ -593,7 +593,6 @@ CommunicatorGroup* Workload::extract_comm_group(
         // No communicator group is specified for this communication ET node.
         return nullptr;
     }
-
     int comm_group_id = std::stoi(comm_group_name);
     if (comm_groups.find(comm_group_id) == comm_groups.end()) {
         LoggerFactory::get_logger("workload")
