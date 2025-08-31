@@ -38,6 +38,8 @@ class TopologyManager {
 
     void reconfigure(int topo_id) noexcept;
 
+    void set_reconfig_latency(Latency latency) noexcept;
+
     void precomputeRoutes() noexcept;
 
     void precomputeSingleRoute(DeviceId src, DeviceId dst) noexcept;

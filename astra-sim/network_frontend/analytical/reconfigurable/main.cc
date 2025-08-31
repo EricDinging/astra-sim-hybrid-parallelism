@@ -134,6 +134,8 @@ int main(int argc, char* argv[]) {
     // // Initialize the topology to the first topology in the map
     tm->reconfigure(bw_matrix_map.begin()->second, lt_matrix, 0);
 
+    tm->set_reconfig_latency(reconfig_latency);
+
     // Set up Network API
     ReconfigurableNetworkApi::set_event_queue(event_queue);
     ReconfigurableNetworkApi::set_topology(tm);

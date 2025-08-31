@@ -84,6 +84,7 @@ void NetworkParser::parse_network_config_yml(const YAML::Node& network_config) n
     npus_count_per_dim = parse_vector<int>(network_config["npus_count"]);
     bandwidth_per_dim = parse_vector<Bandwidth>(network_config["bandwidth"]);
     latency_per_dim = parse_vector<Latency>(network_config["latency"]);
+    reconfig_time = parse_vector<Latency>(network_config["reconfig_time"])[0];
 
     // check the validity of the parsed network config
     check_validity();

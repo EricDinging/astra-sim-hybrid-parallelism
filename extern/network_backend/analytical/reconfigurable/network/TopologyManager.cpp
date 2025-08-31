@@ -124,9 +124,11 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     this->latencies = std::move(latencies);
     this->reconfig_time = reconfig_time;
 
+
+
     precomputeRoutes();
 
-    printf("Reconfiguring topology with %d devices and %d NPUs.\n", devices_count, npus_count);
+    printf("Reconfiguring topology with %d devices and %d NPUs and reconfig time %f.\n", devices_count, npus_count, reconfig_time);
 
     reconfiguring = true;
     topology_iteration++;
@@ -140,6 +142,10 @@ void TopologyManager::reconfigure(int topo_id) noexcept{
     } else {
         printf("Topology ID %d not found in circuit schedules.\n", topo_id);
     }
+}
+
+void TopologyManager::set_reconfig_latency(Latency latency) noexcept {
+    this->reconfig_time = latency;
 }
 
 void TopologyManager::precomputeRoutes() noexcept {
