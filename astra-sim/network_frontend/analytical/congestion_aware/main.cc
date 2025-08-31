@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
 
     // Instantiate event queue
     const auto event_queue = std::make_shared<EventQueue>();
-    Topology::set_event_queue(event_queue);
+    NetworkAnalyticalCongestionAware::Topology::set_event_queue(event_queue);
 
     // Generate topology
     const auto network_parser = NetworkParser(network_configuration);

@@ -14,14 +14,20 @@ PROJECT_DIR="${SCRIPT_DIR:?}/../.."
 EXAMPLE_DIR="${PROJECT_DIR:?}/examples/test-1-comm-group"
 
 # paths
-ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Unaware"
+#ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Aware"
+ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Reconfigurable"
+
 WORKLOAD="${EXAMPLE_DIR:?}/chakra_trace"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"
 REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
 COMM_GROUP="${EXAMPLE_DIR:?}/comm_group.json"
 
+<<<<<<< HEAD
 # start
+=======
+# # start
+>>>>>>> barry-reconfig
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
 echo ""
 

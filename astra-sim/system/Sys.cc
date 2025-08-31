@@ -1568,6 +1568,13 @@ int Sys::rendezvous_sim_recv(Tick delay,
     return 1;
 }
 
+void Sys::sim_reconfig(int topo_id) {
+    // Call through virtual interface (no-op for backends that don't implement)
+    if (comm_NI) {
+        comm_NI->sim_reconfig(topo_id);
+    }
+}
+
 int Sys::sim_send(Tick delay,
                   void* buffer,
                   uint64_t count,

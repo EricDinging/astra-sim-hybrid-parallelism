@@ -72,6 +72,11 @@ endif()
 
 # Include Directories
 target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Include analytical network frontend public headers so system code can include
+#+ them transitively (e.g., ReconfigurableNetworkApi includes common/CommonNetworkApi.hh)
+target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/astra-sim/network_frontend/analytical/include)
+target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/network_backend/analytical/include)
+target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/network_backend/analytical/include/astra-network-analytical)
 target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/)
 target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/schema/protobuf)
 target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/src/third_party/utils)
