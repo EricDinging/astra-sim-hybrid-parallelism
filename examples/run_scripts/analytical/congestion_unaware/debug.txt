@@ -1,0 +1,249 @@
+[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend...
+
+-- {fmt} version: 11.0.2
+-- Build type: Release
+-- Build spdlog: 1.14.1
+-- Build type: Release
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /app/astra-sim/build/astra_analytical/build
+Consolidate compiler generated dependencies of target fmt
+Consolidate compiler generated dependencies of target spdlog
+[  2%] Built target fmt
+[  6%] Built target spdlog
+Consolidate compiler generated dependencies of target yaml-cpp
+[ 25%] Built target yaml-cpp
+Consolidate compiler generated dependencies of target yaml-cpp-sandbox
+Consolidate compiler generated dependencies of target yaml-cpp-read
+Consolidate compiler generated dependencies of target Analytical_Congestion_Aware
+Consolidate compiler generated dependencies of target yaml-cpp-parse
+Consolidate compiler generated dependencies of target Analytical_Congestion_Unaware
+[ 27%] Built target yaml-cpp-sandbox
+[ 28%] Built target yaml-cpp-read
+Consolidate compiler generated dependencies of target Analytical_Reconfigurable
+[ 36%] Built target Analytical_Congestion_Aware
+[ 37%] Built target yaml-cpp-parse
+[ 45%] Built target Analytical_Congestion_Unaware
+[ 52%] Built target Analytical_Reconfigurable
+Consolidate compiler generated dependencies of target AstraSim
+[ 53%] Building CXX object AstraSim/CMakeFiles/AstraSim.dir/extern/graph_frontend/chakra/src/feeder_v3/et_feeder.cpp.o
+[ 54%] Linking CXX static library ../lib/libAstraSim.a
+[ 84%] Built target AstraSim
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Unaware
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Aware
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Reconfigurable
+[ 85%] Linking CXX executable ../bin/AstraSim_Analytical_Congestion_Unaware
+[ 85%] Linking CXX executable ../bin/AstraSim_Analytical_Congestion_Aware
+[ 86%] Linking CXX executable ../bin/AstraSim_Analytical_Reconfigurable
+[ 91%] Built target AstraSim_Analytical_Congestion_Unaware
+[ 95%] Built target AstraSim_Analytical_Reconfigurable
+[100%] Built target AstraSim_Analytical_Congestion_Aware
+
+[ASTRA-sim] Compilation finished.
+[ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend...
+
+Message: [2025-08-23 18:36:51.818] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
+[2025-08-23 18:36:51.818] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
+[2025-08-23 18:36:51.818] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
+[2025-08-23 18:36:51.818] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
+version: "0.0.4"
+
+Message: name: "reduce_scatter_4npus_1MB"
+type: COMM_COLL_NODE
+attr {
+  name: "is_cpu_op"
+  bool_val: false
+}
+attr {
+  name: "comm_type"
+  int64_val: 7
+}
+attr {
+  name: "comm_size"
+  int64_val: 1048576
+}
+
+Adding parent for node 0: 
+Adding parent for node 0: 
+Adding parent for node 0: 
+Adding node 0
+Message: version: "0.0.4"
+
+Message: id: 1
+name: "reduce_scatter_4npus_1MB"
+type: COMM_COLL_NODE
+attr {
+  name: "is_cpu_op"
+  bool_val: false
+}
+attr {
+  name: "comm_type"
+  int64_val: 7
+}
+attr {
+  name: "comm_size"
+  int64_val: 1048576
+}
+
+Adding parent for node 1: 
+Adding parent for node 1: 
+Adding parent for node 1: 
+Adding node 1
+Message: version: "0.0.4"
+
+Message: id: 2
+name: "reduce_scatter_4npus_1MB"
+type: COMM_COLL_NODE
+attr {
+  name: "is_cpu_op"
+  bool_val: false
+}
+attr {
+  name: "comm_type"
+  int64_val: 7
+}
+attr {
+  name: "comm_size"
+  int64_val: 1048576
+}
+
+Adding parent for node 2: 
+Adding parent for node 2: 
+Adding parent for node 2: 
+Adding node 2
+Message: version: "0.0.4"
+
+Message: id: 3
+name: "reduce_scatter_4npus_1MB"
+type: COMM_COLL_NODE
+attr {
+  name: "is_cpu_op"
+  bool_val: false
+}
+attr {
+  name: "comm_type"
+  int64_val: 7
+}
+attr {
+  name: "comm_size"
+  int64_val: 1048576
+}
+
+Adding parent for node 3: 
+Adding parent for node 3: 
+Adding parent for node 3: 
+Adding node 3
+Message: name: "reduce_scatter_4npus_1MB"
+type: COMM_COLL_NODE
+attr {
+  name: "is_cpu_op"
+  bool_val: false
+}
+attr {
+  name: "comm_type"
+  int64_val: 7
+}
+attr {
+  name: "comm_size"
+  int64_val: 1048576
+}
+
+Issue node, sys->id=0, tick=0, node->id=0, node->name=reduce_scatter_4npus_1MB, node->type=7
+Message: id: 1
+name: "reduce_scatter_4npus_1MB"
+type: COMM_COLL_NODE
+attr {
+  name: "is_cpu_op"
+  bool_val: false
+}
+attr {
+  name: "comm_type"
+  int64_val: 7
+}
+attr {
+  name: "comm_size"
+  int64_val: 1048576
+}
+
+Issue node, sys->id=1, tick=0, node->id=1, node->name=reduce_scatter_4npus_1MB, node->type=7
+Message: id: 2
+name: "reduce_scatter_4npus_1MB"
+type: COMM_COLL_NODE
+attr {
+  name: "is_cpu_op"
+  bool_val: false
+}
+attr {
+  name: "comm_type"
+  int64_val: 7
+}
+attr {
+  name: "comm_size"
+  int64_val: 1048576
+}
+
+Issue node, sys->id=2, tick=0, node->id=2, node->name=reduce_scatter_4npus_1MB, node->type=7
+Message: id: 3
+name: "reduce_scatter_4npus_1MB"
+type: COMM_COLL_NODE
+attr {
+  name: "is_cpu_op"
+  bool_val: false
+}
+attr {
+  name: "comm_type"
+  int64_val: 7
+}
+attr {
+  name: "comm_size"
+  int64_val: 1048576
+}
+
+Issue node, sys->id=3, tick=0, node->id=3, node->name=reduce_scatter_4npus_1MB, node->type=7
+Collective communication finished, sys->id=0, tick=22240, node->id=0, node->name=reduce_scatter_4npus_1MB, node->type=7
+[2025-08-23 18:36:51.819] [workload] [info] sys[0] finished, 22240 cycles, exposed communication 22240 cycles.
+Collective communication finished, sys->id=1, tick=22240, node->id=1, node->name=reduce_scatter_4npus_1MB, node->type=7
+Collective communication finished, sys->id=2, tick=22240, node->id=[2025-08-23 18:36:51.819] [statistics] [info] sys[0]. Post statistics processing start.
+2[2025-08-23 18:36:51.819] [statistics] [info] sys[0]. Post statistics processing end.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[0], Wall time: 22240
+[2025-08-23 18:36:51.819] [statistics] [info] sys[0], Comm time: 22240
+, node->name=[2025-08-23 18:36:51.819] [statistics] [info] sys[0], Total compute-communication overlap: 0
+[2025-08-23 18:36:51.819] [statistics] [info] sys[0], Compute bound percentage: 0.000%
+reduce_scatter_4npus_1MB, node->type=7
+[2025-08-23 18:36:51.819] [statistics] [info] sys[0], Average compute utilization: 0.000%
+[2025-08-23 18:36:51.819] [statistics] [info] sys[0], Average memory utilization: 0.000%
+Collective communication finished, [2025-08-23 18:36:51.819] [statistics] [info] sys[0], Average operation intensity: 0.000
+[2025-08-23 18:36:51.819] [workload] [info] sys[1] finished, 22240 cycles, exposed communication 22240 cycles.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[1]. Post statistics processing start.
+sys->id=[2025-08-23 18:36:51.819] [statistics] [info] sys[1]. Post statistics processing end.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[1], Wall time: 22240
+[2025-08-23 18:36:51.819] [statistics] [info] sys[1], Comm time: 22240
+3, tick=22240, node->id=3, node->name=[2025-08-23 18:36:51.819] [statistics] [info] sys[1], Total compute-communication overlap: 0
+reduce_scatter_4npus_1MB[2025-08-23 18:36:51.819] [statistics] [info] sys[1], Compute bound percentage: 0.000%
+, node->type=[2025-08-23 18:36:51.819] [statistics] [info] sys[1], Average compute utilization: 0.000%
+7[2025-08-23 18:36:51.819] [statistics] [info] sys[1], Average memory utilization: 0.000%
+
+[2025-08-23 18:36:51.819] [statistics] [info] sys[1], Average operation intensity: 0.000
+[2025-08-23 18:36:51.819] [workload] [info] sys[2] finished, 22240 cycles, exposed communication 22240 cycles.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2]. Post statistics processing start.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2]. Post statistics processing end.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2], Wall time: 22240
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2], Comm time: 22240
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2], Total compute-communication overlap: 0
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2], Compute bound percentage: 0.000%
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2], Average compute utilization: 0.000%
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2], Average memory utilization: 0.000%
+[2025-08-23 18:36:51.819] [statistics] [info] sys[2], Average operation intensity: 0.000
+[2025-08-23 18:36:51.819] [workload] [info] sys[3] finished, 22240 cycles, exposed communication 22240 cycles.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3]. Post statistics processing start.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3]. Post statistics processing end.
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3], Wall time: 22240
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3], Comm time: 22240
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3], Total compute-communication overlap: 0
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3], Compute bound percentage: 0.000%
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3], Average compute utilization: 0.000%
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3], Average memory utilization: 0.000%
+[2025-08-23 18:36:51.819] [statistics] [info] sys[3], Average operation intensity: 0.000
+[2025-08-23 18:36:51.819] [system] [warning] Exiting
+
+[ASTRA-sim] Finished the execution.

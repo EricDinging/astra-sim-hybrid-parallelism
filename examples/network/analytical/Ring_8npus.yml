@@ -1,4 +1,5 @@
-topology: [ Ring ]
+topology: [ Spine ]
 npus_count: [ 8 ]
-bandwidth: [ 50.0 ]  # GB/s
+bandwidth: [ 1.0 ]  # GB/s
 latency: [ 500.0 ]  # ns
+reconfig_time: [ 1000.0 ]  # ns

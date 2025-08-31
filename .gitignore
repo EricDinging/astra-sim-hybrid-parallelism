@@ -19,7 +19,9 @@ build/astra_htsim/build/
 # Generated Chakra ET files
 *.eg
 *.et
-!examples/**/*.et
+# !examples/**/*.et
+*trace*.json
+*et*.json
 
 # vscode
 .vscode
@@ -29,3 +31,5 @@ build/astra_htsim/build/
 
 # runs
 runs
+
+

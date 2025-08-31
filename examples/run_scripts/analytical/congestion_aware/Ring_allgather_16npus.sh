@@ -14,11 +14,11 @@ PROJECT_DIR="${SCRIPT_DIR:?}/../../../.."
 EXAMPLE_DIR="${PROJECT_DIR:?}/examples"
 
 # paths
-ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Aware"
-WORKLOAD="${EXAMPLE_DIR:?}/workload/microbenchmarks/all_gather/16npus_1MB/all_gather"
-SYSTEM="${EXAMPLE_DIR:?}/system/native_collectives/Ring_4chunks.json"
-NETWORK="${EXAMPLE_DIR:?}/network/analytical/Ring_16npus.yml"
-REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory/analytical/no_memory_expansion.json"
+ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable"
+WORKLOAD="${EXAMPLE_DIR:?}/workload/AllReduce_1MB"
+SYSTEM="${EXAMPLE_DIR:?}/system.json"
+NETWORK="${EXAMPLE_DIR:?}/network.yml"
+REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
 
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
@@ -32,12 +32,20 @@ echo "[ASTRA-sim] Compilation finished."
 echo "[ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend..."
 echo ""
 
+echo "${ASTRA_SIM:?}" \
+    --workload-configuration="${WORKLOAD}" \
+    --system-configuration="${SYSTEM:?}" \
+    --remote-memory-configuration="${REMOTE_MEMORY:?}" \
+    --network-configuration="${NETWORK:?}" \
+    --circuit-schedules="${EXAMPLE_DIR:?}/circuit_schedules.txt" \
+
 # run ASTRA-sim
 "${ASTRA_SIM:?}" \
     --workload-configuration="${WORKLOAD}" \
     --system-configuration="${SYSTEM:?}" \
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
-    --network-configuration="${NETWORK:?}"
+    --network-configuration="${NETWORK:?}" \
+    --circuit-schedules="${EXAMPLE_DIR:?}/circuit_schedules.txt" \
 
 # finalize
 echo ""
