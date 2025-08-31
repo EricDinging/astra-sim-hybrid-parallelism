@@ -7,11 +7,13 @@
 using namespace NetworkAnalytical;
 using namespace NetworkAnalyticalReconfigurable;
 
-TopologyManager::TopologyManager(int npus_count, int devices_count, EventQueue* event_queue) noexcept {
+TopologyManager::TopologyManager(int npus_count, int devices_count, EventQueue* event_queue, std::map<int, std::vector<std::vector<Bandwidth>>> circuit_schedules) noexcept {
     // Initialize the number of NPUs
     this->npus_count = npus_count;
     this->devices_count = devices_count;
     this->event_queue = event_queue;
+    this->circuit_schedules = std::move(circuit_schedules);
+    printf("Circuit schedules size: %zu\n", this->circuit_schedules.size());
 
     // Validate the counts
     assert(npus_count > 0);
@@ -83,7 +85,7 @@ void TopologyManager::increment_callback() noexcept {
     reconfiguring = false;
 
     // All links have been drained, increment the topology iteration
-    std::cout << "Drained Network, reconfiguring to TOPO #" << topology_iteration << std::endl;
+    std::cout << "Drained Network, reconfiguring to TOPO ITERATION #" << topology_iteration << std::endl;
 
 
 
@@ -129,6 +131,15 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     reconfiguring = true;
     topology_iteration++;
     drain_network();
+}
+
+void TopologyManager::reconfigure(int topo_id) noexcept{
+    auto it = circuit_schedules.find(topo_id);
+    if (it != circuit_schedules.end()) {
+        reconfigure(it->second, latencies, reconfig_time);
+    } else {
+        printf("Topology ID %d not found in circuit schedules.\n", topo_id);
+    }
 }
 
 void TopologyManager::precomputeRoutes() noexcept {

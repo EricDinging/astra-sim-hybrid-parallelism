@@ -65,6 +65,12 @@ class AstraNetworkAPI {
         return -1;
     };
 
+    // Optional: reconfigure network topology (default no-op; overridden by
+    // backends that support reconfiguration).
+    virtual void sim_reconfig(int /*topo_id*/) {
+        return;
+    }
+
     // Notifies that the workload for this rank has finished. 
     // Note that we have one network handler per rank. 
     // Therefore, when implementing this function, the network handler must 

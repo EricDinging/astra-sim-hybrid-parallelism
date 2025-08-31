@@ -26,7 +26,7 @@ class TopologyManager {
     /**
      * Constructor.
      */
-    TopologyManager(int npus_count, int devices_count, EventQueue* event_queue) noexcept;
+    TopologyManager(int npus_count, int devices_count, EventQueue* event_queue, std::map<int, std::vector<std::vector<Bandwidth>>> circuit_schedules) noexcept;
 
     std::shared_ptr<Device> get_device(const DeviceId deviceId) noexcept;
 
@@ -35,6 +35,8 @@ class TopologyManager {
      */
     void reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
                      std::vector<std::vector<Latency>> latencies, Latency reconfig_time) noexcept;
+
+    void reconfigure(int topo_id) noexcept;
 
     void precomputeRoutes() noexcept;
 
@@ -111,6 +113,8 @@ class TopologyManager {
     std::vector<std::vector<Latency>> latencies;
 
     std::vector<std::vector<Route>> precomputed_routes;
+
+    std::map<int, std::vector<std::vector<Bandwidth>>> circuit_schedules;
 };
 
 }  // namespace NetworkAnalyticalReconfigurable

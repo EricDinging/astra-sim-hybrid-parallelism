@@ -70,6 +70,7 @@ class Workload : public Callable {
     // node, return nullptr.
     CommunicatorGroup* extract_comm_group(
         std::shared_ptr<Chakra::ETFeederNode> node);
+    CommunicatorGroup* previous_group;
 };
 
 }  // namespace AstraSim

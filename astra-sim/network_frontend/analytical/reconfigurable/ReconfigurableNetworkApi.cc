@@ -27,6 +27,10 @@ ReconfigurableNetworkApi::ReconfigurableNetworkApi(const int rank) noexcept
     assert(rank >= 0);
 }
 
+void ReconfigurableNetworkApi::sim_reconfig(int topo_id) {
+    tm->reconfigure(topo_id);
+}
+
 int ReconfigurableNetworkApi::sim_send(void* const buffer,
                                         const uint64_t count,
                                         const int type,

@@ -37,7 +37,7 @@ static inline std::string trim(const std::string &s) {
     return s.substr(start, end - start + 1);
 }
 
-std::map<std::string, bw_matrix_t> bw_matrix_map;
+std::map<int, bw_matrix_t> bw_matrix_map;
 
 void parse_bw_matrix(const std::string& filename) {
     std::ifstream file(filename);
@@ -49,7 +49,7 @@ void parse_bw_matrix(const std::string& filename) {
             continue;
 
         if (line.substr(0, 2) == "BW") {
-            std::string topology_name = line.substr(3);
+            int topo_id = std::stoi(line.substr(3));
             bw_matrix_t bw_matrix;
 
             while (std::getline(file, line)) {
@@ -69,8 +69,8 @@ void parse_bw_matrix(const std::string& filename) {
                 }
                 bw_matrix.push_back(row);
             }
-            bw_matrix_map[topology_name] = bw_matrix;
-            std::cout << "Parsed BW matrix for topology: " << topology_name << std::endl;
+            bw_matrix_map[topo_id] = bw_matrix;
+            std::cout << "Parsed BW matrix for topology: " << topo_id << std::endl;
         }
     }
 }
@@ -122,13 +122,14 @@ int main(int argc, char* argv[]) {
 
     lt_matrix_t lt_matrix;
     lt_matrix.resize(npus_count, std::vector<Latency>(npus_count, link_latency));
-
-    tm = std::make_shared<TopologyManager>(npus_count, npus_count, event_queue.get());
+   
 
     // Get topology information
     std::cout << "Parsing BW Matrix..." << std::endl;
     parse_bw_matrix(circuit_schedules);
     std::cout << "BW Matrix parsed" << std::endl;
+
+    tm = std::make_shared<TopologyManager>(npus_count, npus_count, event_queue.get(), bw_matrix_map);
 
     // // Initialize the topology to the first topology in the map
     tm->reconfigure(bw_matrix_map.begin()->second, lt_matrix, 0);

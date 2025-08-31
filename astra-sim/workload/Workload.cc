@@ -53,6 +53,7 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     initialize_comm_groups(comm_group_filename);
     this->stats = new Statistics(this);
     this->is_finished = false;
+    previous_group = nullptr;
 }
 
 Workload::~Workload() {
@@ -335,6 +336,11 @@ void Workload::issue_coll_comm(
     }
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
+    if(previous_group != comm_group && previous_group != nullptr) {
+        std::cout << ">> >> Switching to comm group " << comm_group << std::endl;
+        sys->comm_NI->sim_reconfig(1);
+    }
+    previous_group = comm_group;
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
     const auto comm_size = node->comm_size<uint64_t>();

@@ -9,6 +9,7 @@ LICENSE file in the root directory of this source tree.
 #include <chrono>
 
 #include "astra-sim/common/AstraNetworkAPI.hh"
+#include "astra-sim/network_frontend/analytical/include/reconfigurable/ReconfigurableNetworkApi.hh"
 #include "astra-sim/common/AstraRemoteMemoryAPI.hh"
 #include "astra-sim/system/Callable.hh"
 #include "astra-sim/system/CollectivePhase.hh"
@@ -231,6 +232,8 @@ class Sys : public Callable {
                  sim_request* request,
                  void (*msg_handler)(void* fun_arg),
                  void* fun_arg);
+
+    void sim_reconfig(int topo_id);
 
     int sim_recv(Tick delay,
                  void* buffer,

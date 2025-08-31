@@ -92,8 +92,9 @@ if (BUILDTARGET STREQUAL "all" OR BUILDTARGET STREQUAL "reconfigurable")
     target_link_libraries(AstraSim_Analytical_Reconfigurable LINK_PRIVATE AstraSim)
     target_link_libraries(AstraSim_Analytical_Reconfigurable LINK_PRIVATE Analytical_Reconfigurable)
 
-    # Include directories   
+    # Include directories
     target_include_directories(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
+    target_include_directories(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/common/)
     target_include_directories(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../extern/)
     target_include_directories(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../extern/helper)
 
