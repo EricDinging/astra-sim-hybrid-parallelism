@@ -1,6 +1,9 @@
 [submodule "extern/graph_frontend/chakra"]
 	path = extern/graph_frontend/chakra
-	url = https://github.com/astra-sim/chakra.git
+	url = https://github.com/EricDinging/chakra_fix.git
+[submodule "extern/graph_frontend/param"]
+	path = extern/graph_frontend/param
+	url = https://github.com/facebookresearch/param.git
 [submodule "extern/network_backend/analytical"]
 	path = extern/network_backend/analytical
 	url = https://github.com/shuoshuc/astra-network-analytical.git

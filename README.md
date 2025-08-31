@@ -20,6 +20,15 @@ The previous version, ASTRA-sim 1.0, is available in the `ASTRA-sim-1.0` [branch
 
 We encourage community contributions to ASTRA-sim via PRs.
 
+## Astra-sim++ Setup
+```
+git submodule update --init --recursive
+
+docker build -t astra-sim:latest -f Dockerfile .
+
+docker run -it --name astra-sim-latest  --shm-size=8g astra-sim:latest bash
+```
+
 
 ## Contact Us
 For any questions about using ASTRA-sim, you can email the ASTRA-sim User Mailing List: astrasim-users@googlegroups.com
