@@ -343,6 +343,7 @@ void Workload::issue_coll_comm(
     // }
     // std::cout << std::endl;
 
+    // TODO in addition to comm group detection, also check topo id change
     if(previous_group != comm_group && previous_group != nullptr) {
         std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
         // TODO use suitable topo_id

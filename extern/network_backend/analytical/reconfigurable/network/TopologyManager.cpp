@@ -100,17 +100,21 @@ void TopologyManager::increment_callback() noexcept {
 }
 
 void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
-                               std::vector<std::vector<Latency>> latencies, Latency reconfig_time) noexcept {
+                               std::vector<std::vector<Latency>> latencies, Latency reconfig_time, int topo_id) noexcept {
 
+    if (topo_id == cur_topo_id) {
+        std::cout << "Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id " << topo_id << std::endl;
+        return;
+    }
 
-    while (is_reconfiguring() && !event_queue->finished()) {
+    while (is_reconfiguring() || !event_queue->finished()) {
         // TODO check condition
         std::cout << "Reconfig: trying, but still reconfiguring or not events not drained" << std::endl;
         event_queue->proceed();
     }
 
-    printf("Devices count: %d, NPUs count: %d\n", devices_count, npus_count);
-    printf("bandwidths size: %zu, latencies size: %zu\n", bandwidths.size(), latencies.size());
+    printf("\n!!! Reconfig to topo_id: %d, Devices count: %d, NPUs count: %d\n", topo_id, devices_count, npus_count);
+    printf("bandwidths size: %zu, latencies size: %zu\n\n", bandwidths.size(), latencies.size());
 
     assert(bandwidths.size() == devices_count);
     assert(latencies.size() == devices_count);
@@ -135,6 +139,7 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     printf("Reconfiguring topology with %d devices and %d NPUs and reconfig time %f.\n", devices_count, npus_count, reconfig_time);
 
     reconfiguring = true;
+    this->cur_topo_id = topo_id;
     topology_iteration++;
     drain_network();
 }
@@ -142,7 +147,7 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
 void TopologyManager::reconfigure(int topo_id) noexcept{
     auto it = circuit_schedules.find(topo_id);
     if (it != circuit_schedules.end()) {
-        reconfigure(it->second, latencies, reconfig_time);
+        reconfigure(it->second, latencies, reconfig_time, topo_id);
     } else {
         printf("Topology ID %d not found in circuit schedules.\n", topo_id);
     }

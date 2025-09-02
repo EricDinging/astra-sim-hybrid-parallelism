@@ -34,7 +34,7 @@ class TopologyManager {
      * Reconfigure the topology with new bandwidths and latencies.
      */
     void reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
-                     std::vector<std::vector<Latency>> latencies, Latency reconfig_time) noexcept;
+                     std::vector<std::vector<Latency>> latencies, Latency reconfig_time, int topo_id=0) noexcept;
 
     void reconfigure(int topo_id) noexcept;
 
@@ -47,6 +47,11 @@ class TopologyManager {
     void drain_network() noexcept;
 
     void increment_callback() noexcept;
+
+    void set_cur_topo_id(int topo_id) noexcept {
+        cur_topo_id = topo_id;
+        return;
+    };
     
     /**
      * Construct the route from src to dest.
@@ -100,6 +105,8 @@ class TopologyManager {
     int npus_count;
 
     int topology_iteration;
+
+    int cur_topo_id = 0;
 
     bool reconfiguring;
 
