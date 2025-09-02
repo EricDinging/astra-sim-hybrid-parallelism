@@ -19,14 +19,13 @@ WORKLOAD="${EXAMPLE_DIR:?}/chakra_trace"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"
 REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
-COMM_GROUP="${EXAMPLE_DIR:?}/comm_group.json"
 
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
 echo ""
 
 # Compile
-"${PROJECT_DIR:?}"/build/astra_analytical/build.sh
+"${PROJECT_DIR:?}"/build/astra_analytical/build.sh -d
 
 echo ""
 echo "[ASTRA-sim] Compilation finished."
@@ -34,12 +33,11 @@ echo "[ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend..."
 echo ""
 
 # run ASTRA-sim
-"${ASTRA_SIM:?}" \
+gdb --args "${ASTRA_SIM:?}" \
     --workload-configuration="${WORKLOAD}" \
     --system-configuration="${SYSTEM:?}" \
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
-    --network-configuration="${NETWORK:?}" \
-    --comm-group-configuration="${COMM_GROUP:?}"
+    --network-configuration="${NETWORK:?}"
 
 # finalize
 echo ""

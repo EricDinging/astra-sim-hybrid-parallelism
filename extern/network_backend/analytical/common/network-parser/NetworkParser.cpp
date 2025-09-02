@@ -84,7 +84,14 @@ void NetworkParser::parse_network_config_yml(const YAML::Node& network_config) n
     npus_count_per_dim = parse_vector<int>(network_config["npus_count"]);
     bandwidth_per_dim = parse_vector<Bandwidth>(network_config["bandwidth"]);
     latency_per_dim = parse_vector<Latency>(network_config["latency"]);
-    reconfig_time = parse_vector<Latency>(network_config["reconfig_time"])[0];
+    
+    std::vector<Latency> reconfig_times = parse_vector<Latency>(network_config["reconfig_time"]);
+    if (reconfig_times.size() > 1) {
+        std::cerr << "[Error] (network/analytical) " << "\"reconfig_time\" should be a single value" << std::endl;
+        std::exit(-1);
+    } else if (reconfig_times.size() == 1) {
+        reconfig_time = parse_vector<Latency>(network_config["reconfig_time"])[0];
+    }
 
     // check the validity of the parsed network config
     check_validity();

@@ -58,6 +58,7 @@ void TopologyManager::drain_network() noexcept {
             if (i != j) {
                 auto link = device->get_link(j);
                 if(!link->is_busy()) increment_callback();
+                // TODO what if the link is busy, or the link does not exist
             }
         }
     }
@@ -78,6 +79,7 @@ void TopologyManager::increment_callback() noexcept {
     // printf("Link drained: %d/%d at %d\n", Link::num_drained_links, devices_count * (devices_count - 1), Link::get_current_time());
 
     if(Link::num_drained_links < devices_count * (devices_count - 1)) {
+        // TODO: what if not all devices are connected to each other?
         return;
     }
 
@@ -91,7 +93,7 @@ void TopologyManager::increment_callback() noexcept {
 
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
-        std::vector<Route> routes;
+        // std::vector<Route> routes;
         // Create a route for each device
         device->reconfigure(this->bandwidths[i], precomputed_routes[i], this->latencies[i], reconfig_time);
     }
@@ -102,6 +104,8 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
 
 
     while (is_reconfiguring() && !event_queue->finished()) {
+        // TODO check condition
+        std::cout << "Reconfig: trying, but still reconfiguring or not events not drained" << std::endl;
         event_queue->proceed();
     }
 
@@ -149,7 +153,7 @@ void TopologyManager::set_reconfig_latency(Latency latency) noexcept {
 }
 
 void TopologyManager::precomputeRoutes() noexcept {
-
+    // TODO: add other routing algorithms 
     // Adjacency list
     std::vector<std::vector<int>> adj(devices_count);
     for (int i = 0; i < devices_count; ++i) {

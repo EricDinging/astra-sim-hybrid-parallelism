@@ -1,0 +1,144 @@
+[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend...
+
+-- {fmt} version: 11.0.2
+-- Build type: Release
+-- Build spdlog: 1.14.1
+-- Build type: Release
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /app/astra-sim/build/astra_analytical/build
+Consolidate compiler generated dependencies of target fmt
+Consolidate compiler generated dependencies of target spdlog
+[  2%] Built target fmt
+[  6%] Built target spdlog
+Consolidate compiler generated dependencies of target yaml-cpp
+[ 25%] Built target yaml-cpp
+Consolidate compiler generated dependencies of target yaml-cpp-parse
+Consolidate compiler generated dependencies of target yaml-cpp-read
+Consolidate compiler generated dependencies of target yaml-cpp-sandbox
+Consolidate compiler generated dependencies of target Analytical_Congestion_Unaware
+Consolidate compiler generated dependencies of target Analytical_Congestion_Aware
+Consolidate compiler generated dependencies of target Analytical_Reconfigurable
+[ 26%] Built target yaml-cpp-parse
+[ 27%] Built target yaml-cpp-read
+[ 29%] Built target yaml-cpp-sandbox
+[ 37%] Built target Analytical_Congestion_Unaware
+[ 38%] Building CXX object Analytical/CMakeFiles/Analytical_Reconfigurable.dir/reconfigurable/network/Link.cpp.o
+[ 46%] Built target Analytical_Congestion_Aware
+Consolidate compiler generated dependencies of target AstraSim
+[ 78%] Built target AstraSim
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Aware
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Unaware
+[ 84%] Built target AstraSim_Analytical_Congestion_Unaware
+[ 89%] Built target AstraSim_Analytical_Congestion_Aware
+[ 90%] Linking CXX static library ../lib/libAnalytical_Reconfigurable.a
+[ 95%] Built target Analytical_Reconfigurable
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Reconfigurable
+[ 96%] Linking CXX executable ../bin/AstraSim_Analytical_Reconfigurable
+[100%] Built target AstraSim_Analytical_Reconfigurable
+
+[ASTRA-sim] Compilation finished.
+[ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend...
+
+Parsing BW Matrix...
+Parsed BW matrix for topology: 0
+Parsed BW matrix for topology: 1
+BW Matrix parsed
+Circuit schedules size: 2
+Devices count: 2, NPUs count: 2
+bandwidths size: 2, latencies size: 2
+Reconfiguring topology with 2 devices and 2 NPUs and reconfig time 0.000000.
+Drained Network, reconfiguring to TOPO ITERATION #1
+Reconfiguring link from bandwidth 0.00 GB/s to 300.00 GB/s and latency 0.00 ns to 500.00 ns at time 0 ns
+Reconfiguring link from bandwidth 0.00 GB/s to 300.00 GB/s and latency 0.00 ns to 500.00 ns at time 0 ns
+[2025-09-01 20:35:17.695] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2025-09-01 20:35:17.695] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2025-09-01 20:35:17.695] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2025-09-01 20:35:17.695] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+Current time: 0, Event time: 0
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+>> >> Switching to comm group 0x55ed5945f4e0
+Devices count: 2, NPUs count: 2
+bandwidths size: 2, latencies size: 2
+Reconfiguring topology with 2 devices and 2 NPUs and reconfig time 1000.000000.
+Drained Network, reconfiguring to TOPO ITERATION #2
+No reconfiguration needed
+No reconfiguration needed
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+>> >> Switching to comm group 0x55ed5945bf10
+Devices count: 2, NPUs count: 2
+bandwidths size: 2, latencies size: 2
+Reconfiguring topology with 2 devices and 2 NPUs and reconfig time 1000.000000.
+Drained Network, reconfiguring to TOPO ITERATION #3
+No reconfiguration needed
+No reconfiguration needed
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 0 to 1
+Route to device 1: 0 1 
+Sending chunk from 1 to 0
+Route to device 0: 1 0 
+[2025-09-01 20:35:17.731] [workload] [info] sys[0] finished, 105775266 cycles, exposed communication 1634266 cycles.
+[2025-09-01 20:35:17.731] [statistics] [info] sys[0]. Post statistics processing start.
+[2025-09-01 20:35:17.731] [system] [critical] warning! a callable is removed before call Only GPU and COMM types are supported for overlap extraction
+[2025-09-01 20:35:17.731] [workload] [info] sys[1] finished, 105836266 cycles, exposed communication 1778266 cycles.
+[2025-09-01 20:35:17.731] [statistics] [info] sys[1]. Post statistics processing start.
+[2025-09-01 20:35:17.731] [system] [critical] warning! a callable is removed before call Only GPU and COMM types are supported for overlap extraction
+
+[ASTRA-sim] Finished the execution.
