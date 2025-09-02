@@ -336,10 +336,22 @@ void Workload::issue_coll_comm(
     }
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
+    std::cout << "RANK: " << this->sys->id <<" Issuing coll: " << comm_group->to_string() << std::endl;
+    // std::cout << "Involved npus: ";
+    // for (auto d : comm_group->involved_NPUs) {
+    //     std::cout << d << " ";
+    // }
+    // std::cout << std::endl;
+
     if(previous_group != comm_group && previous_group != nullptr) {
-        std::cout << ">> >> Switching to comm group " << comm_group << std::endl;
+        std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
         // TODO use suitable topo_id
-        sys->comm_NI->sim_reconfig(1);
+        int pg_id = comm_group->get_id();
+        int topo_id = 0;
+        if (pg_id == 3 || pg_id == 4) {
+            topo_id = 1;
+        }
+        sys->comm_NI->sim_reconfig(topo_id);
     }
     previous_group = comm_group;
     const auto comm_type =

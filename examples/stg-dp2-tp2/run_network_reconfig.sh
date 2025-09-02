@@ -11,15 +11,16 @@ set -e
 # find the absolute path to this script
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 PROJECT_DIR="${SCRIPT_DIR:?}/../.."
-EXAMPLE_DIR="${PROJECT_DIR:?}/examples/titan_perlmutter"
+EXAMPLE_DIR="${PROJECT_DIR:?}/examples/stg-dp2-tp2"
 
 # paths
-ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Unaware"
-WORKLOAD="${EXAMPLE_DIR:?}/chakra_trace"
+ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable"
+WORKLOAD="${EXAMPLE_DIR:?}/workload"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"
 REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
-COMM_GROUP="${EXAMPLE_DIR:?}/comm_group.json"
+COMM_GROUP="${EXAMPLE_DIR:?}/workload.json"
+CIRCUIT_SCHEDULES="${EXAMPLE_DIR:?}/schedules.txt"
 
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
@@ -34,15 +35,15 @@ echo "[ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend..."
 echo ""
 
 # run ASTRA-sim
-
-export ASAN_OPTIONS=detect_container_overflow=0
+export ASAN_OPTIONS=detect_container_overflow=0:detect_leaks=0
 
 "${ASTRA_SIM:?}" \
     --workload-configuration="${WORKLOAD}" \
     --system-configuration="${SYSTEM:?}" \
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
     --network-configuration="${NETWORK:?}" \
-    --comm-group-configuration="${COMM_GROUP:?}"
+    --comm-group-configuration="${COMM_GROUP:?}" \
+    --circuit-schedules="${CIRCUIT_SCHEDULES:?}"
 
 # finalize
 echo ""

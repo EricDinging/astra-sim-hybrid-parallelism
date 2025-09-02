@@ -25,6 +25,21 @@ class CommunicatorGroup {
 
     std::vector<int> involved_NPUs;
     int num_streams;
+    std::string to_string() const {
+        std::string result = "CG(id=" + std::to_string(id) + ", NPUs=[";
+        for (size_t i = 0; i < involved_NPUs.size(); i++) {
+            result += std::to_string(involved_NPUs[i]);
+            if (i != involved_NPUs.size() - 1) {
+                result += ", ";
+            }
+        }
+        result += "])";
+        return result;
+    };
+
+    int get_id() const {
+        return id;
+    };
 
   private:
     int id;
