@@ -28,7 +28,9 @@ void EventQueue::proceed() noexcept {
     assert(!finished());
 
     // proceed to the next event time
-    auto& current_event_list = event_queue.front();
+    //auto& current_event_list = event_queue.front();
+    EventList current_event_list = event_queue.front();
+    event_queue.pop_front();
 
     // check the validity and update current time
     if(current_event_list.get_event_time() <= current_time) {
@@ -42,7 +44,7 @@ void EventQueue::proceed() noexcept {
     current_event_list.invoke_events();
 
     // drop processed event list
-    event_queue.pop_front();
+    
 }
 
 void EventQueue::schedule_event(const EventTime event_time,
