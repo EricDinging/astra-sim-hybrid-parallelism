@@ -1569,11 +1569,12 @@ int Sys::rendezvous_sim_recv(Tick delay,
     return 1;
 }
 
-void Sys::sim_reconfig(int topo_id) {
+bool Sys::sim_reconfig(int topo_id) {
     // Call through virtual interface (no-op for backends that don't implement)
     if (comm_NI) {
-        comm_NI->sim_reconfig(topo_id);
+        return comm_NI->sim_reconfig(topo_id);
     }
+    return false;
 }
 
 void Sys::increment_inflight_coll() {

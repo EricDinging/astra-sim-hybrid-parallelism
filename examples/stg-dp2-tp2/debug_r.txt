@@ -13,40 +13,29 @@ Consolidate compiler generated dependencies of target spdlog
 [  6%] Built target spdlog
 Consolidate compiler generated dependencies of target yaml-cpp
 [ 25%] Built target yaml-cpp
-Consolidate compiler generated dependencies of target yaml-cpp-parse
 Consolidate compiler generated dependencies of target yaml-cpp-read
 Consolidate compiler generated dependencies of target yaml-cpp-sandbox
-Consolidate compiler generated dependencies of target Analytical_Congestion_Aware
+Consolidate compiler generated dependencies of target yaml-cpp-parse
 Consolidate compiler generated dependencies of target Analytical_Congestion_Unaware
+Consolidate compiler generated dependencies of target Analytical_Congestion_Aware
 Consolidate compiler generated dependencies of target Analytical_Reconfigurable
+[ 26%] Built target yaml-cpp-read
 [ 28%] Built target yaml-cpp-sandbox
-[ 28%] Built target yaml-cpp-read
 [ 29%] Built target yaml-cpp-parse
-[ 37%] Built target Analytical_Congestion_Aware
-[ 45%] Built target Analytical_Congestion_Unaware
-[ 52%] Built target Analytical_Reconfigurable
+[ 37%] Built target Analytical_Congestion_Unaware
+[ 37%] Building CXX object Analytical/CMakeFiles/Analytical_Reconfigurable.dir/reconfigurable/network/TopologyManager.cpp.o
+[ 45%] Built target Analytical_Congestion_Aware
 Consolidate compiler generated dependencies of target AstraSim
-[ 53%] Building CXX object AstraSim/CMakeFiles/AstraSim.dir/astra-sim/workload/Workload.cc.o
-[ 54%] Linking CXX static library ../lib/libAstraSim.a
-[ 84%] Built target AstraSim
-Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Aware
-Consolidate compiler generated dependencies of target AstraSim_Analytical_Reconfigurable
+[ 77%] Built target AstraSim
 Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Unaware
-[ 85%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Reconfigurable.dir/reconfigurable/ReconfigurableNetworkApi.cc.o
-[ 85%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Congestion_Aware.dir/congestion_aware/CongestionAwareNetworkApi.cc.o
-[ 86%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Congestion_Unaware.dir/congestion_unaware/CongestionUnawareNetworkApi.cc.o
-[ 86%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Congestion_Aware.dir/congestion_aware/main.cc.o
-[ 88%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Reconfigurable.dir/reconfigurable/main.cc.o
-[ 88%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Congestion_Aware.dir/common/CommonNetworkApi.cc.o
-[ 88%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Congestion_Unaware.dir/congestion_unaware/main.cc.o
-[ 89%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Reconfigurable.dir/common/CommonNetworkApi.cc.o
-[ 89%] Building CXX object AstraSim_Analytical/CMakeFiles/AstraSim_Analytical_Congestion_Unaware.dir/common/CommonNetworkApi.cc.o
-[ 90%] Linking CXX executable ../bin/AstraSim_Analytical_Congestion_Unaware
-[ 91%] Linking CXX executable ../bin/AstraSim_Analytical_Reconfigurable
-[ 91%] Linking CXX executable ../bin/AstraSim_Analytical_Congestion_Aware
-[ 94%] Built target AstraSim_Analytical_Congestion_Unaware
-[ 97%] Built target AstraSim_Analytical_Reconfigurable
-[100%] Built target AstraSim_Analytical_Congestion_Aware
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Aware
+[ 83%] Built target AstraSim_Analytical_Congestion_Unaware
+[ 88%] Built target AstraSim_Analytical_Congestion_Aware
+[ 89%] Linking CXX static library ../lib/libAnalytical_Reconfigurable.a
+[ 95%] Built target Analytical_Reconfigurable
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Reconfigurable
+[ 96%] Linking CXX executable ../bin/AstraSim_Analytical_Reconfigurable
+[100%] Built target AstraSim_Analytical_Reconfigurable
 
 [ASTRA-sim] Compilation finished.
 [ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend...
@@ -73,10 +62,10 @@ Reconfiguring link from bandwidth 0.00 GB/s to 0.00 GB/s and latency 0.00 ns to 
 Reconfiguring link from bandwidth 0.00 GB/s to 0.00 GB/s and latency 0.00 ns to 500.00 ns at time 0 ns
 Reconfiguring link from bandwidth 0.00 GB/s to 12.50 GB/s and latency 0.00 ns to 500.00 ns at time 0 ns
 Reconfiguring link from bandwidth 0.00 GB/s to 0.00 GB/s and latency 0.00 ns to 500.00 ns at time 0 ns
-[2025-09-03 18:34:07.351] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
-[2025-09-03 18:34:07.352] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
-[2025-09-03 18:34:07.352] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
-[2025-09-03 18:34:07.352] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
+[2025-09-03 19:35:38.780] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
+[2025-09-03 19:35:38.780] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
+[2025-09-03 19:35:38.780] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
+[2025-09-03 19:35:38.780] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 4 index in ring: 0 offset: 1 total nodes in ring: 4
 Node 2 data_deps_size=1 ctrl_deps_size=0
 Node 3 data_deps_size=2 ctrl_deps_size=0
 Node 4 data_deps_size=1 ctrl_deps_size=0
@@ -13674,7 +13663,7 @@ Workload::issue_dep_free_nodes, sys->id=0, tick=2, dependancy_free_nodes_set.siz
 Workload::issue, sys->id=0, tick=2, node->id=8, node->name=mb0.transformer.0.mha.qkv@0_X1COMM, node->type=7
 RANK: 0 Issuing collective CG(id=3, NPUs=[0, 2])
 RANK: 0 inflight collective count: 1
-NPU CONSTRUCTOR[2025-09-03 18:34:07.832] [system::topology::RingTopology] [info] custom ring, id: 0, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
+NPU CONSTRUCTOR[2025-09-03 19:35:39.251] [system::topology::RingTopology] [info] custom ring, id: 0, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
 
 EventQueue: issue event
 
@@ -13682,7 +13671,7 @@ Workload::issue_dep_free_nodes, sys->id=1, tick=2, dependancy_free_nodes_set.siz
 Workload::issue, sys->id=1, tick=2, node->id=8, node->name=mb0.transformer.0.mha.qkv@0_X1COMM, node->type=7
 RANK: 1 Issuing collective CG(id=4, NPUs=[1, 3])
 RANK: 1 inflight collective count: 2
-NPU CONSTRUCTOR[2025-09-03 18:34:07.833] [system::topology::RingTopology] [info] custom ring, id: 1, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
+NPU CONSTRUCTOR[2025-09-03 19:35:39.252] [system::topology::RingTopology] [info] custom ring, id: 1, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
 
 EventQueue: issue event
 
@@ -13690,7 +13679,7 @@ Workload::issue_dep_free_nodes, sys->id=2, tick=2, dependancy_free_nodes_set.siz
 Workload::issue, sys->id=2, tick=2, node->id=8, node->name=mb0.transformer.0.mha.qkv@0_X1COMM, node->type=7
 RANK: 2 Issuing collective CG(id=3, NPUs=[0, 2])
 RANK: 2 inflight collective count: 3
-NPU CONSTRUCTOR[2025-09-03 18:34:07.833] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
+NPU CONSTRUCTOR[2025-09-03 19:35:39.252] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
 
 EventQueue: issue event
 
@@ -13698,7 +13687,7 @@ Workload::issue_dep_free_nodes, sys->id=3, tick=2, dependancy_free_nodes_set.siz
 Workload::issue, sys->id=3, tick=2, node->id=8, node->name=mb0.transformer.0.mha.qkv@0_X1COMM, node->type=7
 RANK: 3 Issuing collective CG(id=4, NPUs=[1, 3])
 RANK: 3 inflight collective count: 4
-NPU CONSTRUCTOR[2025-09-03 18:34:07.834] [system::topology::RingTopology] [info] custom ring, id: 3, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
+NPU CONSTRUCTOR[2025-09-03 19:35:39.253] [system::topology::RingTopology] [info] custom ring, id: 3, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
 
 EventQueue: issue event
 
@@ -13984,7 +13973,7 @@ Workload::issue_dep_free_nodes, sys->id=0, tick=20001042, dependancy_free_nodes_
 Workload::issue, sys->id=0, tick=20001042, node->id=16, node->name=mb0.transformer.0.mha.o@0_X1COMM, node->type=7
 RANK: 0 Issuing collective CG(id=3, NPUs=[0, 2])
 RANK: 0 inflight collective count: 4
-NPU CONSTRUCTOR[2025-09-03 18:34:07.840] [system::topology::RingTopology] [info] custom ring, id: 0, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
+NPU CONSTRUCTOR[2025-09-03 19:35:39.259] [system::topology::RingTopology] [info] custom ring, id: 0, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
 
 EventQueue: issue event
 
@@ -13994,7 +13983,7 @@ Workload::issue_dep_free_nodes, sys->id=1, tick=20001042, dependancy_free_nodes_
 Workload::issue, sys->id=1, tick=20001042, node->id=16, node->name=mb0.transformer.0.mha.o@0_X1COMM, node->type=7
 RANK: 1 Issuing collective CG(id=4, NPUs=[1, 3])
 RANK: 1 inflight collective count: 4
-NPU CONSTRUCTOR[2025-09-03 18:34:07.841] [system::topology::RingTopology] [info] custom ring, id: 1, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
+NPU CONSTRUCTOR[2025-09-03 19:35:39.260] [system::topology::RingTopology] [info] custom ring, id: 1, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
 
 EventQueue: issue event
 
@@ -14004,7 +13993,7 @@ Workload::issue_dep_free_nodes, sys->id=2, tick=20001042, dependancy_free_nodes_
 Workload::issue, sys->id=2, tick=20001042, node->id=16, node->name=mb0.transformer.0.mha.o@0_X1COMM, node->type=7
 RANK: 2 Issuing collective CG(id=3, NPUs=[0, 2])
 RANK: 2 inflight collective count: 4
-NPU CONSTRUCTOR[2025-09-03 18:34:07.841] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
+NPU CONSTRUCTOR[2025-09-03 19:35:39.260] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
 
 EventQueue: issue event
 
@@ -14014,7 +14003,7 @@ Workload::issue_dep_free_nodes, sys->id=3, tick=20001042, dependancy_free_nodes_
 Workload::issue, sys->id=3, tick=20001042, node->id=16, node->name=mb0.transformer.0.mha.o@0_X1COMM, node->type=7
 RANK: 3 Issuing collective CG(id=4, NPUs=[1, 3])
 RANK: 3 inflight collective count: 4
-NPU CONSTRUCTOR[2025-09-03 18:34:07.841] [system::topology::RingTopology] [info] custom ring, id: 3, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
+NPU CONSTRUCTOR[2025-09-03 19:35:39.260] [system::topology::RingTopology] [info] custom ring, id: 3, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
 
 EventQueue: issue event
 
@@ -81075,90 +81064,195 @@ RANK: 2 Issuing collective CG(id=2, NPUs=[2, 3])
 RANK: 2 Switching to comm group: 2
 
 TM: trying to reconfig, inflight coll: 3, is reconfiguring? 0, is event queue finished? 0
-Workload::issue_dep_free_nodes, sys->id=2, tick=4850515727, dependancy_free_nodes_set.size=1
-Workload::issue, sys->id=2, tick=4850515727, node->id=6859, node->name=mb0.transformer.79.ffn.dxgate@0_COMP, node->type=4
+Workload::issue_dep_free_nodes, sys->id=2, tick=4850515726, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7 issue failed
 
 EventQueue: issue event
 
+Ring contains:  1 3
+RANK: 3 finish collective: 1923, inflight collective 2
+Workload::issue_dep_free_nodes, sys->id=3, tick=4850515726, dependancy_free_nodes_set.size=3
+Workload::issue, sys->id=3, tick=4850515726, node->id=6858, node->name=mb0.transformer.79.ffn.dwdown@0_COMP, node->type=4
+Workload::issue, sys->id=3, tick=4850515726, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7
+RANK: 3 Issuing collective CG(id=2, NPUs=[2, 3])
+RANK: 3 Switching to comm group: 2
 
-TM: trying to reconfig, inflight coll: 3, is reconfiguring? 0, is event queue finished? 0
+TM: trying to reconfig, inflight coll: 2, is reconfiguring? 0, is event queue finished? 0
+Workload::issue_dep_free_nodes, sys->id=3, tick=4850515726, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7 issue failed
+
+EventQueue: issue event
+
+Ring contains:  0 2
+RANK: 0 finish collective: 1920, inflight collective 1
+Workload::issue_dep_free_nodes, sys->id=0, tick=4850515726, dependancy_free_nodes_set.size=3
+Workload::issue, sys->id=0, tick=4850515726, node->id=6858, node->name=mb0.transformer.79.ffn.dwdown@0_COMP, node->type=4
+Workload::issue, sys->id=0, tick=4850515726, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7
+RANK: 0 Issuing collective CG(id=1, NPUs=[0, 1])
+RANK: 0 Switching to comm group: 1
+
+TM: trying to reconfig, inflight coll: 1, is reconfiguring? 0, is event queue finished? 0
+Workload::issue_dep_free_nodes, sys->id=0, tick=4850515726, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7 issue failed
+
+EventQueue: issue event
+
+Ring contains:  1 3
+RANK: 1 finish collective: 1921, inflight collective 0
+Workload::issue_dep_free_nodes, sys->id=1, tick=4850515726, dependancy_free_nodes_set.size=3
+Workload::issue, sys->id=1, tick=4850515726, node->id=6858, node->name=mb0.transformer.79.ffn.dwdown@0_COMP, node->type=4
+Workload::issue, sys->id=1, tick=4850515726, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7
+RANK: 1 Issuing collective CG(id=1, NPUs=[0, 1])
+RANK: 1 Switching to comm group: 1
+
+TM: !!! Reconfig to topo_id: 0, Devices count: 4, NPUs count: 4, inflight_coll 0
+bandwidths size: 4, latencies size: 4
+
+Drained Network, reconfiguring to TOPO ITERATION #2
+Reconfiguring link from bandwidth 0.00 GB/s to 12.50 GB/s and latency 500.00 ns to 500.00 ns at time 4850515726 ns
+Reconfiguring link from bandwidth 12.50 GB/s to 0.00 GB/s and latency 500.00 ns to 500.00 ns at time 4850515726 ns
+No reconfiguration needed
+Reconfiguring link from bandwidth 0.00 GB/s to 12.50 GB/s and latency 500.00 ns to 500.00 ns at time 4850515726 ns
+No reconfiguration needed
+Reconfiguring link from bandwidth 12.50 GB/s to 0.00 GB/s and latency 500.00 ns to 500.00 ns at time 4850515726 ns
+Reconfiguring link from bandwidth 12.50 GB/s to 0.00 GB/s and latency 500.00 ns to 500.00 ns at time 4850515726 ns
+No reconfiguration needed
+No reconfiguration needed
+No reconfiguration needed
+Reconfiguring link from bandwidth 12.50 GB/s to 0.00 GB/s and latency 500.00 ns to 500.00 ns at time 4850515726 ns
+No reconfiguration needed
+RANK: 1 inflight collective count: 1
+NPU CONSTRUCTOR[2025-09-03 19:35:40.730] [system::topology::RingTopology] [info] custom ring, id: 1, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
+
+EventQueue: issue event
+
+Current time: 4850515726, Event time: 4850515726
+Device 0: link to 3 is free at time 555548430
+Device 0: link to 3 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Device 1: link to 2 is free at time 555548430
+Device 1: link to 2 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Device 2: link to 1 is free at time 555548430
+Device 2: link to 1 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Device 2: link to 3 is free at time 555548430
+Device 2: link to 3 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Device 3: link to 0 is free at time 555548430
+Device 3: link to 0 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Device 3: link to 2 is free at time 555548430
+Device 3: link to 2 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Workload::issue_dep_free_nodes, sys->id=2, tick=4850515727, dependancy_free_nodes_set.size=2
+Workload::issue, sys->id=2, tick=4850515727, node->id=6859, node->name=mb0.transformer.79.ffn.dxgate@0_COMP, node->type=4
+Workload::issue, sys->id=2, tick=4850515727, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7
+RANK: 2 Issuing collective CG(id=2, NPUs=[2, 3])
+RANK: 2 Switching to comm group: 2
+TM: Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id 0
+RANK: 2 inflight collective count: 2
+NPU CONSTRUCTOR[2025-09-03 19:35:40.730] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
+
+EventQueue: issue event
+
+Workload::issue_dep_free_nodes, sys->id=3, tick=4850515727, dependancy_free_nodes_set.size=2
+Workload::issue, sys->id=3, tick=4850515727, node->id=6859, node->name=mb0.transformer.79.ffn.dxgate@0_COMP, node->type=4
+Workload::issue, sys->id=3, tick=4850515727, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7
+RANK: 3 Issuing collective CG(id=2, NPUs=[2, 3])
+RANK: 3 Switching to comm group: 2
+TM: Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id 0
+RANK: 3 inflight collective count: 3
+NPU CONSTRUCTOR[2025-09-03 19:35:40.731] [system::topology::RingTopology] [info] custom ring, id: 3, dimension: local total nodes in ring: 2 index in ring: 1 total nodes in ring 2
+
+EventQueue: issue event
+
+Workload::issue_dep_free_nodes, sys->id=0, tick=4850515727, dependancy_free_nodes_set.size=2
+Workload::issue, sys->id=0, tick=4850515727, node->id=6859, node->name=mb0.transformer.79.ffn.dxgate@0_COMP, node->type=4
+Workload::issue, sys->id=0, tick=4850515727, node->id=7142, node->name=out_emb.w@1_X2_COMM, node->type=7
+RANK: 0 Issuing collective CG(id=1, NPUs=[0, 1])
+RANK: 0 Switching to comm group: 1
+TM: Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id 0
+RANK: 0 inflight collective count: 4
+NPU CONSTRUCTOR[2025-09-03 19:35:40.731] [system::topology::RingTopology] [info] custom ring, id: 0, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
+
+EventQueue: issue event
+
+Workload::issue_dep_free_nodes, sys->id=1, tick=4850515727, dependancy_free_nodes_set.size=1
+Workload::issue, sys->id=1, tick=4850515727, node->id=6859, node->name=mb0.transformer.79.ffn.dxgate@0_COMP, node->type=4
+
+EventQueue: issue event
+
 Workload::issue_dep_free_nodes, sys->id=2, tick=4850515728, dependancy_free_nodes_set.size=2
 Workload::issue, sys->id=2, tick=4850515728, node->id=6862, node->name=mb0.transformer.79.ffn.dwgate@0_COMP, node->type=4
 
 EventQueue: issue event
 
+Workload::issue_dep_free_nodes, sys->id=3, tick=4850515728, dependancy_free_nodes_set.size=2
+Workload::issue, sys->id=3, tick=4850515728, node->id=6862, node->name=mb0.transformer.79.ffn.dwgate@0_COMP, node->type=4
 
-TM: trying to reconfig, inflight coll: 3, is reconfiguring? 0, is event queue finished? 0
+EventQueue: issue event
+
+Workload::issue_dep_free_nodes, sys->id=0, tick=4850515728, dependancy_free_nodes_set.size=2
+Workload::issue, sys->id=0, tick=4850515728, node->id=6862, node->name=mb0.transformer.79.ffn.dwgate@0_COMP, node->type=4
+
+EventQueue: issue event
+
+Workload::issue_dep_free_nodes, sys->id=1, tick=4850515728, dependancy_free_nodes_set.size=2
+Workload::issue, sys->id=1, tick=4850515728, node->id=6862, node->name=mb0.transformer.79.ffn.dwgate@0_COMP, node->type=4
+
+EventQueue: issue event
+
 Workload::issue_dep_free_nodes, sys->id=2, tick=4850515729, dependancy_free_nodes_set.size=1
 Workload::issue, sys->id=2, tick=4850515729, node->id=6863, node->name=mb0.transformer.79.ffn.dx000@0_COMP, node->type=4
 
 EventQueue: issue event
 
+Workload::issue_dep_free_nodes, sys->id=3, tick=4850515729, dependancy_free_nodes_set.size=1
+Workload::issue, sys->id=3, tick=4850515729, node->id=6863, node->name=mb0.transformer.79.ffn.dx000@0_COMP, node->type=4
 
-TM: trying to reconfig, inflight coll: 3, is reconfiguring? 0, is event queue finished? 0
+EventQueue: issue event
+
+Workload::issue_dep_free_nodes, sys->id=0, tick=4850515729, dependancy_free_nodes_set.size=1
+Workload::issue, sys->id=0, tick=4850515729, node->id=6863, node->name=mb0.transformer.79.ffn.dx000@0_COMP, node->type=4
+
+EventQueue: issue event
+
+Workload::issue_dep_free_nodes, sys->id=1, tick=4850515729, dependancy_free_nodes_set.size=1
+Workload::issue, sys->id=1, tick=4850515729, node->id=6863, node->name=mb0.transformer.79.ffn.dx000@0_COMP, node->type=4
+
+EventQueue: issue event
+
 Workload::issue_dep_free_nodes, sys->id=2, tick=4850515730, dependancy_free_nodes_set.size=1
 
 EventQueue: issue event
 
-
-TM: !!! Reconfig to topo_id: 0, Devices count: 4, NPUs count: 4, inflight_coll 3
-bandwidths size: 4, latencies size: 4
-
-Drained Network, reconfiguring to TOPO ITERATION #2
-Reconfiguring link from bandwidth 0.00 GB/s to 12.50 GB/s and latency 500.00 ns to 500.00 ns at time 4850515730 ns
-Reconfiguring link from bandwidth 12.50 GB/s to 0.00 GB/s and latency 500.00 ns to 500.00 ns at time 4850515730 ns
-No reconfiguration needed
-Reconfiguring link from bandwidth 0.00 GB/s to 12.50 GB/s and latency 500.00 ns to 500.00 ns at time 4850515730 ns
-No reconfiguration needed
-Reconfiguring link from bandwidth 12.50 GB/s to 0.00 GB/s and latency 500.00 ns to 500.00 ns at time 4850515730 ns
-Reconfiguring link from bandwidth 12.50 GB/s to 0.00 GB/s and latency 500.00 ns to 500.00 ns at time 4850515730 ns
-No reconfiguration needed
-No reconfiguration needed
-No reconfiguration needed
-Reconfiguring link from bandwidth 12.50 GB/s to 0.00 GB/s and latency 500.00 ns to 500.00 ns at time 4850515730 ns
-No reconfiguration needed
-RANK: 2 inflight collective count: 4
-NPU CONSTRUCTOR[2025-09-03 18:34:09.318] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 2 index in ring: 0 total nodes in ring 2
+Workload::issue_dep_free_nodes, sys->id=3, tick=4850515730, dependancy_free_nodes_set.size=1
 
 EventQueue: issue event
 
+Workload::issue_dep_free_nodes, sys->id=0, tick=4850515730, dependancy_free_nodes_set.size=1
 
 EventQueue: issue event
 
+Workload::issue_dep_free_nodes, sys->id=1, tick=4850515730, dependancy_free_nodes_set.size=1
 
 EventQueue: issue event
 
-
-EventQueue: issue event
-
-Current time: 4850515730, Event time: 4850515730
-Device 0: link to 3 is free at time 555548434
-Device 0: link to 3 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
-
-EventQueue: issue event
-
-Device 1: link to 2 is free at time 555548434
-Device 1: link to 2 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
-
-EventQueue: issue event
-
-Device 2: link to 1 is free at time 555548434
-Device 2: link to 1 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
-
-EventQueue: issue event
-
-Device 2: link to 3 is free at time 555548434
-Device 2: link to 3 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
-
-EventQueue: issue event
-
-Device 3: link to 0 is free at time 555548434
-Device 3: link to 0 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
-
-EventQueue: issue event
-
-Device 3: link to 2 is free at time 555548434
-Device 3: link to 2 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+Ring contains:  0 1
+Issuing send from 1 to 0
+Sending chunk from 1 to 0, in topo iter 2
+Device 1: link to 0 is busy or reconfiguring, adding chunk to pending queue. Pending queue size: 1
+Issuing ring from npu 1
 
 EventQueue: issue event
 
@@ -81170,33 +81264,137 @@ Issuing ring from npu 2
 
 EventQueue: issue event
 
-Device 0: link to 1 is free at time 555549434
-Device 0: link to 1 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+Ring contains:  2 3
+Issuing send from 3 to 2
+Sending chunk from 3 to 2, in topo iter 2
+Device 3: link to 2 is busy or reconfiguring, adding chunk to pending queue. Pending queue size: 1
+Issuing ring from npu 3
 
 EventQueue: issue event
 
-Device 0: link to 2 is free at time 555549434
+Ring contains:  0 1
+Issuing send from 0 to 1
+Sending chunk from 0 to 1, in topo iter 2
+Device 0: link to 1 is busy or reconfiguring, adding chunk to pending queue. Pending queue size: 1
+Issuing ring from npu 0
+
+EventQueue: issue event
+
+Device 0: link to 1 is free at time 555549430
+Device 0: link to 1 becomes free at time 4860282351, link ending chunk: 0
+
+EventQueue: issue event
+
+Device 0: link to 2 is free at time 555549430
 Device 0: link to 2 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
 
 EventQueue: issue event
 
-Device 1: link to 0 is free at time 555549434
-Device 1: link to 0 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+Device 1: link to 0 is free at time 555549430
+Device 1: link to 0 becomes free at time 4860282351, link ending chunk: 0
 
 EventQueue: issue event
 
-Device 1: link to 3 is free at time 555549434
+Device 1: link to 3 is free at time 555549430
 Device 1: link to 3 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
 
 EventQueue: issue event
 
-Device 2: link to 0 is free at time 555549434
+Device 2: link to 0 is free at time 555549430
 Device 2: link to 0 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
 
 EventQueue: issue event
 
-Device 3: link to 1 is free at time 555549434
+Device 3: link to 1 is free at time 555549430
 Device 3: link to 1 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Device 0: link to 1 is free at time 565315055
+Device 0: link to 1 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Device 1: link to 0 is free at time 565315055
+Device 1: link to 0 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+
+EventQueue: issue event
+
+
+EventQueue: issue event
+
+
+EventQueue: issue event
+
+
+EventQueue: issue event
+
+Ring contains:  0 1
+Issuing send from 1 to 0
+Sending chunk from 1 to 0, in topo iter 2
+Issuing ring from npu 1
+
+EventQueue: issue event
+
+Ring contains:  0 1
+Issuing send from 0 to 1
+Sending chunk from 0 to 1, in topo iter 2
+Issuing ring from npu 0
+
+EventQueue: issue event
+
+Device 1: link to 0 is free at time 575326950
+Device 1: link to 0 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+Device 0: link to 1 is free at time 575326950
+Device 0: link to 1 is free but no pending chunks or chunk from future topology iteration. Pending queue size: 0
+
+EventQueue: issue event
+
+
+EventQueue: issue event
+
+
+EventQueue: issue event
+
+Ring contains:  0 1
+RANK: 0 finish collective: 1927, inflight collective 3
+Workload::issue_dep_free_nodes, sys->id=0, tick=4870294756, dependancy_free_nodes_set.size=2
+Workload::issue, sys->id=0, tick=4870294756, node->id=6865, node->name=mb0.transformer.79.ffn.dx0@0_X1COMM, node->type=7
+RANK: 0 Issuing collective CG(id=3, NPUs=[0, 2])
+RANK: 0 Switching to comm group: 3
+
+TM: trying to reconfig, inflight coll: 3, is reconfiguring? 0, is event queue finished? 1
+Workload::issue_dep_free_nodes, sys->id=0, tick=4870294756, node->id=6865, node->name=mb0.transformer.79.ffn.dx0@0_X1COMM, node->type=7 issue failed
+Workload::issue, sys->id=0, tick=4870294756, node->id=7143, node->name=out_emb.w@1_X2_COMM, node->type=7
+RANK: 0 Issuing collective CG(id=3, NPUs=[0, 2])
+RANK: 0 Switching to comm group: 3
+
+TM: trying to reconfig, inflight coll: 3, is reconfiguring? 0, is event queue finished? 1
+Workload::issue_dep_free_nodes, sys->id=0, tick=4870294756, node->id=7143, node->name=out_emb.w@1_X2_COMM, node->type=7 issue failed
+
+EventQueue: issue event
+
+Ring contains:  0 1
+RANK: 1 finish collective: 1924, inflight collective 2
+Workload::issue_dep_free_nodes, sys->id=1, tick=4870294756, dependancy_free_nodes_set.size=2
+Workload::issue, sys->id=1, tick=4870294756, node->id=6865, node->name=mb0.transformer.79.ffn.dx0@0_X1COMM, node->type=7
+RANK: 1 Issuing collective CG(id=4, NPUs=[1, 3])
+RANK: 1 Switching to comm group: 4
+
+TM: trying to reconfig, inflight coll: 2, is reconfiguring? 0, is event queue finished? 1
+Workload::issue_dep_free_nodes, sys->id=1, tick=4870294756, node->id=6865, node->name=mb0.transformer.79.ffn.dx0@0_X1COMM, node->type=7 issue failed
+Workload::issue, sys->id=1, tick=4870294756, node->id=7143, node->name=out_emb.w@1_X2_COMM, node->type=7
+RANK: 1 Issuing collective CG(id=4, NPUs=[1, 3])
+RANK: 1 Switching to comm group: 4
+
+TM: trying to reconfig, inflight coll: 2, is reconfiguring? 0, is event queue finished? 1
+Workload::issue_dep_free_nodes, sys->id=1, tick=4870294756, node->id=7143, node->name=out_emb.w@1_X2_COMM, node->type=7 issue failed
 
 EventQueue: issue event
 

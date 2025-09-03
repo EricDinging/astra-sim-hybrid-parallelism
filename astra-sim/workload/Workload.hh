@@ -38,13 +38,13 @@ class Workload : public Callable {
 
     // event-based simulation
     void issue_dep_free_nodes();
-    void issue(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
+    bool issue(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     void issue_metadata(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     void issue_replay(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     void issue_remote_mem(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     void issue_comp(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    void issue_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    void issue_coll_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
+    bool issue_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
+    bool issue_coll_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     void issue_send_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     void issue_recv_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     void skip_invalid(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);

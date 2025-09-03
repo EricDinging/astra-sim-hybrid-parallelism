@@ -67,8 +67,8 @@ class AstraNetworkAPI {
 
     // Optional: reconfigure network topology (default no-op; overridden by
     // backends that support reconfiguration).
-    virtual void sim_reconfig(int /*topo_id*/) {
-        return;
+    virtual bool sim_reconfig(int /*topo_id*/) {
+        return false;
     }
 
     virtual void increment_inflight_coll() {

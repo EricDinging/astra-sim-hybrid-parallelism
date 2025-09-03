@@ -233,7 +233,7 @@ class Sys : public Callable {
                  void (*msg_handler)(void* fun_arg),
                  void* fun_arg);
 
-    void sim_reconfig(int topo_id);
+    bool sim_reconfig(int topo_id);
 
     void increment_inflight_coll();
     void decrement_inflight_coll();

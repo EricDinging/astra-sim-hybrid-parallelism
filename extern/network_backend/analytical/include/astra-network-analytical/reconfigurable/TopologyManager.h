@@ -33,10 +33,10 @@ class TopologyManager {
     /**
      * Reconfigure the topology with new bandwidths and latencies.
      */
-    void reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
+    bool reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
                      std::vector<std::vector<Latency>> latencies, Latency reconfig_time, int topo_id=0) noexcept;
 
-    void reconfigure(int topo_id) noexcept;
+    bool reconfigure(int topo_id) noexcept;
 
     void set_reconfig_latency(Latency latency) noexcept;
 

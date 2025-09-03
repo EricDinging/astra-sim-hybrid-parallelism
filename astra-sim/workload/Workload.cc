@@ -148,15 +148,25 @@ void Workload::issue_dep_free_nodes() {
               << ", dependancy_free_nodes_set.size="
               << dependancy_free_nodes_set.size() << std::endl;
     
+    bool success = true;
     for (const auto node_id : dependancy_free_nodes_set) {
         std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
         if (hw_resource->is_available(node)) {
-            issue(node);
+            success = issue(node);
+            if (!success) {
+                std::cout << "Workload::issue_dep_free_nodes, sys->id=" << sys->id
+                          << ", tick=" << Sys::boostedTick()
+                          << ", node->id=" << node->id()
+                          << ", node->name=" << node->name()
+                          << ", node->type=" << static_cast<uint64_t>(node->type())
+                          << " issue failed" << std::endl;
+            }
         }
     }
 }
 
-void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    bool success = true;
     auto logger = LoggerFactory::get_logger("workload");
     std::cout << "Workload::issue, sys->id=" << sys->id
               << ", tick=" << Sys::boostedTick()
@@ -202,7 +212,17 @@ void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
         } else if (node->type() == ChakraNodeType::COMM_COLL_NODE ||
                    node->type() == ChakraNodeType::COMM_SEND_NODE ||
                    node->type() == ChakraNodeType::COMM_RECV_NODE) {
-            issue_comm(node);
+            success = issue_comm(node);
+            if (!success) {
+                hw_resource->release(node);
+                this->et_feeder->getDependancyResolver().push_back_node(node->id());
+                stats->record_end(node, Sys::boostedTick());
+                if (this->sys->track_local_mem) {
+                    this->local_mem_usage_tracker->recordEnd(
+                        node, Sys::boostedTick());
+                }
+                return success;
+            }
         } else if (node->type() == ChakraNodeType::INVALID_NODE) {
             skip_invalid(node);
         } else if (node->type() == ChakraNodeType::METADATA_NODE) {
@@ -212,6 +232,7 @@ void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
             exit(EXIT_FAILURE);
         }
     }
+    return success;
 }
 
 void Workload::issue_metadata(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
@@ -299,13 +320,14 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
                 op_stat.memory_utilization.value(), tensor_size, num_ops);
 }
 
-void Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+bool Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     if (node->is_cpu_op<bool>(false)) {
         throw std::runtime_error("Comm node should not be on CPU");
     }
+    bool success = true;
     const auto node_type = node->type();
     if (node_type == ChakraNodeType::COMM_COLL_NODE) {
-        this->issue_coll_comm(node);
+        success = this->issue_coll_comm(node);
     } else if (node_type == ChakraNodeType::COMM_SEND_NODE) {
         this->issue_send_comm(node);
     } else if (node_type == ChakraNodeType::COMM_RECV_NODE) {
@@ -313,9 +335,10 @@ void Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     } else {
         throw std::runtime_error("Unknown comm node type");
     }
+    return success;
 }
 
-void Workload::issue_coll_comm(
+bool Workload::issue_coll_comm(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const bool has_involve_dims = node->has_attr("involve_dims");
     std::vector<bool> involved_dims;
@@ -365,7 +388,8 @@ void Workload::issue_coll_comm(
         if (pg_id == 3 || pg_id == 4) {
             topo_id = 1;
         }
-        sys->comm_NI->sim_reconfig(topo_id);
+        bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+        if (!can_config) return false;
     }
 
     sys->increment_inflight_coll();
@@ -427,6 +451,7 @@ void Workload::issue_coll_comm(
     } else {
         throw std::runtime_error("Unsupported collective comm type");
     }
+    return true;
 }
 
 void Workload::issue_send_comm(
