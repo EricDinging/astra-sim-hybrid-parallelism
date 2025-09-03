@@ -107,8 +107,8 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
 
     while ((is_reconfiguring() || inflight_coll > 0) && !event_queue->finished()) {
         // TODO check condition
+        std::cout << "\nTM: trying to reconfig, inflight coll: " << inflight_coll << ", is reconfiguring? " << is_reconfiguring() << ", is event queue finished? " << event_queue->finished() << std::endl;
         event_queue->proceed();
-        std::cout << "TM: trying to reconfig " << inflight_coll << ", is reconfiguring? " << is_reconfiguring() << ", is event queue finished? " << event_queue->finished() << std::endl;
     }
 
     if (topo_id == cur_topo_id) {
@@ -143,6 +143,7 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     this->cur_topo_id = topo_id;
     topology_iteration++;
     drain_network();
+    return;
 }
 
 void TopologyManager::reconfigure(int topo_id) noexcept{

@@ -43,6 +43,10 @@ class EventList {
      */
     void invoke_events() noexcept;
 
+    bool is_empty() const noexcept {
+        return events.empty();
+    }
+
   private:
     /// event time of the event list
     EventTime event_time;

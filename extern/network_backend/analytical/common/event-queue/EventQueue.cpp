@@ -29,6 +29,10 @@ void EventQueue::proceed() noexcept {
 
     // proceed to the next event time
     //auto& current_event_list = event_queue.front();
+    // if (!current_event_list.is_empty()) {
+    //     current_event_list.invoke_events();
+    // }
+    
     EventList current_event_list = event_queue.front();
     event_queue.pop_front();
 

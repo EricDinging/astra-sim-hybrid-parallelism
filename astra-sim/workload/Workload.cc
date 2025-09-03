@@ -496,6 +496,7 @@ void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 
 void Workload::call(EventType event, CallData* data) {
     if (is_finished) {
+        printf("Rank %d: workload already finished, ignore event %d\n", this->sys->id, static_cast<int>(event));
         return;
     }
 

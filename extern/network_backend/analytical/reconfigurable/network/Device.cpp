@@ -45,9 +45,11 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     
     // set link free
     links[link_id]->set_free();
+    std::cout << "Device " << device_id << ": link to " << link_id << " is free at time " << Link::get_current_time() << std::endl;
 
     // process pending chunks if one exist
     if(pending_chunks[link_id].empty() || pending_chunks[link_id].front()->get_topology_iteration() > topology_iteration) {
+        std::cout << "Device " << device_id << ": link to " << link_id << " is free but no pending chunks or chunk from future topology iteration. Pending queue size: " << pending_chunks[link_id].size() << std::endl;
         if(drain_all_flow){
             increment_callback();
         }
@@ -66,6 +68,7 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     LinkFreeCallbackArg* next_callback_arg = new LinkFreeCallbackArg{shared_from_this(), link_id};
     // get the next link free time
     
+    std::cout << "Device " << device_id << ": link to " << link_id << " becomes free at time " << next_link_free_time << ", link ending chunk: " << pending_chunks[link_id].size() << std::endl;
 
     Link::schedule_event(next_link_free_time, link_become_free, next_callback_arg);
 }
@@ -118,6 +121,7 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     if (link->is_busy() || link->get_bandwidth() == Bandwidth(0) || chunk->get_topology_iteration() > topology_iteration) {
         // link is busy, add the chunk to pending chunks
         pending_chunks[next_dest_id].push_back(std::move(chunk));
+        std::cout << "Device " << device_id << ": link to " << next_dest_id << " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " << pending_chunks[next_dest_id].size() << std::endl;
         return;
     }
 

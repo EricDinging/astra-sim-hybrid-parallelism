@@ -5,6 +5,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "common/EventList.h"
 #include <cassert>
+#include <iostream>
 
 using namespace NetworkAnalytical;
 
@@ -30,6 +31,7 @@ void EventList::invoke_events() noexcept {
     // invoke all events in the event list
     while (!events.empty()) {
         events.front().invoke_event();
+        printf("\nEventQueue: issue event\n\n");
         events.pop_front();
     }
 }
