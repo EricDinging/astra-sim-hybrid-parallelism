@@ -237,6 +237,7 @@ class Sys : public Callable {
 
     void increment_inflight_coll();
     void decrement_inflight_coll();
+    int get_inflight_coll();
 
     int sim_recv(Tick delay,
                  void* buffer,

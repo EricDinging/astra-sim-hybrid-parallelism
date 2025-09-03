@@ -104,18 +104,19 @@ void TopologyManager::increment_callback() noexcept {
 void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
                                std::vector<std::vector<Latency>> latencies, Latency reconfig_time, int topo_id) noexcept {
 
-    if (topo_id == cur_topo_id) {
-        std::cout << "Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id " << topo_id << std::endl;
-        return;
-    }
 
     while ((is_reconfiguring() || inflight_coll > 0) && !event_queue->finished()) {
         // TODO check condition
-        std::cout << "Reconfig: trying, but still reconfiguring or not events not drained" << std::endl;
         event_queue->proceed();
+        std::cout << "TM: trying to reconfig " << inflight_coll << ", is reconfiguring? " << is_reconfiguring() << ", is event queue finished? " << event_queue->finished() << std::endl;
     }
 
-    printf("\n!!! Reconfig to topo_id: %d, Devices count: %d, NPUs count: %d\n", topo_id, devices_count, npus_count);
+    if (topo_id == cur_topo_id) {
+        std::cout << "TM: Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id " << topo_id << std::endl;
+        return;
+    }
+
+    printf("\nTM: !!! Reconfig to topo_id: %d, Devices count: %d, NPUs count: %d, inflight_coll %d\n", topo_id, devices_count, npus_count, inflight_coll);
     printf("bandwidths size: %zu, latencies size: %zu\n\n", bandwidths.size(), latencies.size());
 
     assert(bandwidths.size() == devices_count);
@@ -134,11 +135,9 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     this->latencies = std::move(latencies);
     this->reconfig_time = reconfig_time;
 
-
-
     precomputeRoutes();
 
-    printf("Reconfiguring topology with %d devices and %d NPUs and reconfig time %f.\n", devices_count, npus_count, reconfig_time);
+    // printf("TM: Reconfiguring topology with %d devices and %d NPUs and reconfig time %f.\n", devices_count, npus_count, reconfig_time);
 
     reconfiguring = true;
     this->cur_topo_id = topo_id;

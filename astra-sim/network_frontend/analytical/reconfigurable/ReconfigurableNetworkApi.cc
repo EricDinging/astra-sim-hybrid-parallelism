@@ -39,6 +39,10 @@ void ReconfigurableNetworkApi::decrement_inflight_coll() {
     tm->inflight_coll--;
 }
 
+int ReconfigurableNetworkApi::get_inflight_coll() {
+    return tm->inflight_coll;
+}
+
 int ReconfigurableNetworkApi::sim_send(void* const buffer,
                                         const uint64_t count,
                                         const int type,

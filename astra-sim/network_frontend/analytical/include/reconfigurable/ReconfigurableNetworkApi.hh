@@ -48,6 +48,8 @@ class ReconfigurableNetworkApi final : public CommonNetworkApi {
 
   void increment_inflight_coll() override;
 
+  int get_inflight_coll() override;
+
   void decrement_inflight_coll() override;
 
   private:

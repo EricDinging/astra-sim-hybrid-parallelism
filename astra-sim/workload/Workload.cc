@@ -142,6 +142,12 @@ void Workload::issue_dep_free_nodes() {
     for (const auto node_id : dependancy_free_nodes) {
         dependancy_free_nodes_set.insert(node_id);
     }
+
+    std::cout << "Workload::issue_dep_free_nodes, sys->id=" << sys->id
+              << ", tick=" << Sys::boostedTick()
+              << ", dependancy_free_nodes_set.size="
+              << dependancy_free_nodes_set.size() << std::endl;
+    
     for (const auto node_id : dependancy_free_nodes_set) {
         std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
         if (hw_resource->is_available(node)) {
@@ -152,6 +158,13 @@ void Workload::issue_dep_free_nodes() {
 
 void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     auto logger = LoggerFactory::get_logger("workload");
+    std::cout << "Workload::issue, sys->id=" << sys->id
+              << ", tick=" << Sys::boostedTick()
+              << ", node->id=" << node->id()
+              << ", node->name=" << node->name()
+              << ", node->type=" << static_cast<uint64_t>(node->type())
+              << std::endl;
+    
     if (sys->trace_enabled) {
         logger->debug("issue,sys->id={}, tick={}, node->id={}, "
                       "node->name={}, node->type={}",
@@ -356,6 +369,7 @@ void Workload::issue_coll_comm(
     }
 
     sys->increment_inflight_coll();
+    std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
 
 
     previous_group = comm_group;
@@ -489,7 +503,7 @@ void Workload::call(EventType event, CallData* data) {
         IntData* int_data = (IntData*)data;
         uint64_t coll_comm_id = int_data->data;
         sys->decrement_inflight_coll();
-        printf("RANK: %d finish collective: %lu\n", this->sys->id, coll_comm_id);
+        printf("RANK: %d finish collective: %lu, inflight collective %d\n", this->sys->id, coll_comm_id, sys->get_inflight_coll());
 
         hw_resource->tics_gpu_comms += int_data->execution_time;
         uint64_t node_id = collective_comm_node_id_map[coll_comm_id];

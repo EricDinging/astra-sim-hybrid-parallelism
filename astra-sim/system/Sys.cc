@@ -1588,6 +1588,13 @@ void Sys::decrement_inflight_coll() {
      }
 }
 
+int Sys::get_inflight_coll() {
+     if (comm_NI) {
+         return comm_NI->get_inflight_coll();
+     }
+     return 0;
+}
+
 int Sys::sim_send(Tick delay,
                   void* buffer,
                   uint64_t count,
