@@ -40,6 +40,8 @@ TopologyManager::TopologyManager(int npus_count, int devices_count, EventQueue* 
     latencies.resize(devices_count, std::vector<Latency>(devices_count, Latency(0)));
 
     topology_iteration = 0;
+
+    inflight_coll = 0;
 }
 
 std::shared_ptr<Device> TopologyManager::get_device(const DeviceId deviceId) noexcept {
@@ -107,7 +109,7 @@ void TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
         return;
     }
 
-    while (is_reconfiguring() || !event_queue->finished()) {
+    while ((is_reconfiguring() || inflight_coll > 0) && !event_queue->finished()) {
         // TODO check condition
         std::cout << "Reconfig: trying, but still reconfiguring or not events not drained" << std::endl;
         event_queue->proceed();
@@ -219,9 +221,6 @@ void TopologyManager::precomputeRoutes() noexcept {
 void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
     assert(chunk != nullptr);
     assert(chunk->current_device() != nullptr);
-
-    printf("Sending chunk from %d to %d\n", chunk->current_device()->get_id(), chunk->next_device()->get_id());
-
     // chunk->update_route(route(chunk->current_device()->get_id(), chunk->next_device()->get_id()), topology_iteration);
 
     // Get the source device ID
@@ -231,6 +230,9 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
     if(chunk->get_topology_iteration() == -1){
         chunk->update_route(route(src, chunk->next_device()->get_id()), topology_iteration);
     }
+
+    printf("Sending chunk from %d to %d, in topo iter %d\n", chunk->current_device()->get_id(), chunk->next_device()->get_id(), chunk->get_topology_iteration());
+
     // Send the chunk through the topology
     topology->send(std::move(chunk));
 }

@@ -71,6 +71,14 @@ class AstraNetworkAPI {
         return;
     }
 
+    virtual void increment_inflight_coll() {
+        return;
+    }
+
+    virtual void decrement_inflight_coll() {
+        return;
+    }
+
     // Notifies that the workload for this rank has finished. 
     // Note that we have one network handler per rank. 
     // Therefore, when implementing this function, the network handler must 

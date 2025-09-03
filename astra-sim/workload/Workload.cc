@@ -336,7 +336,7 @@ void Workload::issue_coll_comm(
     }
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
-    std::cout << "RANK: " << this->sys->id <<" Issuing coll: " << comm_group->to_string() << std::endl;
+    std::cout << "RANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << std::endl;
     // std::cout << "Involved npus: ";
     // for (auto d : comm_group->involved_NPUs) {
     //     std::cout << d << " ";
@@ -354,6 +354,10 @@ void Workload::issue_coll_comm(
         }
         sys->comm_NI->sim_reconfig(topo_id);
     }
+
+    sys->increment_inflight_coll();
+
+
     previous_group = comm_group;
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
@@ -363,6 +367,7 @@ void Workload::issue_coll_comm(
     // TODO: comm_tag? which is used to distinguish two different collective in
     // same pg
     const auto comm_priority = node->comm_priority<uint32_t>();  // default 0u
+
 
     if (comm_type == ChakraCollectiveCommType::ALL_REDUCE) {
         DataSet* fp = sys->generate_all_reduce(comm_size, involved_dims,
@@ -483,6 +488,8 @@ void Workload::call(EventType event, CallData* data) {
     if (event == EventType::CollectiveCommunicationFinished) {
         IntData* int_data = (IntData*)data;
         uint64_t coll_comm_id = int_data->data;
+        sys->decrement_inflight_coll();
+        printf("RANK: %d finish collective: %lu\n", this->sys->id, coll_comm_id);
 
         hw_resource->tics_gpu_comms += int_data->execution_time;
         uint64_t node_id = collective_comm_node_id_map[coll_comm_id];

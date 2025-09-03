@@ -31,6 +31,14 @@ void ReconfigurableNetworkApi::sim_reconfig(int topo_id) {
     tm->reconfigure(topo_id);
 }
 
+void ReconfigurableNetworkApi::increment_inflight_coll() {
+    tm->inflight_coll++;
+}
+
+void ReconfigurableNetworkApi::decrement_inflight_coll() {
+    tm->inflight_coll--;
+}
+
 int ReconfigurableNetworkApi::sim_send(void* const buffer,
                                         const uint64_t count,
                                         const int type,

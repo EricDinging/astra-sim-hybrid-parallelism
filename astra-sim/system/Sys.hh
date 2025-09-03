@@ -235,6 +235,9 @@ class Sys : public Callable {
 
     void sim_reconfig(int topo_id);
 
+    void increment_inflight_coll();
+    void decrement_inflight_coll();
+
     int sim_recv(Tick delay,
                  void* buffer,
                  uint64_t count,

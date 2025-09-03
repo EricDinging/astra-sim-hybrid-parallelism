@@ -46,6 +46,10 @@ class ReconfigurableNetworkApi final : public CommonNetworkApi {
 
   void sim_reconfig(int topo_id) override;
 
+  void increment_inflight_coll() override;
+
+  void decrement_inflight_coll() override;
+
   private:
     /// topology
     static std::shared_ptr<TopologyManager> tm;

@@ -53,6 +53,8 @@ class TopologyManager {
         return;
     };
     
+    int inflight_coll;
+
     /**
      * Construct the route from src to dest.
      * Route is a list of devices (pointers) that the chunk should traverse,

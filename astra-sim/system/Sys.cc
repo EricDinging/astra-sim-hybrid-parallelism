@@ -1477,6 +1477,7 @@ int Sys::front_end_sim_send(Tick delay,
         return rendezvous_sim_send(delay, buffer, count, type, dst, tag,
                                    request, msg_handler, fun_arg);
     } else {
+        printf("Issuing send from %d to %d\n", id, dst);
         return sim_send(delay, buffer, count, type, dst, tag, request,
                         msg_handler, fun_arg);
     }
@@ -1573,6 +1574,18 @@ void Sys::sim_reconfig(int topo_id) {
     if (comm_NI) {
         comm_NI->sim_reconfig(topo_id);
     }
+}
+
+void Sys::increment_inflight_coll() {
+     if (comm_NI) {
+         comm_NI->increment_inflight_coll();
+     }
+}
+
+void Sys::decrement_inflight_coll() {
+     if (comm_NI) {
+         comm_NI->decrement_inflight_coll();
+     }
 }
 
 int Sys::sim_send(Tick delay,
