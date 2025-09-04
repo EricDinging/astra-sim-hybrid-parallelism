@@ -137,8 +137,8 @@ int main(int argc, char* argv[]) {
 
     tm = std::make_shared<TopologyManager>(npus_count, npus_count, event_queue.get(), bw_matrix_map);
 
-    // TODO Initialize the topology to the first topology in the map
-    tm->reconfigure(bw_matrix_map[1], lt_matrix, 0, 1);
+    // Initialize the topology to the first topology in the map
+    tm->reconfigure(bw_matrix_map[0], lt_matrix, 0, 0);
 
     tm->set_reconfig_latency(reconfig_latency);
 
