@@ -90,14 +90,26 @@ void TopologyManager::increment_callback() noexcept {
 
     // All links have been drained, increment the topology iteration
     std::cout << "Drained Network, reconfiguring to TOPO ITERATION #" << topology_iteration << std::endl;
-
+    for(auto row:bandwidths){
+        for(auto bw: row){
+            std::cout << bw << " ";
+        }
+        std::cout << std::endl;
+    }
 
 
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
         // std::vector<Route> routes;
         // Create a route for each device
-        device->reconfigure(this->bandwidths[i], precomputed_routes[i], this->latencies[i], reconfig_time);
+        std::vector<Bandwidth> bw_device = bandwidths[i];
+        std::cout << "BW Vector for device " << i << std::endl;
+        for (auto bw: bw_device){
+            std::cout << bw << " ";
+        }
+        std::cout << std::endl;
+
+        device->reconfigure(bandwidths[i], precomputed_routes[i], latencies[i], reconfig_time);
     }
 }
 
@@ -118,6 +130,12 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
 
     printf("\nTM: !!! Reconfig to topo_id: %d, Devices count: %d, NPUs count: %d, inflight_coll %d\n", topo_id, devices_count, npus_count, inflight_coll);
     printf("bandwidths size: %zu, latencies size: %zu\n\n", bandwidths.size(), latencies.size());
+    for(auto row:bandwidths){
+        for(auto bw: row){
+            std::cout << bw << " ";
+        }
+        std::cout << std::endl;
+    }
 
     assert(bandwidths.size() == devices_count);
     assert(latencies.size() == devices_count);
@@ -131,8 +149,8 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     }
 
     // Update the bandwidth and latency matrices
-    this->bandwidths = std::move(bandwidths);
-    this->latencies = std::move(latencies);
+    this->bandwidths = bandwidths;
+    this->latencies = latencies;
     this->reconfig_time = reconfig_time;
 
     precomputeRoutes();
@@ -232,7 +250,11 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
         chunk->update_route(route(src, chunk->next_device()->get_id()), topology_iteration);
     }
 
-    printf("Sending chunk from %d to %d, in topo iter %d\n", chunk->current_device()->get_id(), chunk->next_device()->get_id(), chunk->get_topology_iteration());
+    printf("TM: Sending chunk from %d to %d, in topo iter %d, route: ", chunk->current_device()->get_id(), chunk->next_device()->get_id(), chunk->get_topology_iteration());
+    for(auto device : chunk->route){
+        printf("%d ", device->get_id());
+    }
+    printf("\n");
 
     // Send the chunk through the topology
     topology->send(std::move(chunk));

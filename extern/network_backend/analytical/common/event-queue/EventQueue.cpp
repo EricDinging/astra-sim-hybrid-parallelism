@@ -37,10 +37,10 @@ void EventQueue::proceed() noexcept {
     event_queue.pop_front();
 
     // check the validity and update current time
-    if(current_event_list.get_event_time() <= current_time) {
-        // this should never happen
-        printf("Current time: %lu, Event time: %lu\n", current_time, current_event_list.get_event_time());
-    }
+    // if(current_event_list.get_event_time() <= current_time) {
+    //     // this should never happen
+    //     printf("Current time: %lu, Event time: %lu\n", current_time, current_event_list.get_event_time());
+    // }
     assert(current_event_list.get_event_time() >= current_time);
     current_time = current_event_list.get_event_time();
 

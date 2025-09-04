@@ -124,7 +124,7 @@ unsigned long Link::schedule_chunk_transmission(std::unique_ptr<Chunk> chunk) no
 unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency reconfig_time) noexcept{
     if (bandwidth == this->bandwidth && latency == this->latency) {
         std::cout << "No reconfiguration needed" << std::endl;
-        return Link::event_queue->get_current_time();
+        return Link::event_queue->get_current_time() + 1;
     }
 
     assert(!busy);

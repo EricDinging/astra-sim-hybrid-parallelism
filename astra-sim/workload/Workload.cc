@@ -154,9 +154,7 @@ void Workload::issue_dep_free_nodes() {
         if (hw_resource->is_available(node)) {
             success = issue(node);
             if (!success) {
-                std::cout << "Workload::issue_dep_free_nodes, sys->id=" << sys->id
-                          << ", tick=" << Sys::boostedTick()
-                          << ", node->id=" << node->id()
+                std::cout << "Workload:: node->id=" << node->id()
                           << ", node->name=" << node->name()
                           << ", node->type=" << static_cast<uint64_t>(node->type())
                           << " issue failed" << std::endl;

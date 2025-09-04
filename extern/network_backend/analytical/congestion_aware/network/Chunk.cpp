@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 #include "congestion_aware/Device.h"
 #include "congestion_aware/Link.h"
 #include <cassert>
+#include <stdio.h>
 
 using namespace NetworkAnalyticalCongestionAware;
 

@@ -104,6 +104,8 @@ class Chunk {
         return on_route_chunks;
     }
 
+    Route route;
+
   private:
     static int on_route_chunks;
 
@@ -114,7 +116,6 @@ class Chunk {
     /// Route has the structure of [current device, next device, ..., dest device]
     /// e.g., if a chunk starts from device 5, then reaches destination 3,
     /// the route would be e.g., [5, 1, 6, 2, 3]
-    Route route;
 
     DeviceId src_id;
 

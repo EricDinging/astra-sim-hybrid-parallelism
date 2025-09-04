@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 #include "reconfigurable/Link.h"
 #include <cassert>
 #include <optional>
+#include <stdio.h>
 
 using namespace NetworkAnalyticalReconfigurable;
 
@@ -25,6 +26,7 @@ void Chunk::chunk_arrived_next_device(void* const chunk_ptr) noexcept {
     if (chunk->arrived_dest()) {
         // chunk arrived dest, invoke callback
         // as chunk is unique_ptr, will be destroyed automatically
+        printf("ABCDEFGHIJ\n");
         chunk->invoke_callback();
     } else {
         // send this chunk to next dest

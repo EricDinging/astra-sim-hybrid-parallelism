@@ -71,6 +71,12 @@ void parse_bw_matrix(const std::string& filename) {
             }
             bw_matrix_map[topo_id] = bw_matrix;
             std::cout << "Parsed BW matrix for topology: " << topo_id << std::endl;
+            for(auto row:bw_matrix){
+                for(auto bw: row){
+                    std::cout << bw << " ";
+                }
+                std::cout << std::endl;
+            }
         }
     }
 }
@@ -173,8 +179,15 @@ int main(int argc, char* argv[]) {
     }
 
     // run simulation
-    while (!event_queue->finished()) {
+    while (true) {
         event_queue->proceed();
+        if(event_queue->finished()){
+            for (int i = 0; i < npus_count; i++) {
+                systems[i]->workload->issue_dep_free_nodes();
+            }
+        }
+        if(event_queue->finished())
+            break;
     }
 
     // terminate simulation

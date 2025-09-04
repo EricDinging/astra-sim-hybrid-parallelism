@@ -31,7 +31,7 @@ void EventList::invoke_events() noexcept {
     // invoke all events in the event list
     while (!events.empty()) {
         events.front().invoke_event();
-        printf("\nEventQueue: issue event\n\n");
+        // printf("\nEventQueue: issue event\n\n");
         events.pop_front();
     }
 }
