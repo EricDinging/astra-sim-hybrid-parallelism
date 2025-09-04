@@ -14,7 +14,7 @@ PROJECT_DIR="${SCRIPT_DIR:?}/../.."
 EXAMPLE_DIR="${PROJECT_DIR:?}/examples/stg-dp2-tp2"
 
 # paths
-ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Unaware"
+ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Aware"
 WORKLOAD="${EXAMPLE_DIR:?}/workload"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"

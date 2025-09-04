@@ -1477,7 +1477,7 @@ int Sys::front_end_sim_send(Tick delay,
         return rendezvous_sim_send(delay, buffer, count, type, dst, tag,
                                    request, msg_handler, fun_arg);
     } else {
-        printf("Issuing send from %d to %d\n", id, dst);
+        // printf("Issuing send from %d to %d\n", id, dst);
         return sim_send(delay, buffer, count, type, dst, tag, request,
                         msg_handler, fun_arg);
     }

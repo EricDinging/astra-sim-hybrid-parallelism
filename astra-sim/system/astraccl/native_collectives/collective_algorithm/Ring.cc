@@ -96,11 +96,11 @@ int Ring::get_non_zero_latency_packets() {
 void Ring::run(EventType event, CallData* data) {
     if (event == EventType::General) {
         free_packets += 1;
-        printf("Ring contains: ");
-        for (auto npu : ((RingTopology*)logical_topo)->NPUs) {
-            printf(" %d", npu);
-        }
-        printf("\n");
+        // printf("Ring contains: ");
+        // for (auto npu : ((RingTopology*)logical_topo)->NPUs) {
+        //     printf(" %d", npu);
+        // }
+        // printf("\n");
 
         ready();
         
@@ -245,7 +245,7 @@ bool Ring::ready() {
     RecvPacketEventHandlerData* ehd = new RecvPacketEventHandlerData(
         stream, stream->owner->id, EventType::PacketReceived,
         packet.preferred_vnet, packet.stream_id);
-    printf("Issuing ring from npu %d\n", stream->owner->id);
+    // printf("Issuing ring from npu %d\n", stream->owner->id);
     stream->owner->front_end_sim_recv(
         0, Sys::dummy_data, msg_size, UINT8, packet.preferred_src,
         stream->stream_id, &rcv_req, Sys::FrontEndSendRecvType::COLLECTIVE,
