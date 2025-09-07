@@ -43,6 +43,10 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
         LoggerFactory::get_logger("workload")->critical(error_msg);
         exit(EXIT_FAILURE);
     }
+    auto temp_et_feeder = new ETFeeder(workload_filename);
+    this->comm_group_list = temp_et_feeder->traverse_comm_group();
+    this->current_comm_group_idx = 0;
+    delete temp_et_feeder;
     this->et_feeder = new ETFeeder(workload_filename);
     this->comm_groups.clear();
     // TODO: parametrize the number of available hardware resources
@@ -54,6 +58,12 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     this->stats = new Statistics(this);
     this->is_finished = false;
     previous_group = nullptr;
+
+    std::cout << "Workload::Workload, sys->id=" << sys->id << " Comm groups: ";
+    for(int comm_group_id : this->comm_group_list) {
+        std::cout << comm_group_id << " ";
+    }
+    std::cout << std::endl;
 }
 
 Workload::~Workload() {
@@ -528,6 +538,17 @@ void Workload::call(EventType event, CallData* data) {
         uint64_t coll_comm_id = int_data->data;
         sys->decrement_inflight_coll();
         printf("RANK: %d finish collective: %lu, inflight collective %d\n", this->sys->id, coll_comm_id, sys->get_inflight_coll());
+
+        current_comm_group_idx++;
+        if (current_comm_group_idx < comm_group_list.size()) {
+            int next_comm_group_id = comm_group_list[current_comm_group_idx];
+            int topo_id = 0;
+            if (next_comm_group_id == 3 || next_comm_group_id == 4) {
+                topo_id = 1;
+            }
+            bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+            printf("RANK: %d attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
+        }
 
         hw_resource->tics_gpu_comms += int_data->execution_time;
         uint64_t node_id = collective_comm_node_id_map[coll_comm_id];

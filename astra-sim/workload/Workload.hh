@@ -68,6 +68,11 @@ class Workload : public Callable {
     // From the ET node, find out the corresponding communicator group, and
     // return the pointer. If no communicator group is specified for this ET
     // node, return nullptr.
+    std::vector<int> comm_group_list;
+    int current_comm_group_idx;
+
+    int cached_reconfig_topo_id;
+
     CommunicatorGroup* extract_comm_group(
         std::shared_ptr<Chakra::ETFeederNode> node);
     CommunicatorGroup* previous_group;
