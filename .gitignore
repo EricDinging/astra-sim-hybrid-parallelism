@@ -33,4 +33,8 @@ build/astra_htsim/build/
 runs
 *.txt
 
+# workload file
+workload_0
+workload_0.pdf
+
 

@@ -19,9 +19,10 @@ void ETFeeder::removeNode(const NodeId& node_id) {
   }
 }
 
+
+
 std::vector<int> ETFeeder::traverse_comm_group() {
   std::vector<int> comm_group_ids;
-  std::unordered_set<int> seen; // deduplicate while preserving encounter order
   // Destructively consume the dependency graph.
   while (this->hasNodesToIssue()) {
     auto node = this->getNextIssuableNode();
@@ -30,9 +31,7 @@ std::vector<int> ETFeeder::traverse_comm_group() {
     if (!comm_group_name.empty()) {
       try {
         int comm_group_id = std::stoi(comm_group_name);
-        if (seen.insert(comm_group_id).second) {
-          comm_group_ids.push_back(comm_group_id);
-        }
+        comm_group_ids.push_back(comm_group_id);
       } catch (const std::exception&) {
         // Ignore malformed pg_name that is not an int.
       }
@@ -42,6 +41,30 @@ std::vector<int> ETFeeder::traverse_comm_group() {
   }
   return comm_group_ids;
 }
+
+// std::vector<int> ETFeeder::traverse_comm_group() {
+//   std::vector<int> comm_group_ids;
+//   std::unordered_set<int> seen; // deduplicate while preserving encounter order
+//   // Destructively consume the dependency graph.
+//   while (this->hasNodesToIssue()) {
+//     auto node = this->getNextIssuableNode();
+//     // Extract communicator group id if present.
+//     std::string comm_group_name = node->pg_name<std::string>("");
+//     if (!comm_group_name.empty()) {
+//       try {
+//         int comm_group_id = std::stoi(comm_group_name);
+//         if (seen.insert(comm_group_id).second) {
+//           comm_group_ids.push_back(comm_group_id);
+//         }
+//       } catch (const std::exception&) {
+//         // Ignore malformed pg_name that is not an int.
+//       }
+//     }
+//     // Mark node finished to release its children.
+//     this->freeChildrenNodes(node->id());
+//   }
+//   return comm_group_ids;
+// }
 
 bool ETFeeder::hasNodesToIssue() {
   return !this->dependancy_resolver.get_dependancy_free_nodes().empty();

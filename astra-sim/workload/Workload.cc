@@ -164,10 +164,11 @@ void Workload::issue_dep_free_nodes() {
         if (hw_resource->is_available(node)) {
             success = issue(node);
             if (!success) {
-                std::cout << "Workload:: node->id=" << node->id()
+                std::cout << "Workload::issue failed, sys->id=" << sys->id 
+                          << ", node->id=" << node->id()
                           << ", node->name=" << node->name()
                           << ", node->type=" << static_cast<uint64_t>(node->type())
-                          << " issue failed" << std::endl;
+                          << std::endl;
             }
         }
     }
@@ -380,7 +381,7 @@ bool Workload::issue_coll_comm(
     }
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
-    std::cout << "RANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << std::endl;
+    
     // std::cout << "Involved npus: ";
     // for (auto d : comm_group->involved_NPUs) {
     //     std::cout << d << " ";
@@ -388,8 +389,8 @@ bool Workload::issue_coll_comm(
     // std::cout << std::endl;
 
     // TODO in addition to comm group detection, also check topo id change
+    // Lazy reconfiguration
     if(previous_group != comm_group || previous_group == nullptr) {
-        std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
         // TODO use suitable topo_id
         int pg_id = comm_group->get_id();
         int topo_id = 0;
@@ -398,7 +399,11 @@ bool Workload::issue_coll_comm(
         }
         bool can_config = sys->comm_NI->sim_reconfig(topo_id);
         if (!can_config) return false;
+        
+        std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
     }
+
+    std::cout << "RANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << std::endl;
 
     sys->increment_inflight_coll();
     std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
