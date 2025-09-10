@@ -555,6 +555,13 @@ void Workload::call(EventType event, CallData* data) {
             printf("RANK: %d attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
         }
 
+        // if (coll_comm_id == 1921) {
+        //     // TODO change coll_comm_id
+        //     int topo_id = 0;
+        //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+        //     printf("RANK: %d hard-code attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
+        // }
+
         hw_resource->tics_gpu_comms += int_data->execution_time;
         uint64_t node_id = collective_comm_node_id_map[coll_comm_id];
         shared_ptr<Chakra::FeederV3::ETFeederNode> node =
