@@ -338,7 +338,7 @@ bool Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     if (node_type == ChakraNodeType::COMM_COLL_NODE) {
         success = this->issue_coll_comm(node);
     } else if (node_type == ChakraNodeType::COMM_SEND_NODE) {
-        this->issue_send_comm(node);
+        success = this->issue_send_comm(node);
     } else if (node_type == ChakraNodeType::COMM_RECV_NODE) {
         this->issue_recv_comm(node);
     } else {
@@ -390,13 +390,26 @@ bool Workload::issue_coll_comm(
 
     // TODO in addition to comm group detection, also check topo id change
     // Lazy reconfiguration
+
+    // std_dp2_tp2
+    // if(previous_group != comm_group || previous_group == nullptr) {
+    //     // TODO use suitable topo_id
+    //     int pg_id = comm_group->get_id();
+    //     int topo_id = 0;
+    //     if (pg_id == 3 || pg_id == 4) {
+    //         topo_id = 1;
+    //     }
+    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+    //     if (!can_config) return false;
+        
+    //     std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
+    // }
+
+    // std_dp2_pp2
     if(previous_group != comm_group || previous_group == nullptr) {
         // TODO use suitable topo_id
         int pg_id = comm_group->get_id();
         int topo_id = 0;
-        if (pg_id == 3 || pg_id == 4) {
-            topo_id = 1;
-        }
         bool can_config = sys->comm_NI->sim_reconfig(topo_id);
         if (!can_config) return false;
         
@@ -408,8 +421,8 @@ bool Workload::issue_coll_comm(
     sys->increment_inflight_coll();
     std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
 
-
     previous_group = comm_group;
+
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
     const auto comm_size = node->comm_size<uint64_t>();
@@ -467,7 +480,7 @@ bool Workload::issue_coll_comm(
     return true;
 }
 
-void Workload::issue_send_comm(
+bool Workload::issue_send_comm(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const auto src = node->comm_src<uint32_t>(this->sys->id);
     if (src != this->sys->id) {
@@ -478,6 +491,18 @@ void Workload::issue_send_comm(
     // Record communication size for bandwidth calculation
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
+
+    // stg_tp2_pp2
+    if(previous_group != nullptr) {
+        // TODO use suitable topo_id
+        int topo_id = 1;
+        bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+        if (!can_config) return false;
+        std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
+    }
+
+    previous_group = nullptr;
+    std::cout << "RANK: " << this->sys->id <<" Issuing SEND " << src << "-" << dst << std::endl;
 
     sim_request snd_req;
     snd_req.srcRank = src;
@@ -491,6 +516,7 @@ void Workload::issue_send_comm(
     sys->front_end_sim_send(0, Sys::dummy_data, size, UINT8, dst, tag, &snd_req,
                             Sys::FrontEndSendRecvType::NATIVE,
                             &Sys::handleEvent, sehd);
+    return true;
 }
 
 void Workload::issue_recv_comm(
@@ -545,15 +571,15 @@ void Workload::call(EventType event, CallData* data) {
         printf("RANK: %d finish collective: %lu, inflight collective %d\n", this->sys->id, coll_comm_id, sys->get_inflight_coll());
 
         current_comm_group_idx++;
-        if (current_comm_group_idx < comm_group_list.size()) {
-            int next_comm_group_id = comm_group_list[current_comm_group_idx];
-            int topo_id = 0;
-            if (next_comm_group_id == 3 || next_comm_group_id == 4) {
-                topo_id = 1;
-            }
-            bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-            printf("RANK: %d attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
-        }
+        // if (current_comm_group_idx < comm_group_list.size()) {
+        //     int next_comm_group_id = comm_group_list[current_comm_group_idx];
+        //     int topo_id = 0;
+        //     if (next_comm_group_id == 3 || next_comm_group_id == 4) {
+        //         topo_id = 1;
+        //     }
+        //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+        //     printf("RANK: %d attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
+        // }
 
         // if (coll_comm_id == 1921) {
         //     // TODO change coll_comm_id
