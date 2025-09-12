@@ -392,29 +392,29 @@ bool Workload::issue_coll_comm(
     // Lazy reconfiguration
 
     // std_dp2_tp2
-    // if(previous_group != comm_group || previous_group == nullptr) {
-    //     // TODO use suitable topo_id
-    //     int pg_id = comm_group->get_id();
-    //     int topo_id = 0;
-    //     if (pg_id == 3 || pg_id == 4) {
-    //         topo_id = 1;
-    //     }
-    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-    //     if (!can_config) return false;
-        
-    //     std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
-    // }
-
-    // std_dp2_pp2
     if(previous_group != comm_group || previous_group == nullptr) {
         // TODO use suitable topo_id
         int pg_id = comm_group->get_id();
         int topo_id = 0;
+        if (pg_id == 3 || pg_id == 4) {
+            topo_id = 1;
+        }
         bool can_config = sys->comm_NI->sim_reconfig(topo_id);
         if (!can_config) return false;
         
         std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
     }
+
+    // std_dp2_pp2
+    // if(previous_group != comm_group || previous_group == nullptr) {
+    //     // TODO use suitable topo_id
+    //     int pg_id = comm_group->get_id();
+    //     int topo_id = 0;
+    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+    //     if (!can_config) return false;
+        
+    //     std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
+    // }
 
     std::cout << "RANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << std::endl;
 
@@ -493,15 +493,15 @@ bool Workload::issue_send_comm(
     const auto tag = node->comm_tag<uint32_t>();
 
     // stg_tp2_pp2
-    if(previous_group != nullptr) {
-        // TODO use suitable topo_id
-        int topo_id = 1;
-        bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        if (!can_config) return false;
-        std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
-    }
+    // if(previous_group != nullptr) {
+    //     // TODO use suitable topo_id
+    //     int topo_id = 1;
+    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+    //     if (!can_config) return false;
+    //     std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
+    // }
 
-    previous_group = nullptr;
+    // previous_group = nullptr;
     std::cout << "RANK: " << this->sys->id <<" Issuing SEND " << src << "-" << dst << std::endl;
 
     sim_request snd_req;
