@@ -108,7 +108,7 @@ class TopologyManager {
 
     int topology_iteration;
 
-    int cur_topo_id = 0;
+    int cur_topo_id = -1;
 
     bool reconfiguring;
 
