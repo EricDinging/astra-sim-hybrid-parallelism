@@ -75,7 +75,7 @@ class Workload : public Callable {
 
     CommunicatorGroup* extract_comm_group(
         std::shared_ptr<Chakra::ETFeederNode> node);
-    CommunicatorGroup* previous_group;
+    int previous_group_id = 0;
 };
 
 }  // namespace AstraSim
