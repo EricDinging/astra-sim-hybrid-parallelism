@@ -36,6 +36,16 @@ std::vector<int> ETFeeder::traverse_comm_group() {
         // Ignore malformed pg_name that is not an int.
       }
     }
+    // Check if the node name ends in SEND or RECV
+    std::string node_name = node->name();
+    if (node_name.size() >= 4) {
+      std::string suffix = node_name.substr(node_name.size() - 4);
+      if (suffix == "SEND" || suffix == "RECV") {
+      // Perform any additional logic if needed
+        int comm_group_id = -1;
+        comm_group_ids.push_back(comm_group_id);
+      }
+    }
     // Mark node finished to release its children.
     this->freeChildrenNodes(node->id());
   }

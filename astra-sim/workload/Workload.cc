@@ -11,6 +11,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/system/RecvPacketEventHandlerData.hh"
 #include "astra-sim/system/SendPacketEventHandlerData.hh"
 #include "astra-sim/system/WorkloadLayerHandlerData.hh"
+#include "astra-sim/workload/Scheduler.hh"
 #include <json/json.hpp>
 
 #include <iostream>
@@ -58,6 +59,8 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     this->stats = new Statistics(this);
     this->is_finished = false;
 
+    this->scheduler = new Scheduler(sys);
+
     std::cout << "Workload::Workload, sys->id=" << sys->id << " Comm groups: ";
     for(int comm_group_id : this->comm_group_list) {
         std::cout << comm_group_id << " ";
@@ -79,6 +82,9 @@ Workload::~Workload() {
     }
     if (this->stats != nullptr) {
         delete this->stats;
+    }
+    if (this->scheduler != nullptr) {
+        delete this->scheduler;
     }
 }
 
@@ -339,7 +345,7 @@ bool Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     } else if (node_type == ChakraNodeType::COMM_SEND_NODE) {
         success = this->issue_send_comm(node);
     } else if (node_type == ChakraNodeType::COMM_RECV_NODE) {
-        this->issue_recv_comm(node);
+        success = this->issue_recv_comm(node);
     } else {
         throw std::runtime_error("Unknown comm node type");
     }
@@ -390,37 +396,15 @@ bool Workload::issue_coll_comm(
     // TODO in addition to comm group detection, also check topo id change
     // Lazy reconfiguration
 
-    // std_dp2_tp2
-    // if(previous_group_id != comm_group->get_id() || previous_group_id == -1) {
-    //     // TODO use suitable topo_id
-    //     int pg_id = comm_group->get_id();
-    //     int topo_id = 0;
-    //     if (pg_id == 3 || pg_id == 4) {
-    //         topo_id = 1;
-    //     }
-    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-    //     if (!can_config) return false;
-        
-    //     std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
-    // }
-
     // std_dp2_pp2
-    if(previous_group_id != comm_group->get_id() || previous_group_id == -1) {
-        // TODO use suitable topo_id
-        int pg_id = comm_group->get_id();
-        int topo_id = 0;
-        bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        if (!can_config) return false;
-        
-        std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << comm_group->get_id() << std::endl;
-    }
+    bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id);
+    if (!reconfig_success) return false;
 
     std::cout << "RANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << std::endl;
+    previous_group_id = comm_group->get_id();
 
     sys->increment_inflight_coll();
     std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
-
-    previous_group_id = comm_group->get_id();
 
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
@@ -492,17 +476,16 @@ bool Workload::issue_send_comm(
     const auto tag = node->comm_tag<uint32_t>();
 
     // stg_tp2_pp2
-    if(previous_group_id >= 0) {
-        // TODO use suitable topo_id
-        int topo_id = 1;
-        bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        if (!can_config) return false;
-        std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
-    }
-
-    previous_group_id = -1;
+    int cur_comm_group_id = -1;
+    bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
+    if (!reconfig_success) return false;
 
     std::cout << "RANK: " << this->sys->id <<" Issuing SEND " << src << "-" << dst << std::endl;
+    previous_group_id = cur_comm_group_id;
+
+    // sys->increment_inflight_coll();
+    // std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
+
 
     sim_request snd_req;
     snd_req.srcRank = src;
@@ -519,7 +502,7 @@ bool Workload::issue_send_comm(
     return true;
 }
 
-void Workload::issue_recv_comm(
+bool Workload::issue_recv_comm(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const auto src = node->comm_src<uint32_t>();
     const auto dst = node->comm_dst<uint32_t>(this->sys->id);
@@ -531,6 +514,19 @@ void Workload::issue_recv_comm(
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
 
+    // stg_tp2_pp2 no need to reconfigure because recv is paired with send
+    // if(previous_group_id >= 0) {
+    //     // TODO use suitable topo_id
+    //     int topo_id = 1;
+    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+    //     if (!can_config) return false;
+    //     std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
+    // }
+
+    // previous_group_id = -1;
+
+    std::cout << "RANK: " << this->sys->id <<" Issuing RECV " << src << "-" << dst << std::endl;
+
     sim_request rcv_req;
     RecvPacketEventHandlerData* rcehd = new RecvPacketEventHandlerData;
     rcehd->wlhd = new WorkloadLayerHandlerData;
@@ -540,6 +536,7 @@ void Workload::issue_recv_comm(
     sys->front_end_sim_recv(0, Sys::dummy_data, size, UINT8, src, tag, &rcv_req,
                             Sys::FrontEndSendRecvType::NATIVE,
                             &Sys::handleEvent, rcehd);
+    return true;
 }
 
 void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
