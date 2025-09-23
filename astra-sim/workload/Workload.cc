@@ -568,6 +568,9 @@ void Workload::call(EventType event, CallData* data) {
         printf("RANK: %d finish collective: %lu, inflight collective %d\n", this->sys->id, coll_comm_id, sys->get_inflight_coll());
 
         current_comm_group_idx++;
+
+        scheduler->post_reconfig(coll_comm_id);
+
         // if (current_comm_group_idx < comm_group_list.size()) {
         //     int next_comm_group_id = comm_group_list[current_comm_group_idx];
         //     int topo_id = 0;
@@ -645,6 +648,10 @@ void Workload::call(EventType event, CallData* data) {
             // Calculate network bandwidth for point-to-point communications
             if (event == EventType::PacketSent ||
                 event == EventType::PacketReceived) {
+
+                printf("RANK: %d finish SEND/RECV\n", this->sys->id);
+                scheduler->post_reconfig(-1);
+
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);
                 Tick execution_time =
                     stats->get_operator_statistics(wlhd->node_id).end_time -

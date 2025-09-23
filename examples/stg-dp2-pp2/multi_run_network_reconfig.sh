@@ -40,7 +40,7 @@ export ASAN_OPTIONS=detect_container_overflow=0:detect_leaks=0
 for NETWORK in "${NETWORK_CONFIGS}"/*; do
     NETWORK_NAME=$(basename "${NETWORK}")
     # OUTPUT_FILE="${EXAMPLE_DIR}/output/debug_${NETWORK_NAME}"
-    OUTPUT_FILE="${EXAMPLE_DIR}/output_500ns/debug_${NETWORK_NAME}.txt"
+    OUTPUT_FILE="${EXAMPLE_DIR}/output_500ns_provision/debug_${NETWORK_NAME}.txt"
     "${ASTRA_SIM:?}" \
         --workload-configuration="${WORKLOAD}" \
         --system-configuration="${SYSTEM:?}" \
