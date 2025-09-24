@@ -20,7 +20,7 @@ private:
     AstraSim::Sys* sys;
     std::unordered_map<int, std::vector<int>> comm_group_to_start_indexes;
 
-    int cur_comm_idx = 0;
+    int cur_comm_idx = -1;
     bool reconfigure(int cur_comm_group_id, int prev_comm_group_id);
 
 public:

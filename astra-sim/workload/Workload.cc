@@ -61,6 +61,9 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
 
     this->scheduler = new Scheduler(sys);
 
+    // choose a non-relavant comm group to trigger initial reconfiguration
+    this->scheduler->post_reconfig(-10);
+
     std::cout << "Workload::Workload, sys->id=" << sys->id << " Comm groups: ";
     for(int comm_group_id : this->comm_group_list) {
         std::cout << comm_group_id << " ";
@@ -212,6 +215,7 @@ bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
         } else if (node->type() == ChakraNodeType::COMP_NODE) {
             if (!this->sys->roofline_enabled) {
                 issue_replay(node);
+
             } else {
                 if (node->is_cpu_op<bool>(false)) {
                     // comp node on cpu
@@ -273,6 +277,8 @@ void Workload::issue_replay(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     } else {
         hw_resource->tics_gpu_ops += runtime;
     }
+    printf("Workload::issue_replay, sys->id=%d, node->id=%lu, runtime=%lu ns\n",
+           sys->id, node->id(), runtime);
     sys->register_event(this, EventType::General, wlhd, runtime);
 }
 
@@ -302,6 +308,7 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     double num_ops = static_cast<double>(node->num_ops<uint64_t>());
     double tensor_size = static_cast<double>(node->tensor_size<uint64_t>());
 
+
     // if tensor_size is 0 during roofline mode, this is an invalid node
     if (tensor_size == 0) {
         skip_invalid(node);
@@ -312,6 +319,14 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     double perf = sys->roofline->get_perf(operational_intensity);
     double elapsed_time = static_cast<double>(node->num_ops()) / perf;  // sec
     uint64_t runtime = static_cast<uint64_t>(elapsed_time * 1e9);  // sec -> ns
+
+    printf(
+        "Workload::issue_comp, sys->id=%d, node->id=%lu, num_ops=%e, "
+        "tensor_size=%e, operational_intensity=%f, perf=%f, elapsed_time=%f "
+        "sec, runtime=%lu ns\n",
+        sys->id, node->id(), num_ops, tensor_size, operational_intensity,
+        perf, elapsed_time, runtime);
+    
     if (node->is_cpu_op()) {
         hw_resource->tics_cpu_ops += runtime;
     } else {

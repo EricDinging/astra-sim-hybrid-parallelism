@@ -47,9 +47,9 @@ bool AstraSim::Scheduler::reconfigure(int cur_comm_group_id, int prev_comm_group
     // TODO use suitable topo_id
 
     int topo_id = 0;
-    if (prev_comm_group_id == -1) {
+    if (cur_comm_group_id != -1) {
         topo_id = 0; // default topology
-    } else if (prev_comm_group_id >= 0 && cur_comm_group_id == -1) {
+    } else {
         topo_id = 1;
     }
     
