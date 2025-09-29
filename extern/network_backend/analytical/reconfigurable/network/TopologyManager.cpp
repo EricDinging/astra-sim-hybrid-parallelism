@@ -117,19 +117,19 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
                                std::vector<std::vector<Latency>> latencies, Latency reconfig_time, int topo_id) noexcept {
     
     if (topo_id == cur_topo_id) {
-        std::cout << "TM: Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id " << topo_id << std::endl;
+        std::cout << "\033[1;31mTM: Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id " << topo_id << "\033[0m" << std::endl;
         return true;
     }
 
     if ((is_reconfiguring() || inflight_coll > 0)) {
         // TODO check condition
-        std::cout << "\nTM: trying to reconfig, inflight coll: " << inflight_coll << ", is reconfiguring? " << is_reconfiguring() << ", is event queue finished? " << event_queue->finished() << std::endl;
+        std::cout << "\033[1;31m\nTM: trying to reconfig, inflight coll: " << inflight_coll << ", is reconfiguring? " << is_reconfiguring() << ", is event queue finished? " << event_queue->finished() << "\033[0m" << std::endl;
         // event_queue->proceed();
         return false;
     }
 
-    printf("\nTM: !!! Reconfig to topo_id: %d, Devices count: %d, NPUs count: %d, inflight_coll %d\n", topo_id, devices_count, npus_count, inflight_coll);
-    printf("bandwidths size: %zu, latencies size: %zu\n\n", bandwidths.size(), latencies.size());
+    printf("\n\033[1;31mTM: !!! Reconfig to topo_id: %d, Devices count: %d, NPUs count: %d, inflight_coll %d\033[0m\n", topo_id, devices_count, npus_count, inflight_coll);
+    printf("\033[1;31mTM: bandwidths size: %zu, latencies size: %zu\033[0m\n\n", bandwidths.size(), latencies.size());
     for(auto row:bandwidths){
         for(auto bw: row){
             std::cout << bw << " ";
@@ -250,11 +250,11 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
         chunk->update_route(route(src, chunk->next_device()->get_id()), topology_iteration);
     }
 
-    printf("TM: Sending chunk from %d to %d, in topo iter %d, route: ", chunk->current_device()->get_id(), chunk->next_device()->get_id(), chunk->get_topology_iteration());
-    for(auto device : chunk->route){
-        printf("%d ", device->get_id());
-    }
-    printf("\n");
+    // printf("TM: Sending chunk from %d to %d, in topo iter %d, route: ", chunk->current_device()->get_id(), chunk->next_device()->get_id(), chunk->get_topology_iteration());
+    // for(auto device : chunk->route){
+    //     printf("%d ", device->get_id());
+    // }
+    // printf("\n");
 
     // Send the chunk through the topology
     topology->send(std::move(chunk));

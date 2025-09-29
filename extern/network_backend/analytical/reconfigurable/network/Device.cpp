@@ -50,7 +50,7 @@ void Device::link_become_free(DeviceId link_id) noexcept {
 
     // process pending chunks if one exist
     if(pending_chunks[link_id].empty() || pending_chunks[link_id].front()->get_topology_iteration() > topology_iteration) {
-    std::cout << "Device " << device_id << ": link to " << link_id << " is free but no pending chunks or chunk from future topology iteration. Pending queue size: " << pending_chunks[link_id].size() << std::endl;
+    // std::cout << "Device " << device_id << ": link to " << link_id << " is free but no pending chunks or chunk from future topology iteration. Pending queue size: " << pending_chunks[link_id].size() << std::endl;
         if(drain_all_flow){
             increment_callback();
         }
@@ -70,7 +70,7 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     LinkFreeCallbackArg* next_callback_arg = new LinkFreeCallbackArg{shared_from_this(), link_id};
     // get the next link free time
     
-    std::cout << "Device " << device_id << ": link to " << link_id << " becomes free at time and scheduled another chunk " << next_link_free_time << ", link pending chunk: " << pending_chunks[link_id].size() << std::endl;
+    // std::cout << "Device " << device_id << ": link to " << link_id << " becomes free at time and scheduled another chunk " << next_link_free_time << ", link pending chunk: " << pending_chunks[link_id].size() << std::endl;
 
     Link::schedule_event(next_link_free_time, link_become_free, next_callback_arg);
 }

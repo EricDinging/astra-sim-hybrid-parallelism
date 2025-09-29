@@ -26,6 +26,7 @@ Scheduler::Scheduler(AstraSim::Sys* system) : sys(system) {
                 int group_id = group.first.as<int>();
                 std::vector<int> start_indexes = group.second.as<std::vector<int>>();
                 comm_group_to_start_indexes[group_id] = start_indexes;
+                printf("Rank: {}, Group ID: {}", rank, group_id);
             }
         }
 
@@ -55,7 +56,7 @@ bool AstraSim::Scheduler::reconfigure(int cur_comm_group_id, int prev_comm_group
     
     bool can_config = this->sys->comm_NI->sim_reconfig(topo_id);
     if (!can_config) {
-        std::cout << "RANK: " << this->sys->id << " Switching to comm group failed: " << cur_comm_group_id << std::endl;
+        printf("\033[1;33mScheduler: %d Switching to comm group failed: %d\033[0m\n", this->sys->id, cur_comm_group_id);
         return false;
     }
     return true;
@@ -86,7 +87,7 @@ bool AstraSim::Scheduler::pre_reconfig(int cur_comm_group_id, int prev_comm_grou
         bool can_config = this->reconfigure(cur_comm_group_id, prev_comm_group_id);
         if (!can_config) return false;
         
-        std::cout << "RANK: " << this->sys->id << " Switching to comm group: " << cur_comm_group_id << std::endl;
+        printf("\033[1;33mScheduler: %d Switching to comm group: %d\033[0m\n", this->sys->id, cur_comm_group_id);
     }
 
     return true;
@@ -110,7 +111,7 @@ bool AstraSim::Scheduler::post_reconfig(int cur_comm_group_id) {
         }
     }
 
-    printf("RANK: %d current comm idx: %d, target comm group id: %d\n", this->sys->id, this->cur_comm_idx, target_comm_group_id);
+    printf("\033[1;33mScheduler: %d current comm idx: %d, target comm group id: %d\033[0m\n", this->sys->id, this->cur_comm_idx, target_comm_group_id);
 
     // TODO increment for PP as well
     this->cur_comm_idx++;
@@ -119,9 +120,9 @@ bool AstraSim::Scheduler::post_reconfig(int cur_comm_group_id) {
     if (target_comm_group_id != cur_comm_group_id) {
         bool can_config = this->reconfigure(target_comm_group_id, cur_comm_group_id);
         if (can_config) {
-            std::cout << "RANK: " << this->sys->id << " provision success for " << target_comm_group_id << std::endl;
+            printf("\033[1;33mScheduler: %d provision success for %d\033[0m\n", this->sys->id, target_comm_group_id);
         } else {
-            std::cout << "RANK: " << this->sys->id << " provision failed for " << target_comm_group_id << std::endl;
+            printf("\033[1;33mScheduler: %d provision failed for %d\033[0m\n", this->sys->id, target_comm_group_id);
         }
     } 
 
