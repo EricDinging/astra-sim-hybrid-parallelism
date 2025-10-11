@@ -1,5 +1,5 @@
 topology: [ FullyConnected ]
 npus_count: [ 8 ]
-bandwidth: [ 5.0 ]  # GB/s
+bandwidth: [ 10.0 ]  # GB/s
 latency: [ 500.0 ]  # ns
-reconfig_time: [ 1000.0 ]  # ns
+reconfig_time: [ 10000.0 ]  # ns
