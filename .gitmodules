@@ -7,6 +7,7 @@
 [submodule "extern/network_backend/analytical"]
 	path = extern/network_backend/analytical
 	url = https://github.com/shuoshuc/astra-network-analytical.git
+	branch = main
 [submodule "extern/remote_memory_backend/analytical"]
 	path = extern/remote_memory_backend/analytical
 	url = https://github.com/astra-sim/astra-memory-analytical.git
