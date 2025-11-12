@@ -32,10 +32,13 @@ class RingTopology : public BasicLogicalTopology {
     bool is_enabled();
     Dimension get_dimension();
     int get_index_in_ring();
+    std::vector<int> NPUs;
 
   private:
     std::unordered_map<int, int> id_to_index;
     std::unordered_map<int, int> index_to_id;
+
+    
 
     std::string name;
     int id;
