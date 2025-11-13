@@ -59,11 +59,6 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     this->stats = new Statistics(this);
     this->is_finished = false;
 
-    this->scheduler = new Scheduler(sys);
-
-    // choose a non-relavant comm group to trigger initial reconfiguration
-    this->scheduler->post_reconfig(-10);
-
     std::cout << "Workload::Workload, sys->id=" << sys->id << " Comm groups: ";
     for(int comm_group_id : this->comm_group_list) {
         std::cout << comm_group_id << " ";
@@ -85,9 +80,6 @@ Workload::~Workload() {
     }
     if (this->stats != nullptr) {
         delete this->stats;
-    }
-    if (this->scheduler != nullptr) {
-        delete this->scheduler;
     }
 }
 
@@ -411,10 +403,6 @@ bool Workload::issue_coll_comm(
     // TODO in addition to comm group detection, also check topo id change
     // Lazy reconfiguration
 
-    // std_dp2_pp2
-    bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id);
-    if (!reconfig_success) return false;
-
     std::cout << "\033[0;32mRANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
     previous_group_id = comm_group->get_id();
 
@@ -492,9 +480,6 @@ bool Workload::issue_send_comm(
 
     // stg_tp2_pp2
     int cur_comm_group_id = -1;
-    bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
-    if (!reconfig_success) return false;
-
     std::cout << "RANK: " << this->sys->id <<" Issuing SEND " << src << "-" << dst << std::endl;
     previous_group_id = cur_comm_group_id;
 
@@ -583,12 +568,6 @@ void Workload::call(EventType event, CallData* data) {
         printf("\033[0;32mRANK: %d finish collective: %lu, inflight collective %d\033[0m\n", this->sys->id, coll_comm_id, sys->get_inflight_coll());
 
         current_comm_group_idx++;
-        //TODO edit coll_comm_id to comm group
-        if (this->sys->id == 0 || this->sys->id == 1) {
-            scheduler->post_reconfig(1);
-        } else {
-            scheduler->post_reconfig(2);
-        }
         
 
         // if (current_comm_group_idx < comm_group_list.size()) {
@@ -670,7 +649,6 @@ void Workload::call(EventType event, CallData* data) {
                 event == EventType::PacketReceived) {
 
                 printf("\033[0;32mRANK: %d finish SEND/RECV\033[0m\n", this->sys->id);
-                scheduler->post_reconfig(-1);
 
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);
                 Tick execution_time =
