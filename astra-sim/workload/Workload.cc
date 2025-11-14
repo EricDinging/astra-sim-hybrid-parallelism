@@ -311,14 +311,11 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     double perf = sys->roofline->get_perf(operational_intensity);
     double elapsed_time = static_cast<double>(node->num_ops()) / perf;  // sec
     uint64_t runtime = static_cast<uint64_t>(elapsed_time * 1e9);  // sec -> ns
+    // if dummy node, use runtime from chakra directly
+    if (node->name().find("DummyNode") != std::string::npos) {
+        runtime = node->runtime() * 1e3;  // µs -> ns 
+    } 
 
-    // printf(
-    //     "Workload::issue_comp, sys->id=%d, node->id=%lu, num_ops=%e, "
-    //     "tensor_size=%e, operational_intensity=%f, perf=%f, elapsed_time=%f "
-    //     "sec, runtime=%lu ns\n",
-    //     sys->id, node->id(), num_ops, tensor_size, operational_intensity,
-    //     perf, elapsed_time, runtime);
-    
     if (node->is_cpu_op()) {
         hw_resource->tics_cpu_ops += runtime;
     } else {
