@@ -11,6 +11,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/system/RecvPacketEventHandlerData.hh"
 #include "astra-sim/system/SendPacketEventHandlerData.hh"
 #include "astra-sim/system/WorkloadLayerHandlerData.hh"
+#include "astra-sim/workload/Scheduler.hh"
 #include <json/json.hpp>
 
 #include <iostream>
@@ -43,6 +44,10 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
         LoggerFactory::get_logger("workload")->critical(error_msg);
         exit(EXIT_FAILURE);
     }
+    auto temp_et_feeder = new ETFeeder(workload_filename);
+    this->comm_group_list = temp_et_feeder->traverse_comm_group();
+    this->current_comm_group_idx = 0;
+    delete temp_et_feeder;
     this->et_feeder = new ETFeeder(workload_filename);
     this->comm_groups.clear();
     // TODO: parametrize the number of available hardware resources
@@ -53,6 +58,12 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     initialize_comm_groups(comm_group_filename);
     this->stats = new Statistics(this);
     this->is_finished = false;
+
+    std::cout << "Workload::Workload, sys->id=" << sys->id << " Comm groups: ";
+    for(int comm_group_id : this->comm_group_list) {
+        std::cout << comm_group_id << " ";
+    }
+    std::cout << std::endl;
 }
 
 Workload::~Workload() {
@@ -141,16 +152,38 @@ void Workload::issue_dep_free_nodes() {
     for (const auto node_id : dependancy_free_nodes) {
         dependancy_free_nodes_set.insert(node_id);
     }
+
+    // std::cout << "Workload::issue_dep_free_nodes, sys->id=" << sys->id
+    //           << ", tick=" << Sys::boostedTick()
+    //           << ", dependancy_free_nodes_set.size="
+    //           << dependancy_free_nodes_set.size() << std::endl;
+    
+    bool success = true;
     for (const auto node_id : dependancy_free_nodes_set) {
         std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
         if (hw_resource->is_available(node)) {
-            issue(node);
+            success = issue(node);
+            if (!success) {
+                std::cout << "Workload::issue failed, sys->id=" << sys->id 
+                          << ", node->id=" << node->id()
+                          << ", node->name=" << node->name()
+                          << ", node->type=" << static_cast<uint64_t>(node->type())
+                          << std::endl;
+            }
         }
     }
 }
 
-void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    bool success = true;
     auto logger = LoggerFactory::get_logger("workload");
+    // std::cout << "Workload::issue, sys->id=" << sys->id
+    //           << ", tick=" << Sys::boostedTick()
+    //           << ", node->id=" << node->id()
+    //           << ", node->name=" << node->name()
+    //           << ", node->type=" << static_cast<uint64_t>(node->type())
+    //           << std::endl;
+    
     if (sys->trace_enabled) {
         logger->debug("issue,sys->id={}, tick={}, node->id={}, "
                       "node->name={}, node->type={}",
@@ -174,6 +207,7 @@ void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
         } else if (node->type() == ChakraNodeType::COMP_NODE) {
             if (!this->sys->roofline_enabled) {
                 issue_replay(node);
+
             } else {
                 if (node->is_cpu_op<bool>(false)) {
                     // comp node on cpu
@@ -188,7 +222,17 @@ void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
         } else if (node->type() == ChakraNodeType::COMM_COLL_NODE ||
                    node->type() == ChakraNodeType::COMM_SEND_NODE ||
                    node->type() == ChakraNodeType::COMM_RECV_NODE) {
-            issue_comm(node);
+            success = issue_comm(node);
+            if (!success) {
+                hw_resource->release(node);
+                this->et_feeder->getDependancyResolver().push_back_node(node->id());
+                stats->record_end(node, Sys::boostedTick());
+                if (this->sys->track_local_mem) {
+                    this->local_mem_usage_tracker->recordEnd(
+                        node, Sys::boostedTick());
+                }
+                return success;
+            }
         } else if (node->type() == ChakraNodeType::INVALID_NODE) {
             skip_invalid(node);
         } else if (node->type() == ChakraNodeType::METADATA_NODE) {
@@ -198,6 +242,7 @@ void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
             exit(EXIT_FAILURE);
         }
     }
+    return success;
 }
 
 void Workload::issue_metadata(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
@@ -224,6 +269,8 @@ void Workload::issue_replay(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     } else {
         hw_resource->tics_gpu_ops += runtime;
     }
+    // printf("Workload::issue_replay, sys->id=%d, node->id=%lu, runtime=%lu ns\n",
+    //        sys->id, node->id(), runtime);
     sys->register_event(this, EventType::General, wlhd, runtime);
 }
 
@@ -252,6 +299,7 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 
     double num_ops = static_cast<double>(node->num_ops<uint64_t>());
     double tensor_size = static_cast<double>(node->tensor_size<uint64_t>());
+
 
     // if tensor_size is 0 during roofline mode, this is an invalid node
     if (tensor_size == 0) {
@@ -290,23 +338,25 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
                 op_stat.memory_utilization.value(), tensor_size, num_ops);
 }
 
-void Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+bool Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     if (node->is_cpu_op<bool>(false)) {
         throw std::runtime_error("Comm node should not be on CPU");
     }
+    bool success = true;
     const auto node_type = node->type();
     if (node_type == ChakraNodeType::COMM_COLL_NODE) {
-        this->issue_coll_comm(node);
+        success = this->issue_coll_comm(node);
     } else if (node_type == ChakraNodeType::COMM_SEND_NODE) {
-        this->issue_send_comm(node);
+        success = this->issue_send_comm(node);
     } else if (node_type == ChakraNodeType::COMM_RECV_NODE) {
-        this->issue_recv_comm(node);
+        success = this->issue_recv_comm(node);
     } else {
         throw std::runtime_error("Unknown comm node type");
     }
+    return success;
 }
 
-void Workload::issue_coll_comm(
+bool Workload::issue_coll_comm(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const bool has_involve_dims = node->has_attr("involve_dims");
     std::vector<bool> involved_dims;
@@ -340,6 +390,22 @@ void Workload::issue_coll_comm(
     }
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
+    
+    // std::cout << "Involved npus: ";
+    // for (auto d : comm_group->involved_NPUs) {
+    //     std::cout << d << " ";
+    // }
+    // std::cout << std::endl;
+
+    // TODO in addition to comm group detection, also check topo id change
+    // Lazy reconfiguration
+
+    std::cout << "\033[0;32mRANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
+    previous_group_id = comm_group->get_id();
+
+    sys->increment_inflight_coll();
+    std::cout << "\033[0;32mRANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << "\033[0m" << std::endl;
+
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
     const auto comm_size = node->comm_size<uint64_t>();
@@ -348,6 +414,7 @@ void Workload::issue_coll_comm(
     // TODO: comm_tag? which is used to distinguish two different collective in
     // same pg
     const auto comm_priority = node->comm_priority<uint32_t>();  // default 0u
+
 
     if (comm_type == ChakraCollectiveCommType::ALL_REDUCE) {
         DataSet* fp = sys->generate_all_reduce(comm_size, involved_dims,
@@ -393,9 +460,10 @@ void Workload::issue_coll_comm(
     } else {
         throw std::runtime_error("Unsupported collective comm type");
     }
+    return true;
 }
 
-void Workload::issue_send_comm(
+bool Workload::issue_send_comm(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const auto src = node->comm_src<uint32_t>(this->sys->id);
     if (src != this->sys->id) {
@@ -406,6 +474,15 @@ void Workload::issue_send_comm(
     // Record communication size for bandwidth calculation
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
+
+    // stg_tp2_pp2
+    int cur_comm_group_id = -1;
+    std::cout << "RANK: " << this->sys->id <<" Issuing SEND " << src << "-" << dst << std::endl;
+    previous_group_id = cur_comm_group_id;
+
+    // sys->increment_inflight_coll();
+    // std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
+
 
     sim_request snd_req;
     snd_req.srcRank = src;
@@ -419,9 +496,10 @@ void Workload::issue_send_comm(
     sys->front_end_sim_send(0, Sys::dummy_data, size, UINT8, dst, tag, &snd_req,
                             Sys::FrontEndSendRecvType::NATIVE,
                             &Sys::handleEvent, sehd);
+    return true;
 }
 
-void Workload::issue_recv_comm(
+bool Workload::issue_recv_comm(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const auto src = node->comm_src<uint32_t>();
     const auto dst = node->comm_dst<uint32_t>(this->sys->id);
@@ -433,6 +511,19 @@ void Workload::issue_recv_comm(
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
 
+    // stg_tp2_pp2 no need to reconfigure because recv is paired with send
+    // if(previous_group_id >= 0) {
+    //     // TODO use suitable topo_id
+    //     int topo_id = 1;
+    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+    //     if (!can_config) return false;
+    //     std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
+    // }
+
+    // previous_group_id = -1;
+
+    std::cout << "RANK: " << this->sys->id <<" Issuing RECV " << src << "-" << dst << std::endl;
+
     sim_request rcv_req;
     RecvPacketEventHandlerData* rcehd = new RecvPacketEventHandlerData;
     rcehd->wlhd = new WorkloadLayerHandlerData;
@@ -442,6 +533,7 @@ void Workload::issue_recv_comm(
     sys->front_end_sim_recv(0, Sys::dummy_data, size, UINT8, src, tag, &rcv_req,
                             Sys::FrontEndSendRecvType::NATIVE,
                             &Sys::handleEvent, rcehd);
+    return true;
 }
 
 void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
@@ -462,12 +554,35 @@ void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 
 void Workload::call(EventType event, CallData* data) {
     if (is_finished) {
+        printf("Rank %d: workload already finished, ignore event %d\n", this->sys->id, static_cast<int>(event));
         return;
     }
 
     if (event == EventType::CollectiveCommunicationFinished) {
         IntData* int_data = (IntData*)data;
         uint64_t coll_comm_id = int_data->data;
+        sys->decrement_inflight_coll();
+        printf("\033[0;32mRANK: %d finish collective: %lu, inflight collective %d\033[0m\n", this->sys->id, coll_comm_id, sys->get_inflight_coll());
+
+        current_comm_group_idx++;
+        
+
+        // if (current_comm_group_idx < comm_group_list.size()) {
+        //     int next_comm_group_id = comm_group_list[current_comm_group_idx];
+        //     int topo_id = 0;
+        //     if (next_comm_group_id == 3 || next_comm_group_id == 4) {
+        //         topo_id = 1;
+        //     }
+        //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+        //     printf("RANK: %d attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
+        // }
+
+        // if (coll_comm_id == 1921) {
+        //     // TODO change coll_comm_id
+        //     int topo_id = 0;
+        //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
+        //     printf("RANK: %d hard-code attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
+        // }
 
         hw_resource->tics_gpu_comms += int_data->execution_time;
         uint64_t node_id = collective_comm_node_id_map[coll_comm_id];
@@ -529,6 +644,9 @@ void Workload::call(EventType event, CallData* data) {
             // Calculate network bandwidth for point-to-point communications
             if (event == EventType::PacketSent ||
                 event == EventType::PacketReceived) {
+
+                printf("\033[0;32mRANK: %d finish SEND/RECV\033[0m\n", this->sys->id);
+
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);
                 Tick execution_time =
                     stats->get_operator_statistics(wlhd->node_id).end_time -
@@ -598,7 +716,6 @@ CommunicatorGroup* Workload::extract_comm_group(
         // No communicator group is specified for this communication ET node.
         return nullptr;
     }
-
     int comm_group_id = std::stoi(comm_group_name);
     if (comm_groups.find(comm_group_id) == comm_groups.end()) {
         LoggerFactory::get_logger("workload")

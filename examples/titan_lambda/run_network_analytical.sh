@@ -19,6 +19,7 @@ WORKLOAD="${EXAMPLE_DIR:?}/chakra_trace"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"
 REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
+COMM_GROUP="${EXAMPLE_DIR:?}/comm_group.json"
 
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
@@ -37,7 +38,8 @@ echo ""
     --workload-configuration="${WORKLOAD}" \
     --system-configuration="${SYSTEM:?}" \
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
-    --network-configuration="${NETWORK:?}"
+    --network-configuration="${NETWORK:?}" \
+    --comm-group-configuration="${COMM_GROUP:?}"
 
 # finalize
 echo ""
