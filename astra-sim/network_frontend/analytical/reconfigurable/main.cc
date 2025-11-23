@@ -12,12 +12,12 @@ LICENSE file in the root directory of this source tree.
 #include <remote_memory_backend/analytical/AnalyticalRemoteMemory.hh>
 
 #include <cstdlib>
-#include <iostream>
 #include <fstream>
+#include <iostream>
 #include <sstream>
-#include <vector>
-#include <tuple>
 #include <string>
+#include <tuple>
+#include <vector>
 
 using namespace AstraSim;
 using namespace Analytical;
@@ -29,10 +29,12 @@ using namespace NetworkAnalyticalReconfigurable;
 using bw_matrix_t = std::vector<std::vector<Bandwidth>>;
 using lt_matrix_t = std::vector<std::vector<Latency>>;
 
-static inline std::string trim(const std::string &s) {
+static inline std::string trim(const std::string& s) {
     auto ws = " \t\r\n";
     size_t start = s.find_first_not_of(ws);
-    if (start == std::string::npos) return "";
+    if (start == std::string::npos) {
+        return "";
+    }
     size_t end = s.find_last_not_of(ws);
     return s.substr(start, end - start + 1);
 }
@@ -45,8 +47,9 @@ void parse_bw_matrix(const std::string& filename) {
 
     while (std::getline(file, line)) {
         line = trim(line);
-        if (line.empty() || line.rfind("//", 0) == 0)
+        if (line.empty() || line.rfind("//", 0) == 0) {
             continue;
+        }
 
         if (line.substr(0, 2) == "BW") {
             int topo_id = std::stoi(line.substr(3));
@@ -54,8 +57,9 @@ void parse_bw_matrix(const std::string& filename) {
 
             while (std::getline(file, line)) {
                 line = trim(line);
-                if (line.empty() || line.rfind("//", 0) == 0)
+                if (line.empty() || line.rfind("//", 0) == 0) {
                     continue;
+                }
 
                 if (line == "END") {
                     break;
@@ -70,12 +74,15 @@ void parse_bw_matrix(const std::string& filename) {
                 bw_matrix.push_back(row);
             }
             bw_matrix_map[topo_id] = bw_matrix;
-            std::cout << "Parsed BW matrix for topology: " << topo_id << std::endl;
-            for(auto row:bw_matrix){
-                for(auto bw: row){
-                    std::cout << bw << " ";
+
+            auto logger = AstraSim::LoggerFactory::get_logger("default");
+            logger->debug("Parsed BW matrix for topology: {}", topo_id);
+            for (auto row : bw_matrix) {
+                std::string msg;
+                for (auto bw : row) {
+                    msg += std::to_string(bw) + " ";
                 }
-                std::cout << std::endl;
+                logger->debug("{}", msg);
             }
         }
     }
@@ -97,11 +104,13 @@ int main(int argc, char* argv[]) {
         cmd_line_parser.get<std::string>("remote-memory-configuration");
     const auto network_configuration =
         cmd_line_parser.get<std::string>("network-configuration");
-    const auto circuit_schedules = 
+    const auto circuit_schedules =
         cmd_line_parser.get<std::string>("circuit-schedules");
 
     const auto logging_configuration =
         cmd_line_parser.get<std::string>("logging-configuration");
+    const auto logging_folder =
+        cmd_line_parser.get<std::string>("logging-folder");
     const auto num_queues_per_dim =
         cmd_line_parser.get<int>("num-queues-per-dim");
     const auto comm_scale = cmd_line_parser.get<double>("comm-scale");
@@ -109,7 +118,7 @@ int main(int argc, char* argv[]) {
     const auto rendezvous_protocol =
         cmd_line_parser.get<bool>("rendezvous-protocol");
 
-    AstraSim::LoggerFactory::init(logging_configuration);
+    AstraSim::LoggerFactory::init(logging_configuration, logging_folder);
 
     // Instantiate event queue
     const auto event_queue = std::make_shared<EventQueue>();
@@ -127,15 +136,17 @@ int main(int argc, char* argv[]) {
     Latency reconfig_latency = network_parser.get_reconfig_time();
 
     lt_matrix_t lt_matrix;
-    lt_matrix.resize(npus_count, std::vector<Latency>(npus_count, link_latency));
-   
+    lt_matrix.resize(npus_count,
+                     std::vector<Latency>(npus_count, link_latency));
 
     // Get topology information
-    std::cout << "Parsing BW Matrix..." << std::endl;
+    AstraSim::LoggerFactory::get_logger("default")->debug(
+        "Parsing BW Matrix...");
     parse_bw_matrix(circuit_schedules);
-    std::cout << "BW Matrix parsed" << std::endl;
+    AstraSim::LoggerFactory::get_logger("default")->debug("BW Matrix parsed");
 
-    tm = std::make_shared<TopologyManager>(npus_count, npus_count, event_queue.get(), bw_matrix_map);
+    tm = std::make_shared<TopologyManager>(npus_count, npus_count,
+                                           event_queue.get(), bw_matrix_map);
 
     // Initialize the topology to the first topology in the map
     tm->reconfigure(bw_matrix_map[0], lt_matrix, 0, 0);
@@ -165,8 +176,8 @@ int main(int argc, char* argv[]) {
         auto* const system =
             new Sys(i, workload_configuration, comm_group_configuration,
                     system_configuration, memory_api.get(), network_api.get(),
-                    {npus_count}, queues_per_dim, injection_scale,
-                    comm_scale, rendezvous_protocol);
+                    {npus_count}, queues_per_dim, injection_scale, comm_scale,
+                    rendezvous_protocol);
 
         // push back network and system
         network_apis.push_back(std::move(network_api));
@@ -181,13 +192,14 @@ int main(int argc, char* argv[]) {
     // run simulation
     while (true) {
         event_queue->proceed();
-        if(event_queue->finished()){
+        if (event_queue->finished()) {
             for (int i = 0; i < npus_count; i++) {
                 systems[i]->workload->issue_dep_free_nodes();
             }
         }
-        if(event_queue->finished())
+        if (event_queue->finished()) {
             break;
+        }
     }
 
     // terminate simulation
