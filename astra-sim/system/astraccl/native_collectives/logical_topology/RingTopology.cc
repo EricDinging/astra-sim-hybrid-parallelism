@@ -32,7 +32,6 @@ RingTopology::RingTopology(Dimension dimension, int id, std::vector<int> NPUs)
             index_in_ring = i;
         }
     }
-    printf("NPU CONSTRUCTOR");
     this->NPUs = NPUs;
 
     LoggerFactory::get_logger("system::topology::RingTopology")
