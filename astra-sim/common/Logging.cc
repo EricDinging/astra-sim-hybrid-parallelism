@@ -3,6 +3,35 @@
 
 namespace AstraSim {
 
+ExactLevelSink::ExactLevelSink(std::shared_ptr<spdlog::sinks::sink> sink,
+                               spdlog::level::level_enum level)
+    : sink(std::move(sink)),
+      level(level) {
+    // Set the base level to the target level so spdlog doesn't filter it
+    // out early
+    this->set_level(level);
+}
+
+void ExactLevelSink::log(const spdlog::details::log_msg& msg) {
+    // Only pass the log to the underlying sink if it matches exactly
+    if (msg.level == level) {
+        sink->log(msg);
+    }
+}
+
+void ExactLevelSink::flush() {
+    sink->flush();
+}
+
+void ExactLevelSink::set_pattern(const std::string& pattern) {
+    sink->set_pattern(pattern);
+}
+
+void ExactLevelSink::set_formatter(
+    std::unique_ptr<spdlog::formatter> sink_formatter) {
+    sink->set_formatter(std::move(sink_formatter));
+}
+
 std::unordered_set<spdlog::sink_ptr> LoggerFactory::default_sinks;
 
 std::shared_ptr<spdlog::logger> LoggerFactory::get_logger(
@@ -64,6 +93,14 @@ void LoggerFactory::init_default_components(const std::string& log_path) {
             log_path + "/err.log", 1024 * 1024 * 10, 10);
     sink_rotate_err->set_level(spdlog::level::err);
     default_sinks.insert(sink_rotate_err);
+
+    // Use the lowest logging level for JCT.
+    auto jct_rotating_sink =
+        std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+            log_path + "/jct.log", 1024 * 1024 * 10, 10);
+    auto jct_exact_sink = std::make_shared<ExactLevelSink>(
+        jct_rotating_sink, spdlog::level::trace);
+    default_sinks.insert(jct_exact_sink);
 
     spdlog::init_thread_pool(8192, 1);
     spdlog::set_pattern("[%Y-%m-%dT%T%z] [%L] <%n>: %v");

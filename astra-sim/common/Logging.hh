@@ -11,6 +11,26 @@
 
 namespace AstraSim {
 
+// Wrapper sink that only logs messages of a specific exact level
+class ExactLevelSink : public spdlog::sinks::sink {
+  public:
+    ExactLevelSink(std::shared_ptr<spdlog::sinks::sink> sink,
+                   spdlog::level::level_enum level);
+
+    void log(const spdlog::details::log_msg& msg) override;
+
+    void flush() override;
+
+    void set_pattern(const std::string& pattern) override;
+
+    void set_formatter(
+        std::unique_ptr<spdlog::formatter> sink_formatter) override;
+
+  private:
+    std::shared_ptr<spdlog::sinks::sink> sink;
+    spdlog::level::level_enum level;
+};
+
 class LoggerFactory {
   public:
     LoggerFactory() = delete;

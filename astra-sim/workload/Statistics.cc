@@ -144,6 +144,8 @@ Tick Statistics::_calculateTotalRuntimeFromIntervals(
 void Statistics::report(std::shared_ptr<spdlog::logger> logger) const {
     const auto& sys_id = workload->sys->id;
     logger->info("sys[{}], Wall time: {}", sys_id, this->wall_time);
+    // Log it again, this is only for logging to a file.
+    logger->trace("{}, {}", sys_id, this->wall_time);
     for (const auto& [type, time] : this->type_time) {
         switch (type) {
         case OperatorStatistics::OperatorType::CPU:
