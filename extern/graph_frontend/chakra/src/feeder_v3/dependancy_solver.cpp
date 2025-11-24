@@ -1,10 +1,10 @@
 #include "dependancy_solver.h"
+#include <iostream>
 #include <mutex>
 #include <shared_mutex>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
-#include <iostream>
 using namespace Chakra::FeederV3;
 
 void _DependancyLayer::add_node(
@@ -141,18 +141,12 @@ void _DependancyLayer::_helper_allocate_bucket(NodeId node_id) {
 void DependancyResolver::add_node(const ChakraNode& node) {
   NodeId node_id = node.id();
   std::unordered_set<NodeId> parents, enabled_parents;
-  
-  std::cout << "Node " << node_id 
-          << " data_deps_size=" << node.data_deps_size()
-          << " ctrl_deps_size=" << node.ctrl_deps_size()
-          << std::endl;
 
   for (auto& parent : node.data_deps()) {
     if (this->enable_data_deps)
       enabled_parents.insert(parent);
     parents.insert(parent);
   }
-
 
   this->data_dependancy.add_node(node_id, parents);
   parents.clear();
