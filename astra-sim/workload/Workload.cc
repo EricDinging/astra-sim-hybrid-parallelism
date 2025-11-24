@@ -59,11 +59,13 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     this->stats = new Statistics(this);
     this->is_finished = false;
 
-    std::cout << "Workload::Workload, sys->id=" << sys->id << " Comm groups: ";
-    for(int comm_group_id : this->comm_group_list) {
-        std::cout << comm_group_id << " ";
+    auto logger = LoggerFactory::get_logger("workload");
+    std::string comm_group_str;
+    for (int comm_group_id : this->comm_group_list) {
+        comm_group_str += std::to_string(comm_group_id) + " ";
     }
-    std::cout << std::endl;
+    logger->debug("Workload::Workload, sys->id={}. Comm groups: {}", sys->id,
+                  comm_group_str);
 }
 
 Workload::~Workload() {
@@ -157,18 +159,18 @@ void Workload::issue_dep_free_nodes() {
     //           << ", tick=" << Sys::boostedTick()
     //           << ", dependancy_free_nodes_set.size="
     //           << dependancy_free_nodes_set.size() << std::endl;
-    
+
     bool success = true;
     for (const auto node_id : dependancy_free_nodes_set) {
         std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
         if (hw_resource->is_available(node)) {
             success = issue(node);
             if (!success) {
-                std::cout << "Workload::issue failed, sys->id=" << sys->id 
-                          << ", node->id=" << node->id()
-                          << ", node->name=" << node->name()
-                          << ", node->type=" << static_cast<uint64_t>(node->type())
-                          << std::endl;
+                auto logger = LoggerFactory::get_logger("workload");
+                logger->warn("Workload::issue failed, sys->id={}, node->id={}, "
+                             "node->name={}, node->type={}",
+                             sys->id, node->id(), node->name(),
+                             static_cast<uint64_t>(node->type()));
             }
         }
     }
@@ -183,7 +185,7 @@ bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     //           << ", node->name=" << node->name()
     //           << ", node->type=" << static_cast<uint64_t>(node->type())
     //           << std::endl;
-    
+
     if (sys->trace_enabled) {
         logger->debug("issue,sys->id={}, tick={}, node->id={}, "
                       "node->name={}, node->type={}",
@@ -225,7 +227,8 @@ bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
             success = issue_comm(node);
             if (!success) {
                 hw_resource->release(node);
-                this->et_feeder->getDependancyResolver().push_back_node(node->id());
+                this->et_feeder->getDependancyResolver().push_back_node(
+                    node->id());
                 stats->record_end(node, Sys::boostedTick());
                 if (this->sys->track_local_mem) {
                     this->local_mem_usage_tracker->recordEnd(
@@ -269,7 +272,8 @@ void Workload::issue_replay(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     } else {
         hw_resource->tics_gpu_ops += runtime;
     }
-    // printf("Workload::issue_replay, sys->id=%d, node->id=%lu, runtime=%lu ns\n",
+    // printf("Workload::issue_replay, sys->id=%d, node->id=%lu, runtime=%lu
+    // ns\n",
     //        sys->id, node->id(), runtime);
     sys->register_event(this, EventType::General, wlhd, runtime);
 }
@@ -300,7 +304,6 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     double num_ops = static_cast<double>(node->num_ops<uint64_t>());
     double tensor_size = static_cast<double>(node->tensor_size<uint64_t>());
 
-
     // if tensor_size is 0 during roofline mode, this is an invalid node
     if (tensor_size == 0) {
         skip_invalid(node);
@@ -313,8 +316,8 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     uint64_t runtime = static_cast<uint64_t>(elapsed_time * 1e9);  // sec -> ns
     // if dummy node, use runtime from chakra directly
     if (node->name().find("DummyNode") != std::string::npos) {
-        runtime = node->runtime() * 1e3;  // µs -> ns 
-    } 
+        runtime = node->runtime() * 1e3;  // µs -> ns
+    }
 
     if (node->is_cpu_op()) {
         hw_resource->tics_cpu_ops += runtime;
@@ -390,7 +393,7 @@ bool Workload::issue_coll_comm(
     }
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
-    
+
     // std::cout << "Involved npus: ";
     // for (auto d : comm_group->involved_NPUs) {
     //     std::cout << d << " ";
@@ -400,11 +403,14 @@ bool Workload::issue_coll_comm(
     // TODO in addition to comm group detection, also check topo id change
     // Lazy reconfiguration
 
-    std::cout << "\033[0;32mRANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
+    auto logger = LoggerFactory::get_logger("workload");
+    logger->debug("RANK: {} Issuing collective {}", this->sys->id,
+                  comm_group->to_string());
     previous_group_id = comm_group->get_id();
 
     sys->increment_inflight_coll();
-    std::cout << "\033[0;32mRANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << "\033[0m" << std::endl;
+    logger->debug("RANK: {} inflight collective count: {}", this->sys->id,
+                  sys->get_inflight_coll());
 
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
@@ -414,7 +420,6 @@ bool Workload::issue_coll_comm(
     // TODO: comm_tag? which is used to distinguish two different collective in
     // same pg
     const auto comm_priority = node->comm_priority<uint32_t>();  // default 0u
-
 
     if (comm_type == ChakraCollectiveCommType::ALL_REDUCE) {
         DataSet* fp = sys->generate_all_reduce(comm_size, involved_dims,
@@ -477,12 +482,13 @@ bool Workload::issue_send_comm(
 
     // stg_tp2_pp2
     int cur_comm_group_id = -1;
-    std::cout << "RANK: " << this->sys->id <<" Issuing SEND " << src << "-" << dst << std::endl;
+    auto logger = LoggerFactory::get_logger("workload");
+    logger->debug("RANK: {} Issuing SEND {}-{}", this->sys->id, src, dst);
     previous_group_id = cur_comm_group_id;
 
     // sys->increment_inflight_coll();
-    // std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
-
+    // std::cout << "RANK: " << this->sys->id << " inflight collective count: "
+    // << sys->get_inflight_coll() << std::endl;
 
     sim_request snd_req;
     snd_req.srcRank = src;
@@ -517,12 +523,14 @@ bool Workload::issue_recv_comm(
     //     int topo_id = 1;
     //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
     //     if (!can_config) return false;
-    //     std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
+    //     std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV
+    //     group " << std::endl;
     // }
 
     // previous_group_id = -1;
 
-    std::cout << "RANK: " << this->sys->id <<" Issuing RECV " << src << "-" << dst << std::endl;
+    auto logger = LoggerFactory::get_logger("workload");
+    logger->debug("RANK: {} Issuing RECV {}-{}", this->sys->id, src, dst);
 
     sim_request rcv_req;
     RecvPacketEventHandlerData* rcehd = new RecvPacketEventHandlerData;
@@ -553,8 +561,10 @@ void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 }
 
 void Workload::call(EventType event, CallData* data) {
+    auto logger = LoggerFactory::get_logger("workload");
     if (is_finished) {
-        printf("Rank %d: workload already finished, ignore event %d\n", this->sys->id, static_cast<int>(event));
+        logger->debug("Rank {}: workload already finished, ignore event {}",
+                      this->sys->id, static_cast<int>(event));
         return;
     }
 
@@ -562,10 +572,10 @@ void Workload::call(EventType event, CallData* data) {
         IntData* int_data = (IntData*)data;
         uint64_t coll_comm_id = int_data->data;
         sys->decrement_inflight_coll();
-        printf("\033[0;32mRANK: %d finish collective: %lu, inflight collective %d\033[0m\n", this->sys->id, coll_comm_id, sys->get_inflight_coll());
+        logger->debug("RANK: {} finish collective: {}, inflight collective {}",
+                      this->sys->id, coll_comm_id, sys->get_inflight_coll());
 
         current_comm_group_idx++;
-        
 
         // if (current_comm_group_idx < comm_group_list.size()) {
         //     int next_comm_group_id = comm_group_list[current_comm_group_idx];
@@ -574,14 +584,16 @@ void Workload::call(EventType event, CallData* data) {
         //         topo_id = 1;
         //     }
         //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        //     printf("RANK: %d attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
+        //     printf("RANK: %d attempted to provision to topo_id: %d, result:
+        //     %d\n", this->sys->id, topo_id, can_config);
         // }
 
         // if (coll_comm_id == 1921) {
         //     // TODO change coll_comm_id
         //     int topo_id = 0;
         //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        //     printf("RANK: %d hard-code attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
+        //     printf("RANK: %d hard-code attempted to provision to topo_id: %d,
+        //     result: %d\n", this->sys->id, topo_id, can_config);
         // }
 
         hw_resource->tics_gpu_comms += int_data->execution_time;
@@ -645,7 +657,7 @@ void Workload::call(EventType event, CallData* data) {
             if (event == EventType::PacketSent ||
                 event == EventType::PacketReceived) {
 
-                printf("\033[0;32mRANK: %d finish SEND/RECV\033[0m\n", this->sys->id);
+                logger->debug("RANK: {} finish SEND/RECV", this->sys->id);
 
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);
                 Tick execution_time =
