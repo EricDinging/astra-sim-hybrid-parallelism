@@ -18,6 +18,12 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error")
 # Setup project
 project(AstraSim_Analytical)
 
+# Compile-time flag to enable verbose logging in the analytical network backend.
+option(ENABLE_VERBOSE_LOGS "Enable verbose logging" OFF)
+if(ENABLE_VERBOSE_LOGS)
+    add_compile_definitions(VERBOSELOG)
+endif()
+
 # Add vcpkg toolchain file
 if (DEFINED ENV{VCPKG_ROOT})
     set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "Vcpkg toolchain file")

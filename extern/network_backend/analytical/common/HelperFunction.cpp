@@ -8,6 +8,15 @@ LICENSE file in the root directory of this source tree.
 
 using namespace NetworkAnalytical;
 
+// Define a constant boolean based on the preprocessor flag
+#ifdef VERBOSELOG
+constexpr bool verbose_logging = true;
+#else
+constexpr bool verbose_logging = false;
+#endif
+
 void NetworkAnalytical::debug_print(const std::string& msg) noexcept {
-    std::cout << msg << std::endl;
+    if (verbose_logging) {
+        std::cout << msg << std::endl;
+    }
 }
