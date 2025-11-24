@@ -4,11 +4,12 @@ LICENSE file in the root directory of this source tree.
 *******************************************************************************/
 
 #include "reconfigurable/Link.h"
+#include "common/HelperFunction.h"
 #include "common/NetworkFunction.h"
 #include "reconfigurable/Chunk.h"
 #include "reconfigurable/Device.h"
-#include <cassert>
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 
 using namespace NetworkAnalytical;
@@ -17,9 +18,8 @@ using namespace NetworkAnalyticalReconfigurable;
 // declaring static event_queue
 std::shared_ptr<EventQueue> Link::event_queue;
 
-
 int NetworkAnalyticalReconfigurable::Link::num_drained_links = 0;
-std::function<void()> Link::increment_callback = []() { };
+std::function<void()> Link::increment_callback = []() {};
 
 void Link::set_event_queue(std::shared_ptr<EventQueue> event_queue_ptr) noexcept {
     assert(event_queue_ptr != nullptr);
@@ -114,16 +114,16 @@ unsigned long Link::schedule_chunk_transmission(std::unique_ptr<Chunk> chunk) no
     const auto chunk_arrival_time = current_time + communication_time;
     auto* const chunk_ptr = static_cast<void*>(chunk.release());
     Link::event_queue->schedule_event(chunk_arrival_time, Chunk::chunk_arrived_next_device, chunk_ptr);
-    
+
     // schedule link free time
     const auto serialization_time = serialization_delay(chunk_size);
     const auto link_free_time = current_time + serialization_time;
     return link_free_time;
 }
 
-unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency reconfig_time) noexcept{
+unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency reconfig_time) noexcept {
     if (bandwidth == this->bandwidth && latency == this->latency) {
-        std::cout << "No reconfiguration needed" << std::endl;
+        debug_print("No reconfiguration needed");
         return Link::event_queue->get_current_time() + 1;
     }
 
@@ -131,8 +131,9 @@ unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency re
     const auto current_time = Link::event_queue->get_current_time();
     set_busy();
 
-    printf("Reconfiguring link from bandwidth %.2f GB/s to %.2f GB/s and latency %.2f ns to %.2f ns at time %lu ns\n",
-           this->bandwidth, bandwidth, this->latency, latency, current_time);
+    debug_print("Reconfiguring link from bandwidth " + std::to_string(this->bandwidth) + " GB/s to " +
+                std::to_string(bandwidth) + " GB/s and latency " + std::to_string(this->latency) + " ns to " +
+                std::to_string(latency) + " ns at time " + std::to_string(current_time) + " ns");
 
     this->bandwidth = bandwidth;
     this->latency = latency;

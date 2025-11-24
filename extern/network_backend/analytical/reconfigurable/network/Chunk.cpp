@@ -35,7 +35,11 @@ void Chunk::chunk_arrived_next_device(void* const chunk_ptr) noexcept {
     }
 }
 
-Chunk::Chunk(const ChunkSize chunk_size, Route route, const Callback callback, const CallbackArg callback_arg, int topology_iteration) noexcept
+Chunk::Chunk(const ChunkSize chunk_size,
+             Route route,
+             const Callback callback,
+             const CallbackArg callback_arg,
+             int topology_iteration) noexcept
     : chunk_size(chunk_size),
       route(std::move(route)),
       callback(callback),

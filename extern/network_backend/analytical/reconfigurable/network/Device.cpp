@@ -4,6 +4,7 @@ LICENSE file in the root directory of this source tree.
 *******************************************************************************/
 
 #include "reconfigurable/Device.h"
+#include "common/HelperFunction.h"
 #include "reconfigurable/Chunk.h"
 #include "reconfigurable/Link.h"
 #include <cassert>
@@ -12,7 +13,7 @@ LICENSE file in the root directory of this source tree.
 
 using namespace NetworkAnalyticalReconfigurable;
 
-std::function<void()> Device::increment_callback = []() { };
+std::function<void()> Device::increment_callback = []() {};
 bool Device::drain_all_flow = true;
 
 Device::Device(const DeviceId id) noexcept : device_id(id), topology_iteration(0), reconfiguring(false) {
@@ -42,16 +43,18 @@ int Device::pending_chunks_count(const DeviceId id) const noexcept {
 }
 
 void Device::link_become_free(DeviceId link_id) noexcept {
-    
+
     // set link free
     links[link_id]->set_free();
-    // std::cout << "Device " << device_id << ": link to " << link_id << " is free at time " << Link::get_current_time() << std::endl;
-
+    // std::cout << "Device " << device_id << ": link to " << link_id << " is free at time " << Link::get_current_time()
+    // << std::endl;
 
     // process pending chunks if one exist
-    if(pending_chunks[link_id].empty() || pending_chunks[link_id].front()->get_topology_iteration() > topology_iteration) {
-    // std::cout << "Device " << device_id << ": link to " << link_id << " is free but no pending chunks or chunk from future topology iteration. Pending queue size: " << pending_chunks[link_id].size() << std::endl;
-        if(drain_all_flow){
+    if (pending_chunks[link_id].empty() ||
+        pending_chunks[link_id].front()->get_topology_iteration() > topology_iteration) {
+        // std::cout << "Device " << device_id << ": link to " << link_id << " is free but no pending chunks or chunk
+        // from future topology iteration. Pending queue size: " << pending_chunks[link_id].size() << std::endl;
+        if (drain_all_flow) {
             increment_callback();
         }
 
@@ -69,8 +72,9 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     // create a new callback argument for the next link free event
     LinkFreeCallbackArg* next_callback_arg = new LinkFreeCallbackArg{shared_from_this(), link_id};
     // get the next link free time
-    
-    // std::cout << "Device " << device_id << ": link to " << link_id << " becomes free at time and scheduled another chunk " << next_link_free_time << ", link pending chunk: " << pending_chunks[link_id].size() << std::endl;
+
+    // std::cout << "Device " << device_id << ": link to " << link_id << " becomes free at time and scheduled another
+    // chunk " << next_link_free_time << ", link pending chunk: " << pending_chunks[link_id].size() << std::endl;
 
     Link::schedule_event(next_link_free_time, link_become_free, next_callback_arg);
 }
@@ -87,7 +91,7 @@ void Device::link_become_free(void* const arg) noexcept {
     device->link_become_free(callback_arg->link_id);
 
     // clean up the callback argument
-    
+
     delete callback_arg;
 }
 
@@ -120,10 +124,13 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     auto link = links[next_dest_id];
 
-    if (link->is_busy() || link->get_bandwidth() == Bandwidth(0) || chunk->get_topology_iteration() > topology_iteration) {
+    if (link->is_busy() || link->get_bandwidth() == Bandwidth(0) ||
+        chunk->get_topology_iteration() > topology_iteration) {
         // link is busy, add the chunk to pending chunks
         pending_chunks[next_dest_id].push_back(std::move(chunk));
-        std::cout << "Device " << device_id << ": link to " << next_dest_id << " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " << pending_chunks[next_dest_id].size() << std::endl;
+        debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(next_dest_id) +
+                    " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " +
+                    std::to_string(pending_chunks[next_dest_id].size()));
         return;
     }
 
@@ -147,7 +154,10 @@ void Device::connect(const DeviceId id, const Bandwidth bandwidth, const Latency
     pending_chunks[id] = std::list<std::unique_ptr<Chunk>>();
 }
 
-void Device::reconfigure(std::vector<Bandwidth> bandwidth, std::vector<Route> routes, std::vector<Latency> latency, Latency reconfig_time) noexcept {
+void Device::reconfigure(std::vector<Bandwidth> bandwidth,
+                         std::vector<Route> routes,
+                         std::vector<Latency> latency,
+                         Latency reconfig_time) noexcept {
     assert(bandwidth.size() == links.size());
     assert(latency.size() == links.size());
 
@@ -156,18 +166,20 @@ void Device::reconfigure(std::vector<Bandwidth> bandwidth, std::vector<Route> ro
     for (const auto& [id, link] : links) {
         assert(id >= 0);
 
-        if(id == device_id){
+        if (id == device_id) {
             continue;
         }
 
         assert(bandwidth[id] >= 0);
         assert(latency[id] >= 0);
         assert(connected(id));
- 
+
         // update the route
         this->routes[id] = routes[id];
         // reconfigure the link
-        printf("Device %d: Reconfiguring link to %d, pending chunk size: %ld, new bandwidth: %f\n", device_id, id, pending_chunks[id].size(), bandwidth[id]);
+        debug_print("Device " + std::to_string(device_id) + ": Reconfiguring link to " + std::to_string(id) +
+                    ", pending chunk size: " + std::to_string(pending_chunks[id].size()) +
+                    ", new bandwidth: " + std::to_string(bandwidth[id]));
         auto free_time = link->reconfigure(bandwidth[id], latency[id], reconfig_time);
         // create a callback argument for the link free event
 
