@@ -142,10 +142,10 @@ void DependancyResolver::add_node(const ChakraNode& node) {
   NodeId node_id = node.id();
   std::unordered_set<NodeId> parents, enabled_parents;
   
-  std::cout << "Node " << node_id 
-          << " data_deps_size=" << node.data_deps_size()
-          << " ctrl_deps_size=" << node.ctrl_deps_size()
-          << std::endl;
+  // std::cout << "Node " << node_id 
+  //         << " data_deps_size=" << node.data_deps_size()
+  //         << " ctrl_deps_size=" << node.ctrl_deps_size()
+  //         << std::endl;
 
   for (auto& parent : node.data_deps()) {
     if (this->enable_data_deps)

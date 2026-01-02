@@ -41,6 +41,8 @@ class CommunicatorGroup {
         return id;
     };
 
+    std::vector<int> compatible_topo;
+
   private:
     int id;
     Sys* generator;

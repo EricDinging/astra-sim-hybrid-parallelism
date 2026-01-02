@@ -26,7 +26,8 @@ using json = nlohmann::json;
 typedef ChakraProtoMsg::NodeType ChakraNodeType;
 typedef ChakraProtoMsg::CollectiveCommType ChakraCollectiveCommType;
 
-Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
+Workload::Workload(Sys* sys, string et_filename, string comm_group_filename, string provision_config, std::map<int,std::vector<int>>& comm_to_topo) :
+    comm_to_topo(comm_to_topo) {
     string workload_filename = et_filename + "." + to_string(sys->id) + ".et";
     // Check if workload filename exists
     if (access(workload_filename.c_str(), R_OK) < 0) {
@@ -59,8 +60,7 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     this->stats = new Statistics(this);
     this->is_finished = false;
 
-    this->scheduler = new Scheduler(sys);
-
+    this->scheduler = new Scheduler(sys, provision_config);
     // choose a non-relavant comm group to trigger initial reconfiguration
     this->scheduler->post_reconfig(-10);
 
@@ -319,6 +319,10 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     double perf = sys->roofline->get_perf(operational_intensity);
     double elapsed_time = static_cast<double>(node->num_ops()) / perf;  // sec
     uint64_t runtime = static_cast<uint64_t>(elapsed_time * 1e9);  // sec -> ns
+    std::cout << "Workload::issue_comp, sys->id=" << sys->id
+              << ", node->id=" << node->id() << ", start_time=" << Sys::boostedTick()
+              << ", runtime=" << runtime << " ns"
+              << std::endl;
 
     // printf(
     //     "Workload::issue_comp, sys->id=%d, node->id=%lu, num_ops=%e, "
@@ -402,20 +406,26 @@ bool Workload::issue_coll_comm(
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
     
-    // std::cout << "Involved npus: ";
-    // for (auto d : comm_group->involved_NPUs) {
-    //     std::cout << d << " ";
-    // }
+    std::cout << "Involved npus: ";
+    for (auto d : comm_group->involved_NPUs) {
+        std::cout << d << " ";
+    }
+
     // std::cout << std::endl;
 
     // TODO in addition to comm group detection, also check topo id change
     // Lazy reconfiguration
 
-    // std_dp2_pp2
-    bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id);
-    if (!reconfig_success) return false;
+    int comm_id = comm_group->get_id();
+    if(comm_to_topo[comm_id].size() > 1) {
+        std::cout << "TP COMM pattern detected!" << std::endl;
+    }
+    else{
+        bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id);
+        if (!reconfig_success) return false;
+    }
 
-    std::cout << "\033[0;32mRANK: " << this->sys->id <<" Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
+    std::cout << "\033[0;32mRANK: " << this->sys->id << " at time " << Sys::boostedTick() << " Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
     previous_group_id = comm_group->get_id();
 
     sys->increment_inflight_coll();
@@ -437,24 +447,28 @@ bool Workload::issue_coll_comm(
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        std::cout << "Generated all-reduce DataSet, fp->my_id=" << fp->my_id << std::endl;
     } else if (comm_type == ChakraCollectiveCommType::ALL_TO_ALL) {
         DataSet* fp = sys->generate_all_to_all(comm_size, involved_dims,
                                                comm_group, comm_priority);
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        std::cout << "Generated all-to-all DataSet, fp->my_id=" << fp->my_id << std::endl;
     } else if (comm_type == ChakraCollectiveCommType::ALL_GATHER) {
         DataSet* fp = sys->generate_all_gather(comm_size, involved_dims,
                                                comm_group, comm_priority);
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        std::cout << "Generated all-gather DataSet, fp->my_id=" << fp->my_id << std::endl;
     } else if (comm_type == ChakraCollectiveCommType::REDUCE_SCATTER) {
         DataSet* fp = sys->generate_reduce_scatter(comm_size, involved_dims,
                                                    comm_group, comm_priority);
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        std::cout << "Generated reduce-scatter DataSet, fp->my_id=" << fp->my_id << std::endl;
     } else if (comm_type == ChakraCollectiveCommType::BROADCAST) {
         // TODO: implement broadcast, for now just replay
         uint64_t runtime = 1ul;
@@ -472,6 +486,7 @@ bool Workload::issue_coll_comm(
                             // should convert it into nanoseconds
                             runtime);
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        std::cout << "Generated broadcast DataSet, fp->my_id=" << fp->my_id << std::endl;
     } else {
         throw std::runtime_error("Unsupported collective comm type");
     }
@@ -490,16 +505,18 @@ bool Workload::issue_send_comm(
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
 
+    std::cout << "Send comm node: " << node->id() << " from " << src << " to " << dst << " size " << size << std::endl;
+
     // stg_tp2_pp2
     int cur_comm_group_id = -1;
     bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
     if (!reconfig_success) return false;
 
-    std::cout << "RANK: " << this->sys->id <<" Issuing SEND " << src << "-" << dst << std::endl;
+    std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing SEND " << src << "-" << dst << std::endl;
     previous_group_id = cur_comm_group_id;
 
-    // sys->increment_inflight_coll();
-    // std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
+    sys->increment_inflight_coll();
+    std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
 
 
     sim_request snd_req;
@@ -540,7 +557,7 @@ bool Workload::issue_recv_comm(
 
     // previous_group_id = -1;
 
-    std::cout << "RANK: " << this->sys->id <<" Issuing RECV " << src << "-" << dst << std::endl;
+    std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing RECV " << src << "-" << dst << std::endl;
 
     sim_request rcv_req;
     RecvPacketEventHandlerData* rcehd = new RecvPacketEventHandlerData;
@@ -580,7 +597,7 @@ void Workload::call(EventType event, CallData* data) {
         IntData* int_data = (IntData*)data;
         uint64_t coll_comm_id = int_data->data;
         sys->decrement_inflight_coll();
-        printf("\033[0;32mRANK: %d finish collective: %lu, inflight collective %d\033[0m\n", this->sys->id, coll_comm_id, sys->get_inflight_coll());
+        printf("\033[0;32mRANK: %d at time %ld finish collective: %lu, inflight collective %d\033[0m\n", this->sys->id, Sys::boostedTick(), coll_comm_id, sys->get_inflight_coll());
 
         current_comm_group_idx++;
         //TODO edit coll_comm_id to comm group
@@ -589,7 +606,6 @@ void Workload::call(EventType event, CallData* data) {
         } else {
             scheduler->post_reconfig(2);
         }
-        
 
         // if (current_comm_group_idx < comm_group_list.size()) {
         //     int next_comm_group_id = comm_group_list[current_comm_group_idx];
@@ -669,7 +685,10 @@ void Workload::call(EventType event, CallData* data) {
             if (event == EventType::PacketSent ||
                 event == EventType::PacketReceived) {
 
-                printf("\033[0;32mRANK: %d finish SEND/RECV\033[0m\n", this->sys->id);
+                printf("\033[0;32mRANK: %d at time %ld finish SEND/RECV\033[0m\n", this->sys->id, Sys::boostedTick());
+                if( event == EventType::PacketReceived) {
+                    sys->decrement_inflight_coll();
+                }
                 scheduler->post_reconfig(-1);
 
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);

@@ -16,6 +16,9 @@
         "ring"
     ],
     "collective-optimization": "localBWAware",
-    "local-mem-bw": 1600,
-    "boost-mode": 0
+    "local-mem-bw": 3350,
+    "boost-mode": 0,
+    "replay-only": 0,
+    "roofline-enabled": 1,
+    "peak-perf": 494
 }

@@ -14,19 +14,19 @@
 
 using namespace std;
 
-Scheduler::Scheduler(AstraSim::Sys* system) : sys(system) {
+Scheduler::Scheduler(AstraSim::Sys* system, std::string provision_config) : sys(system) {
     int rank = this->sys->id;
     
     try {
         //TODO parse input from command line argument
 
-        YAML::Node config = YAML::LoadFile("/app/astra-sim/examples/stg-dp2-pp2/rank_comm_groups.yaml");
+        YAML::Node config = YAML::LoadFile(provision_config);
         if (config[std::to_string(rank)]) {
             for (const auto& group : config[std::to_string(rank)]) {
                 int group_id = group.first.as<int>();
                 std::vector<int> start_indexes = group.second.as<std::vector<int>>();
                 comm_group_to_start_indexes[group_id] = start_indexes;
-                printf("Rank: {}, Group ID: {}", rank, group_id);
+                printf("Rank: %d, Group ID: %d ", rank, group_id);
             }
         }
 
@@ -83,12 +83,12 @@ bool AstraSim::Scheduler::pre_reconfig(int cur_comm_group_id, int prev_comm_grou
     //     previous_group_id = cur_comm_group_id;
     // }
 
-    if(prev_comm_group_id != cur_comm_group_id) {
+    // if(prev_comm_group_id != cur_comm_group_id) {
         bool can_config = this->reconfigure(cur_comm_group_id, prev_comm_group_id);
         if (!can_config) return false;
         
         printf("\033[1;33mScheduler: %d Switching to comm group: %d\033[0m\n", this->sys->id, cur_comm_group_id);
-    }
+    // }
 
     return true;
 }
@@ -111,7 +111,8 @@ bool AstraSim::Scheduler::post_reconfig(int cur_comm_group_id) {
         }
     }
 
-    printf("\033[1;33mScheduler: %d current comm idx: %d, target comm group id: %d\033[0m\n", this->sys->id, this->cur_comm_idx, target_comm_group_id);
+    printf("\033[1;33mScheduler: %d, current comm idx: %d, target comm group id: %d\033[0m\n", this->sys->id, this->cur_comm_idx, target_comm_group_id);
+    printf("\033[1;33mScheduler: %d, current comm group id: %d\033[0m\n", this->sys->id, cur_comm_group_id);
 
     // TODO increment for PP as well
     this->cur_comm_idx++;

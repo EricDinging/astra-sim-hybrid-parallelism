@@ -25,7 +25,7 @@ private:
 
 public:
     Scheduler(){};
-    Scheduler(AstraSim::Sys* system);
+    Scheduler(AstraSim::Sys* system, std::string provision_config);
     bool pre_reconfig(int cur_comm_group_id, int prev_comm_group_id);
     bool post_reconfig(int cur_comm_group_id);
 };

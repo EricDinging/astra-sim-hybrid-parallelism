@@ -22,6 +22,8 @@ REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
 COMM_GROUP="${EXAMPLE_DIR:?}/workload.json"
 CIRCUIT_SCHEDULES="${EXAMPLE_DIR:?}/schedules.txt"
 
+TRACE_PARSER_PATH="${PROJECT_DIR:?}/examples/helpers/trace_parser.py"
+
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
 echo ""
@@ -43,7 +45,22 @@ export ASAN_OPTIONS=detect_container_overflow=0:detect_leaks=0
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
     --network-configuration="${NETWORK:?}" \
     --comm-group-configuration="${COMM_GROUP:?}" \
-    --circuit-schedules="${CIRCUIT_SCHEDULES:?}"
+    --circuit-schedules="${CIRCUIT_SCHEDULES:?}" > debug_no_provision.txt
+
+python ${TRACE_PARSER_PATH:?} debug_no_provision.txt
+
+PROVISION_CONFIG="${EXAMPLE_DIR:?}/rank_comm_groups.yaml"
+
+"${ASTRA_SIM:?}" \
+    --workload-configuration="${WORKLOAD}" \
+    --system-configuration="${SYSTEM:?}" \
+    --remote-memory-configuration="${REMOTE_MEMORY:?}" \
+    --network-configuration="${NETWORK:?}" \
+    --comm-group-configuration="${COMM_GROUP:?}" \
+    --circuit-schedules="${CIRCUIT_SCHEDULES:?}" \
+    --provision-config="${PROVISION_CONFIG:?}" > debug_provision.txt
+
+
 
 # finalize
 echo ""

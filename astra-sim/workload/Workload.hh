@@ -29,7 +29,9 @@ class Workload : public Callable {
   public:
     Workload(Sys* sys,
        std::string et_filename,
-       std::string comm_group_filename);
+       std::string comm_group_filename,
+       std::string provision_config,
+       std::map<int,std::vector<int>>& comm_to_topo);
     ~Workload();
 
     // communicator groups
@@ -74,6 +76,8 @@ class Workload : public Callable {
     // node, return nullptr.
     std::vector<int> comm_group_list;
     int current_comm_group_idx;
+
+    std::map<int,std::vector<int>>& comm_to_topo;
 
     int cached_reconfig_topo_id;
 

@@ -42,7 +42,9 @@ void CmdLineParser::define_options() noexcept {
         "rendezvous-protocol", "Whether to enable rendezvous protocol",
         cxxopts::value<bool>()->default_value("false"))(        
         "circuit-schedules", "Circuit schedules file",
-        cxxopts::value<std::string>());
+        cxxopts::value<std::string>())(
+        "provision-config", "Provisioning configuration file",
+        cxxopts::value<std::string>()->default_value(""));
 }
 
 void CmdLineParser::parse(int argc, char* argv[]) noexcept {

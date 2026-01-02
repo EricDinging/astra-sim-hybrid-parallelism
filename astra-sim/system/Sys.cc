@@ -146,7 +146,9 @@ Sys::Sys(int id,
          vector<int> queues_per_dim,
          double injection_scale,
          double comm_scale,
-         bool rendezvous_enabled) {
+         bool rendezvous_enabled,
+         string provision_config,
+         std::map<int,std::vector<int>>& comm_to_topo) {
     if ((id + 1) > this->all_sys.size()) {
         this->all_sys.resize(id + 1);
     }
@@ -249,7 +251,7 @@ Sys::Sys(int id,
                         model_shared_bus, communication_delay, true);
 
     workload =
-        new Workload(this, workload_configuration, comm_group_configuration);
+        new Workload(this, workload_configuration, comm_group_configuration, provision_config, comm_to_topo);
 
     if (inter_dimension_scheduling == InterDimensionScheduling::OfflineGreedy ||
         inter_dimension_scheduling ==

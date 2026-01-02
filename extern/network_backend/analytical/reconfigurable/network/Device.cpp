@@ -103,13 +103,18 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     // Print out the route
     // for (const auto& [id, route] : routes) {
-    //     // std::cout << "Route to device " << id << ": ";
+    //     std::cout << "Route to device " << id << ": ";
     //     for (const auto& hop : route) {
     //         std::cout << hop->get_id() << " ";
     //     }
     //     std::cout << std::endl;
     // }
     chunk->update_route(routes[chunk->next_device()->get_id()], chunk->get_topology_iteration());
+    std::cout << "Device " << device_id << ": Sending chunk of size " << chunk->get_size() << " to device " << chunk->next_device()->get_id() << " via route: ";
+    for (const auto& device : chunk->route) {
+        std::cout << device->get_id() << " ";
+    }
+    std::cout << std::endl;
 
     // get next dest
     const auto next_dest = chunk->next_device();

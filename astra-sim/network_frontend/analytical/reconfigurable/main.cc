@@ -10,6 +10,7 @@ LICENSE file in the root directory of this source tree.
 #include <astra-network-analytical/common/NetworkParser.h>
 #include <astra-network-analytical/reconfigurable/Helper.h>
 #include <remote_memory_backend/analytical/AnalyticalRemoteMemory.hh>
+#include "astra-sim/system/CommunicatorGroup.hh"
 
 #include <cstdlib>
 #include <iostream>
@@ -18,6 +19,7 @@ LICENSE file in the root directory of this source tree.
 #include <vector>
 #include <tuple>
 #include <string>
+#include <fstream>
 
 using namespace AstraSim;
 using namespace Analytical;
@@ -81,6 +83,60 @@ void parse_bw_matrix(const std::string& filename) {
     }
 }
 
+std::map<int,std::vector<int>> comm_groups;
+std::map<int,std::vector<int>> comm_to_topo;
+
+void initialize_comm_groups(std::string comm_group_filename) {
+    // communicator group input file is not given
+    if (comm_group_filename.find("empty") != std::string::npos) {
+        comm_groups.clear();
+        std::cout << "[ERROR] No communicator group configuration provided." << std::endl;
+        exit(1);
+    }
+
+    std::ifstream inFile;
+    json j;
+    inFile.open(comm_group_filename);
+    inFile >> j;
+
+    for (json::iterator it = j.begin(); it != j.end(); ++it) {
+        std::string comm_group_name = it.key();
+        int comm_group_id = std::stoi(comm_group_name);
+
+        std::vector<int> involved_NPUs;
+        for (auto id : it.value()) {
+            involved_NPUs.push_back(id);
+        }
+
+        comm_groups[comm_group_id] = involved_NPUs;
+    }
+}
+
+void map_comm_to_topo(std::string comm_group_file){
+    initialize_comm_groups(comm_group_file);
+    for (auto& [comm_group_id, involved_NPUs] : comm_groups) {
+        // For simplicity, we assign each communicator group to a topology
+        // based on its ID modulo the number of topologies available.
+        for (int topo_id = 0; topo_id < bw_matrix_map.size(); ++topo_id) {
+            bool compatible = true;
+            for(const auto& src : involved_NPUs){
+                for (const auto& dst : involved_NPUs){
+                    if(src != dst) {
+                        if (bw_matrix_map[topo_id][src][dst] == 0) {
+                            compatible = false;
+                            break;
+                        }
+                    }
+                }
+            }
+            if (compatible){
+                comm_to_topo[comm_group_id].push_back(topo_id);
+                std::cout << "Mapped Comm Group " << comm_group_id << " to Topology " << topo_id << std::endl;
+            }
+        }
+    }
+}
+
 int main(int argc, char* argv[]) {
     // Parse command line arguments
     auto cmd_line_parser = CmdLineParser(argv[0]);
@@ -109,6 +165,9 @@ int main(int argc, char* argv[]) {
     const auto rendezvous_protocol =
         cmd_line_parser.get<bool>("rendezvous-protocol");
 
+    const auto provision_config =
+        cmd_line_parser.get<std::string>("provision-config");
+
     AstraSim::LoggerFactory::init(logging_configuration);
 
     // Instantiate event queue
@@ -129,16 +188,18 @@ int main(int argc, char* argv[]) {
     lt_matrix_t lt_matrix;
     lt_matrix.resize(npus_count, std::vector<Latency>(npus_count, link_latency));
    
-
+    std::cout << "FULL TRACE PRINTING WITH TIME STAMPS ENABLED" << std::endl;
     // Get topology information
     std::cout << "Parsing BW Matrix..." << std::endl;
     parse_bw_matrix(circuit_schedules);
     std::cout << "BW Matrix parsed" << std::endl;
 
+    map_comm_to_topo(comm_group_configuration);
+
     tm = std::make_shared<TopologyManager>(npus_count, npus_count, event_queue.get(), bw_matrix_map);
 
     // Initialize the topology to the first topology in the map
-    // tm->reconfigure(bw_matrix_map[0], lt_matrix, 0, 0);
+    tm->reconfigure(bw_matrix_map[0], lt_matrix, 0, 0);
 
     tm->set_reconfig_latency(reconfig_latency);
 
@@ -166,7 +227,7 @@ int main(int argc, char* argv[]) {
             new Sys(i, workload_configuration, comm_group_configuration,
                     system_configuration, memory_api.get(), network_api.get(),
                     {npus_count}, queues_per_dim, injection_scale,
-                    comm_scale, rendezvous_protocol);
+                    comm_scale, rendezvous_protocol, provision_config, comm_to_topo);
 
         // push back network and system
         network_apis.push_back(std::move(network_api));
@@ -181,6 +242,7 @@ int main(int argc, char* argv[]) {
     // run simulation
     while (true) {
         event_queue->proceed();
+        // printf("Main: TIME: %ld Event Queue proceeded.\n", event_queue->get_current_time());
         if(event_queue->finished()){
             for (int i = 0; i < npus_count; i++) {
                 systems[i]->workload->issue_dep_free_nodes();
