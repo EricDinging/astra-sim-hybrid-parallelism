@@ -227,7 +227,7 @@ void TopologyManager::precomputeRoutes() noexcept {
             if (s == t) {
                 precomputed_routes[s][t] = {topology->get_device(s)};
             } else if (parent[t] == -1) {
-                precomputed_routes[s][t] = {topology->get_device(s), topology->get_device(t)}; // Unreachable, stub route
+                precomputed_routes[s][t] = {}; // Unreachable, stub route
             } else {
                 Route path;
                 for (int cur = t; cur != -1; cur = parent[cur]) path.push_back(topology->get_device(cur));

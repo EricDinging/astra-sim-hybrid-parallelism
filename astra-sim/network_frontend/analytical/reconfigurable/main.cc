@@ -119,16 +119,24 @@ void map_comm_to_topo(std::string comm_group_file){
         // based on its ID modulo the number of topologies available.
         for (int topo_id = 0; topo_id < bw_matrix_map.size(); ++topo_id) {
             bool compatible = true;
-            for(const auto& src : involved_NPUs){
-                for (const auto& dst : involved_NPUs){
-                    if(src != dst) {
-                        if (bw_matrix_map[topo_id][src][dst] == 0) {
-                            compatible = false;
-                            break;
-                        }
-                    }
+            for(int i = 0; i < involved_NPUs.size() - 1; i++){
+                int npu_a = involved_NPUs[i];
+                int npu_b = involved_NPUs[i+1];
+                if (bw_matrix_map[topo_id][npu_a][npu_b] == 0){
+                    compatible = false;
+                    break;
                 }
             }
+            // for(const auto& src : involved_NPUs){
+            //     for (const auto& dst : involved_NPUs){
+            //         if(src != dst) {
+            //             if (bw_matrix_map[topo_id][src][dst] == 0) {
+            //                 compatible = false;
+            //                 break;
+            //             }
+            //         }
+            //     }
+            // }
             if (compatible){
                 comm_to_topo[comm_group_id].push_back(topo_id);
                 std::cout << "Mapped Comm Group " << comm_group_id << " to Topology " << topo_id << std::endl;

@@ -64,6 +64,10 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     std::unique_ptr<Chunk> chunk = std::move(pending_chunks[link_id].front());
     pending_chunks[link_id].pop_front();
 
+    if(links[link_id]->get_bandwidth() == Bandwidth(0)){
+        std::cout << "ERROR Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
+        return;
+    }
     auto next_link_free_time = links[link_id]->send(std::move(chunk));
     // schedule the next link free event
     // create a new callback argument for the next link free event
@@ -109,8 +113,14 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     //     }
     //     std::cout << std::endl;
     // }
+
+    if (routes[chunk->next_device()->get_id()].empty()) {
+        std::cerr << "ERROR Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
+        return;
+    }
+
     chunk->update_route(routes[chunk->next_device()->get_id()], chunk->get_topology_iteration());
-    std::cout << "Device " << device_id << ": Sending chunk of size " << chunk->get_size() << " to device " << chunk->next_device()->get_id() << " via route: ";
+    //std::cout << "Device " << device_id << ": Sending chunk of size " << chunk->get_size() << " to device " << chunk->next_device()->get_id() << " via route: ";
     for (const auto& device : chunk->route) {
         std::cout << device->get_id() << " ";
     }
@@ -134,6 +144,12 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     // send the chunk to the next dest
     // delegate this task to the link
+
+    if(links[next_dest_id]->get_bandwidth() == Bandwidth(0)){
+        std::cout << "ERROR Device " << device_id << ": link to " << next_dest_id << " IS EMPTY" << pending_chunks[next_dest_id].size() << std::endl;
+        return;
+    }
+
     auto link_free_time = links[next_dest_id]->send(std::move(chunk));
     LinkFreeCallbackArg* args = new LinkFreeCallbackArg{shared_from_this(), next_dest_id};
     Link::schedule_event(link_free_time, link_become_free, args);

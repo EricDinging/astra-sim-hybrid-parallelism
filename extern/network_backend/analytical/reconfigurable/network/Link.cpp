@@ -64,7 +64,7 @@ unsigned long Link::send(std::unique_ptr<Chunk> chunk) noexcept {
     assert(chunk != nullptr);
     assert(!busy);
     assert(bandwidth > 0);
-
+    
     return schedule_chunk_transmission(std::move(chunk));
 }
 

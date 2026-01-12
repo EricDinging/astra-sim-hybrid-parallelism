@@ -40,7 +40,7 @@ Scheduler::Scheduler(AstraSim::Sys* system, std::string provision_config) : sys(
             std::cout << std::endl;
         }
     } catch (const YAML::Exception& e) {
-        std::cerr << "Error loading YAML file: " << e.what() << std::endl;
+        std::cout << "Provisioning Disabled for rank " << rank << e.what() << std::endl;
     }
 }
 
