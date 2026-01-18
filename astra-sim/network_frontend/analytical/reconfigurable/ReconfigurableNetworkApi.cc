@@ -6,6 +6,8 @@ LICENSE file in the root directory of this source tree.
 #include "reconfigurable/ReconfigurableNetworkApi.hh"
 #include <astra-network-analytical/reconfigurable/Chunk.h>
 #include <cassert>
+#include <iostream>
+#include <unordered_set>
 
 using namespace AstraSim;
 using namespace AstraSimAnalyticalReconfigurable;
@@ -13,6 +15,7 @@ using namespace NetworkAnalytical;
 using namespace NetworkAnalyticalReconfigurable;
 
 std::shared_ptr<TopologyManager> ReconfigurableNetworkApi::tm;
+std::map<int, std::unordered_set<std::string>> ReconfigurableNetworkApi::on_going_comms;
 
 void ReconfigurableNetworkApi::set_topology(
     std::shared_ptr<TopologyManager> tm_ptr) noexcept {
@@ -20,6 +23,7 @@ void ReconfigurableNetworkApi::set_topology(
 
     // move topology
     ReconfigurableNetworkApi::tm = std::move(tm_ptr);
+    ReconfigurableNetworkApi::on_going_comms.clear();
 }
 
 ReconfigurableNetworkApi::ReconfigurableNetworkApi(const int rank) noexcept
@@ -31,12 +35,50 @@ bool ReconfigurableNetworkApi::sim_reconfig(int topo_id) {
     return tm->reconfigure(topo_id);
 }
 
-void ReconfigurableNetworkApi::increment_inflight_coll() {
+void ReconfigurableNetworkApi::increment_inflight_coll(int rank, std::string name) {
+    if(on_going_comms.find(rank) == on_going_comms.end()) {
+        on_going_comms[rank] = std::unordered_set<std::string>();
+    }
+    
+    on_going_comms[rank].insert(name);
     tm->inflight_coll++;
 }
 
-void ReconfigurableNetworkApi::decrement_inflight_coll() {
+void ReconfigurableNetworkApi::decrement_inflight_coll(int rank, int node_id) {
+    if (on_going_comms.find(rank) == on_going_comms.end()) {
+        std::cerr << "Error: Rank " << rank << " not initialized" << std::endl;
+        assert(false);
+    }
+    if (node_id < 0) {
+        for (const auto& name : on_going_comms[rank]) {
+            if (name.find("COLL") != std::string::npos) {
+                on_going_comms[rank].erase(name);
+                break;
+            }
+        }
+    }
+    else { 
+        for (const auto& name : on_going_comms[rank]) {
+            if (name.find(std::to_string(node_id)) != std::string::npos) {
+                on_going_comms[rank].erase(name);
+            break;
+            }
+
+        }
+    }
     tm->inflight_coll--;
+}
+
+void ReconfigurableNetworkApi::print_on_going_comms() {
+    std::cout << "On going comms: " << std::endl;
+    for (const auto& [rank, set] : on_going_comms) {
+        if (set.empty()) continue;
+        std::cout << "Rank: " << rank;
+        for (const auto& name : set) {
+            std::cout << " " << name;
+        }
+        std::cout << std::endl;
+    }
 }
 
 int ReconfigurableNetworkApi::get_inflight_coll() {

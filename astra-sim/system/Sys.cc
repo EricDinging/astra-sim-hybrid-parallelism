@@ -1579,15 +1579,15 @@ bool Sys::sim_reconfig(int topo_id) {
     return false;
 }
 
-void Sys::increment_inflight_coll() {
+void Sys::increment_inflight_coll(int rank, std::string name) {
      if (comm_NI) {
-         comm_NI->increment_inflight_coll();
+         comm_NI->increment_inflight_coll(rank, name);
      }
 }
 
-void Sys::decrement_inflight_coll() {
+void Sys::decrement_inflight_coll(int rank, int node_id) {
      if (comm_NI) {
-         comm_NI->decrement_inflight_coll();
+         comm_NI->decrement_inflight_coll(rank, node_id);
      }
 }
 

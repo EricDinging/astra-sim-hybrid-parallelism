@@ -9,6 +9,8 @@ LICENSE file in the root directory of this source tree.
 #include <astra-network-analytical/reconfigurable/Topology.h>
 #include <astra-network-analytical/reconfigurable/TopologyManager.h>
 
+#include <unordered_set>
+
 using namespace AstraSim;
 using namespace AstraSimAnalytical;
 using namespace NetworkAnalytical;
@@ -46,15 +48,19 @@ class ReconfigurableNetworkApi final : public CommonNetworkApi {
 
   bool sim_reconfig(int topo_id) override;
 
-  void increment_inflight_coll() override;
+  void increment_inflight_coll(int rank, std::string name) override;
 
   int get_inflight_coll() override;
 
-  void decrement_inflight_coll() override;
+  void decrement_inflight_coll(int rank, int node_id) override;
+
+  void print_on_going_comms() override;
 
   private:
     /// topology
     static std::shared_ptr<TopologyManager> tm;
+
+    static std::map<int, std::unordered_set<std::string>> on_going_comms;
 };
 
 }  // namespace AstraSimAnalyticalReconfigurable

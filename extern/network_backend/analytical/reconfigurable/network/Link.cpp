@@ -119,7 +119,7 @@ unsigned long Link::schedule_chunk_transmission(std::unique_ptr<Chunk> chunk) no
     
     // schedule link free time
     const auto serialization_time = serialization_delay(chunk_size);
-    const auto link_free_time = current_time + serialization_time;
+    const auto link_free_time = current_time + serialization_time + 2 * latency;
     pending_chunk_end_time = link_free_time;
     return link_free_time;
 }

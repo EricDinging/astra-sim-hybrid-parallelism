@@ -428,7 +428,7 @@ bool Workload::issue_coll_comm(
     std::cout << "\033[0;32mRANK: " << this->sys->id << " at time " << Sys::boostedTick() << " Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
     previous_group_id = comm_group->get_id();
 
-    sys->increment_inflight_coll();
+    sys->increment_inflight_coll(this->sys->id, std::to_string((int)node->id()) + " " + std::to_string(this->sys->id) + "COLL COMM " + std::to_string(node->id()));
     std::cout << "\033[0;32mRANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << "\033[0m" << std::endl;
 
     const auto comm_type =
@@ -515,7 +515,7 @@ bool Workload::issue_send_comm(
     std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing SEND " << src << "-" << dst << std::endl;
     previous_group_id = cur_comm_group_id;
 
-    sys->increment_inflight_coll();
+    sys->increment_inflight_coll(this->sys->id, std::to_string((int)node->id()) + " " + std::to_string(this->sys->id) + " SEND TO " + std::to_string(dst));
     std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
 
 
@@ -557,7 +557,14 @@ bool Workload::issue_recv_comm(
 
     // previous_group_id = -1;
 
+    int cur_comm_group_id = -1;
+    bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
+    if (!reconfig_success) return false;
+
     std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing RECV " << src << "-" << dst << std::endl;
+
+
+    this->sys->increment_inflight_coll(this->sys->id, std::to_string(this->sys->id) + " RECV FROM " + std::to_string(src));
 
     sim_request rcv_req;
     RecvPacketEventHandlerData* rcehd = new RecvPacketEventHandlerData;
@@ -596,7 +603,7 @@ void Workload::call(EventType event, CallData* data) {
     if (event == EventType::CollectiveCommunicationFinished) {
         IntData* int_data = (IntData*)data;
         uint64_t coll_comm_id = int_data->data;
-        sys->decrement_inflight_coll();
+        sys->decrement_inflight_coll(this->sys->id, -1);
         printf("\033[0;32mRANK: %d at time %ld finish collective: %lu, inflight collective %d\033[0m\n", this->sys->id, Sys::boostedTick(), coll_comm_id, sys->get_inflight_coll());
 
         current_comm_group_idx++;
@@ -686,9 +693,10 @@ void Workload::call(EventType event, CallData* data) {
                 event == EventType::PacketReceived) {
 
                 printf("\033[0;32mRANK: %d at time %ld finish SEND/RECV\033[0m\n", this->sys->id, Sys::boostedTick());
-                if( event == EventType::PacketReceived) {
-                    sys->decrement_inflight_coll();
-                }
+
+                sys->decrement_inflight_coll(this->sys->id, node->id());
+                
+                
                 scheduler->post_reconfig(-1);
 
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);

@@ -116,6 +116,7 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     if (routes[chunk->next_device()->get_id()].empty()) {
         std::cerr << "ERROR Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
+        std::cout << "ERROR Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
         return;
     }
 

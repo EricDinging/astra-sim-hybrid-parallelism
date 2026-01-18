@@ -237,8 +237,8 @@ class Sys : public Callable {
 
     bool sim_reconfig(int topo_id);
 
-    void increment_inflight_coll();
-    void decrement_inflight_coll();
+    void increment_inflight_coll(int rank, std::string name);
+    void decrement_inflight_coll(int rank, int node_id);
     int get_inflight_coll();
 
     int sim_recv(Tick delay,
