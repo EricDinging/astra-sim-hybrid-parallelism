@@ -26,6 +26,97 @@ using json = nlohmann::json;
 typedef ChakraProtoMsg::NodeType ChakraNodeType;
 typedef ChakraProtoMsg::CollectiveCommType ChakraCollectiveCommType;
 
+std::map<int, int> Workload::group_vote_count = std::map<int, int>();
+std::map<int, int> Workload::group_finish_count = std::map<int, int>();
+std::map<int, int> Workload::group_leader_npu_id = std::map<int, int>();
+
+std::map<int, int> Workload::vote_rounds = std::map<int, int>();
+std::map<int, int> Workload::finish_rounds = std::map<int, int>();
+
+std::map<int, std::map<int, int>> Workload::group_node_vote_count = std::map<int, std::map<int, int>>();
+std::map<int, std::map<int, int>> Workload::group_node_finish_count = std::map<int, std::map<int, int>>();
+
+void Workload::vote(int comm_group_id) {
+    if (group_node_vote_count.find(comm_group_id) ==
+        group_node_vote_count.end()) {
+        group_node_vote_count[comm_group_id] = std::map<int, int>();
+    }
+
+    if (group_node_vote_count[comm_group_id].find(this->sys->id) ==
+        group_node_vote_count[comm_group_id].end()) {
+        group_node_vote_count[comm_group_id][this->sys->id] = 0;
+    }
+
+    if (vote_rounds.find(comm_group_id) == vote_rounds.end()) {
+        vote_rounds[comm_group_id] = 0;
+    }
+
+    group_node_vote_count[comm_group_id][this->sys->id] += 1;
+    std::cout << "RANK: " << this->sys->id << " Vote for comm group "
+              << comm_group_id << ", current node vote count: "
+              << group_node_vote_count[comm_group_id][this->sys->id]
+              << std::endl;
+}
+
+void Workload::finish(int comm_group_id) {
+    if (group_node_finish_count.find(comm_group_id) ==
+        group_node_finish_count.end()) {
+        group_node_finish_count[comm_group_id] = std::map<int, int>();
+    }
+
+    if (finish_rounds.find(comm_group_id) == finish_rounds.end()) {
+        finish_rounds[comm_group_id] = 0;
+    }
+
+    if (group_node_finish_count[comm_group_id].find(this->sys->id) ==
+        group_node_finish_count[comm_group_id].end()) {
+        group_node_finish_count[comm_group_id][this->sys->id] = 0;
+    }
+
+    group_node_finish_count[comm_group_id][this->sys->id] += 1;
+    std::cout << "RANK: " << this->sys->id << " Finish for comm group "
+              << comm_group_id << ", current node finish count: "
+              << group_node_finish_count[comm_group_id][this->sys->id]
+              << std::endl;
+}
+
+bool Workload::check_vote(int comm_group_id) {
+    int required_votes = comm_groups[comm_group_id]->involved_NPUs.size();
+    int current_votes = 0;
+    std::cout << "Votes for comm group " << comm_group_id << ": ";
+    if (group_node_vote_count.find(comm_group_id) !=
+        group_node_vote_count.end()) {
+        for (const auto& pair : group_node_vote_count[comm_group_id]) {
+            if (pair.second > vote_rounds[comm_group_id]) {
+                current_votes += 1;
+                std::cout << pair.first << " ";
+            }
+        }
+    }
+
+    std::cout << " -- (" << current_votes << "/" << required_votes << ") [" << vote_rounds[comm_group_id] << "]\n";
+    return current_votes >= required_votes;
+}
+
+bool Workload::check_finish(int comm_group_id) {
+    int required_finishes = comm_groups[comm_group_id]->involved_NPUs.size();
+    int current_finishes = 0;
+    std::cout << "Finishes for comm group " << comm_group_id << ": ";
+    if (group_node_finish_count.find(comm_group_id) !=
+        group_node_finish_count.end()) {
+        for (const auto& pair : group_node_finish_count[comm_group_id]) {
+            if (pair.second > finish_rounds[comm_group_id]) {
+                current_finishes += 1;
+                std::cout << pair.first << " ";
+            }
+        }
+    }
+
+    std::cout << " -- (" << current_finishes << "/" << required_finishes << ") [" << finish_rounds[comm_group_id] << "]\n";
+    return current_finishes >= required_finishes;
+}
+
+
 Workload::Workload(Sys* sys, string et_filename, string comm_group_filename, string provision_config, std::map<int,std::vector<int>>& comm_to_topo) :
     comm_to_topo(comm_to_topo) {
     string workload_filename = et_filename + "." + to_string(sys->id) + ".et";
@@ -165,7 +256,7 @@ void Workload::issue_dep_free_nodes() {
     //           << ", tick=" << Sys::boostedTick()
     //           << ", dependancy_free_nodes_set.size="
     //           << dependancy_free_nodes_set.size() << std::endl;
-    
+
     bool success = true;
     for (const auto node_id : dependancy_free_nodes_set) {
         std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
@@ -319,10 +410,10 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     double perf = sys->roofline->get_perf(operational_intensity);
     double elapsed_time = static_cast<double>(node->num_ops()) / perf;  // sec
     uint64_t runtime = static_cast<uint64_t>(elapsed_time * 1e9);  // sec -> ns
-    std::cout << "Workload::issue_comp, sys->id=" << sys->id
-              << ", node->id=" << node->id() << ", start_time=" << Sys::boostedTick()
-              << ", runtime=" << runtime << " ns"
-              << std::endl;
+    // std::cout << "Workload::issue_comp, sys->id=" << sys->id
+    //           << ", node->id=" << node->id() << ", start_time=" << Sys::boostedTick()
+    //           << ", runtime=" << runtime << " ns"
+    //           << std::endl;
 
     // printf(
     //     "Workload::issue_comp, sys->id=%d, node->id=%lu, num_ops=%e, "
@@ -405,30 +496,41 @@ bool Workload::issue_coll_comm(
     }
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
+
+    int group_size = comm_group->involved_NPUs.size();
     
     std::cout << "Involved npus: ";
     for (auto d : comm_group->involved_NPUs) {
         std::cout << d << " ";
     }
+    std::cout << std::endl;
 
     // std::cout << std::endl;
 
     // TODO in addition to comm group detection, also check topo id change
     // Lazy reconfiguration
 
+    vote(comm_group->get_id());
+
     int comm_id = comm_group->get_id();
     if(comm_to_topo[comm_id].size() > 1) {
         std::cout << "TP COMM pattern detected!" << std::endl;
     }
-    else{
-        bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id);
+    else if (check_vote(comm_group->get_id())) {
+        bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id, 0);
         if (!reconfig_success) return false;
     }
 
     std::cout << "\033[0;32mRANK: " << this->sys->id << " at time " << Sys::boostedTick() << " Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
+    std::cout << " COLL COMM NODE: " << node->id() << " of comm group " << comm_group->get_id() << std::endl;
     previous_group_id = comm_group->get_id();
 
-    sys->increment_inflight_coll(this->sys->id, std::to_string((int)node->id()) + " " + std::to_string(this->sys->id) + "COLL COMM " + std::to_string(node->id()));
+    if (check_vote(comm_id)) {
+        group_leader_npu_id[comm_group->get_id()] = this->sys->id;
+        sys->increment_inflight_coll(this->sys->id, "COLL COMM " + std::to_string(node->id()) + " COMM GROUP " + std::to_string(comm_group->get_id()));
+        vote_rounds[comm_group->get_id()] += 1;
+    }
+
     std::cout << "\033[0;32mRANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << "\033[0m" << std::endl;
 
     const auto comm_type =
@@ -446,11 +548,13 @@ bool Workload::issue_coll_comm(
                                                comm_group, comm_priority);
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
+        fp->comm_group_id = comm_group->get_id();
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
         std::cout << "Generated all-reduce DataSet, fp->my_id=" << fp->my_id << std::endl;
     } else if (comm_type == ChakraCollectiveCommType::ALL_TO_ALL) {
         DataSet* fp = sys->generate_all_to_all(comm_size, involved_dims,
                                                comm_group, comm_priority);
+        fp->comm_group_id = comm_group->get_id();
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
@@ -458,6 +562,7 @@ bool Workload::issue_coll_comm(
     } else if (comm_type == ChakraCollectiveCommType::ALL_GATHER) {
         DataSet* fp = sys->generate_all_gather(comm_size, involved_dims,
                                                comm_group, comm_priority);
+        fp->comm_group_id = comm_group->get_id();    
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
@@ -465,6 +570,7 @@ bool Workload::issue_coll_comm(
     } else if (comm_type == ChakraCollectiveCommType::REDUCE_SCATTER) {
         DataSet* fp = sys->generate_reduce_scatter(comm_size, involved_dims,
                                                    comm_group, comm_priority);
+        fp->comm_group_id = comm_group->get_id();
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
@@ -478,6 +584,7 @@ bool Workload::issue_coll_comm(
             runtime = node->runtime() * 1000;
         }
         DataSet* fp = new DataSet(1);
+        fp->comm_group_id = comm_group->get_id();
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
@@ -515,7 +622,7 @@ bool Workload::issue_send_comm(
     std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing SEND " << src << "-" << dst << std::endl;
     previous_group_id = cur_comm_group_id;
 
-    sys->increment_inflight_coll(this->sys->id, std::to_string((int)node->id()) + " " + std::to_string(this->sys->id) + " SEND TO " + std::to_string(dst));
+    //sys->increment_inflight_coll(this->sys->id, std::to_string((int)node->id()) + " " + std::to_string(this->sys->id) + " SEND TO " + std::to_string(dst));
     std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
 
 
@@ -557,14 +664,13 @@ bool Workload::issue_recv_comm(
 
     // previous_group_id = -1;
 
-    int cur_comm_group_id = -1;
-    bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
-    if (!reconfig_success) return false;
+    // int cur_comm_group_id = -1;
+    // bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
+    // if (!reconfig_success) return false;
 
     std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing RECV " << src << "-" << dst << std::endl;
 
-
-    this->sys->increment_inflight_coll(this->sys->id, std::to_string(this->sys->id) + " RECV FROM " + std::to_string(src));
+    // sys->increment_inflight_coll(this->sys->id, std::to_string((int)node->id()) + " " + std::to_string(this->sys->id) + " RECV FROM " + std::to_string(src));
 
     sim_request rcv_req;
     RecvPacketEventHandlerData* rcehd = new RecvPacketEventHandlerData;
@@ -601,10 +707,21 @@ void Workload::call(EventType event, CallData* data) {
     }
 
     if (event == EventType::CollectiveCommunicationFinished) {
-        IntData* int_data = (IntData*)data;
+        TwoIntData* int_data = (TwoIntData*)data;
         uint64_t coll_comm_id = int_data->data;
-        sys->decrement_inflight_coll(this->sys->id, -1);
-        printf("\033[0;32mRANK: %d at time %ld finish collective: %lu, inflight collective %d\033[0m\n", this->sys->id, Sys::boostedTick(), coll_comm_id, sys->get_inflight_coll());
+        uint64_t comm_group_id = int_data->data2;
+        
+        
+        printf("\033[0;32mRANK: %d at time %ld finish collective: %lu of comm group %lu, inflight collective %d\033[0m\n", this->sys->id, Sys::boostedTick(), coll_comm_id, comm_group_id, sys->get_inflight_coll());
+
+
+        finish(comm_group_id);
+        if (check_finish(comm_group_id)) {
+            sys->decrement_inflight_coll(group_leader_npu_id[comm_group_id], -1);
+            std::cout << "REMOVED inflight collective count for leader NPU " << group_leader_npu_id[comm_group_id] << ", current inflight collective count: " << sys->get_inflight_coll() << std::endl;
+            group_leader_npu_id.erase(comm_group_id);
+            finish_rounds[comm_group_id] += 1;
+        }
 
         current_comm_group_idx++;
         //TODO edit coll_comm_id to comm group
@@ -694,7 +811,8 @@ void Workload::call(EventType event, CallData* data) {
 
                 printf("\033[0;32mRANK: %d at time %ld finish SEND/RECV\033[0m\n", this->sys->id, Sys::boostedTick());
 
-                sys->decrement_inflight_coll(this->sys->id, node->id());
+                // if(event == EventType::PacketSent)
+                //     sys->decrement_inflight_coll(this->sys->id, node->id());
                 
                 
                 scheduler->post_reconfig(-1);

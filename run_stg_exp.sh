@@ -4,10 +4,10 @@ STG_DIR="/home/soxehli/work/symbolic_tensor_graph"
 EXAMPLE_DIR="${SCRIPT_DIR}/examples"
 TEMPLATE_DIR="${EXAMPLE_DIR}/stg-template"
 
-TP=1
-PP=4
-DP=8
-MB=16
+TP=2
+PP=2
+DP=2
+MB=-1
 WS=0
 NS=10
 
@@ -16,6 +16,7 @@ NPU_COUNT=$((DP * TP * PP))
 OUT_DIR="$EXAMPLE_DIR/stg_dp${DP}_pp${PP}_tp${TP}_mb${MB}_${NS}stack"
 
 cd ${STG_DIR} || exit 1
+mkdir -p ${OUT_DIR}
 
 python ${STG_DIR}/main.py --output_dir ${OUT_DIR} \
                --output_name workload.%d.et \

@@ -114,14 +114,18 @@ void TopologyManager::increment_callback() noexcept {
 }
 
 bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
-                               std::vector<std::vector<Latency>> latencies, Latency reconfig_time, int topo_id) noexcept {
+                               std::vector<std::vector<Latency>> latencies, Latency reconfig_time, int topo_id, int skip_inflight) noexcept {
     
     if (topo_id == cur_topo_id) {
         std::cout << "\033[1;31mTM: Already in the requested topology and reconfiguring, ignoring reconfiguration request to topo_id " << topo_id << "\033[0m" << std::endl;
         return true;
     }
 
-    if ((is_reconfiguring() || inflight_coll > 0)) {
+    if (skip_inflight == 1 && inflight_coll > 0) {
+        std::cout << "\033[1;31mTM: Force reconfig to topo_id " << topo_id << " despite inflight collectives: " << inflight_coll << "\033[0m" << std::endl;
+    }
+
+    if ((is_reconfiguring() || inflight_coll > 0) && skip_inflight == 0) {
         // TODO check condition
         std::cout << "\033[1;31m\nTM: new topo_id " << topo_id << " cur_topo_id " << cur_topo_id << std::endl;
         std::cout << "\033[1;31m\nTM: trying to reconfig, inflight coll: " << inflight_coll << ", is reconfiguring? " << is_reconfiguring() << ", is event queue finished? " << event_queue->finished() << "\033[0m" << std::endl;
@@ -165,10 +169,10 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     return true;
 }
 
-bool TopologyManager::reconfigure(int topo_id) noexcept{
+bool TopologyManager::reconfigure(int topo_id, int skip_inflight) noexcept{
     auto it = circuit_schedules.find(topo_id);
     if (it != circuit_schedules.end()) {
-        return reconfigure(it->second, latencies, reconfig_time, topo_id);
+        return reconfigure(it->second, latencies, reconfig_time, topo_id, skip_inflight);
     } else {
         printf("Topology ID %d not found in circuit schedules.\n", topo_id);
         exit(1);

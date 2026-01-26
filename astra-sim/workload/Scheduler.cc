@@ -44,7 +44,7 @@ Scheduler::Scheduler(AstraSim::Sys* system, std::string provision_config) : sys(
     }
 }
 
-bool AstraSim::Scheduler::reconfigure(int cur_comm_group_id, int prev_comm_group_id) {
+bool AstraSim::Scheduler::reconfigure(int cur_comm_group_id, int prev_comm_group_id, int skip_inflight) {
     // TODO use suitable topo_id
 
     int topo_id = 0;
@@ -54,7 +54,7 @@ bool AstraSim::Scheduler::reconfigure(int cur_comm_group_id, int prev_comm_group
         topo_id = 1;
     }
     
-    bool can_config = this->sys->comm_NI->sim_reconfig(topo_id);
+    bool can_config = this->sys->comm_NI->sim_reconfig(topo_id, skip_inflight);
     if (!can_config) {
         printf("\033[1;33mScheduler: %d Switching to comm group failed: %d\033[0m\n", this->sys->id, cur_comm_group_id);
         this->sys->comm_NI->print_on_going_comms();
@@ -63,7 +63,7 @@ bool AstraSim::Scheduler::reconfigure(int cur_comm_group_id, int prev_comm_group
     return true;
 }
 
-bool AstraSim::Scheduler::pre_reconfig(int cur_comm_group_id, int prev_comm_group_id) {
+bool AstraSim::Scheduler::pre_reconfig(int cur_comm_group_id, int prev_comm_group_id, int skip_inflight) {
     // if (prev_comm_group_id != cur_comm_group_id || prev_comm_group_id == -1) {
     //     int pg_id = cur_comm_group_id;
     //     int topo_id = 0;
@@ -85,7 +85,7 @@ bool AstraSim::Scheduler::pre_reconfig(int cur_comm_group_id, int prev_comm_grou
     // }
 
     // if(prev_comm_group_id != cur_comm_group_id) {
-    bool can_config = this->reconfigure(cur_comm_group_id, prev_comm_group_id);
+    bool can_config = this->reconfigure(cur_comm_group_id, prev_comm_group_id, skip_inflight);
     if (!can_config) return false;
         
     printf("\033[1;33mScheduler: %d Switching to comm group: %d\033[0m\n", this->sys->id, cur_comm_group_id);

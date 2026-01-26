@@ -46,7 +46,7 @@ class ReconfigurableNetworkApi final : public CommonNetworkApi {
                  void (*msg_handler)(void* fun_arg),
                  void* fun_arg) override;
 
-  bool sim_reconfig(int topo_id) override;
+  bool sim_reconfig(int topo_id, int skip_inflight = 0) override;
 
   void increment_inflight_coll(int rank, std::string name) override;
 

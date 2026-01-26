@@ -70,6 +70,21 @@ class Workload : public Callable {
     bool is_finished;
     Scheduler* scheduler;
 
+    static std::map<int, int> group_vote_count;
+    static std::map<int, std::map<int, int>> group_node_vote_count;
+    static std::map<int, int> group_finish_count;
+    static std::map<int, std::map<int, int>> group_node_finish_count;
+    static std::map<int, int> group_leader_npu_id;
+
+    static std::map<int, int> vote_rounds;
+    static std::map<int, int> finish_rounds;
+
+    void vote(int comm_group_id);
+    void finish(int comm_group_id);
+
+    bool check_vote(int comm_group_id);
+    bool check_finish(int comm_group_id);
+
   private:
     // From the ET node, find out the corresponding communicator group, and
     // return the pointer. If no communicator group is specified for this ET

@@ -260,6 +260,20 @@ int main(int argc, char* argv[]) {
             break;
     }
 
+    for (int i = 0; i < npus_count; i++) {
+        auto d = tm->get_device(i);
+        for (int j = 0; j < npus_count; j++) {
+            if (j != d->get_id()) {
+                if (d->pending_chunks_count(j) != 0) {
+                    std::cerr << "Error: Device " << d->get_id()
+                              << " has pending chunks to Device " << j
+                              << " after simulation ends!" << std::endl;
+                    assert(false);
+                }
+            }
+        }
+    }
+
     // terminate simulation
     AstraSim::LoggerFactory::shutdown();
     return 0;

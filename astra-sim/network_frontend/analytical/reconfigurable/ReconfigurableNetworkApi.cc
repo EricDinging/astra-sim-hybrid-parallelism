@@ -31,8 +31,8 @@ ReconfigurableNetworkApi::ReconfigurableNetworkApi(const int rank) noexcept
     assert(rank >= 0);
 }
 
-bool ReconfigurableNetworkApi::sim_reconfig(int topo_id) {
-    return tm->reconfigure(topo_id);
+bool ReconfigurableNetworkApi::sim_reconfig(int topo_id, int skip_inflight) {
+    return tm->reconfigure(topo_id, skip_inflight);
 }
 
 void ReconfigurableNetworkApi::increment_inflight_coll(int rank, std::string name) {
@@ -66,6 +66,10 @@ void ReconfigurableNetworkApi::decrement_inflight_coll(int rank, int node_id) {
 
         }
     }
+    if(tm->inflight_coll == 0) {
+        std::cerr << "Error: inflight_coll is already zero!" << std::endl;
+        assert(false);
+    }
     tm->inflight_coll--;
 }
 
@@ -75,7 +79,7 @@ void ReconfigurableNetworkApi::print_on_going_comms() {
         if (set.empty()) continue;
         std::cout << "Rank: " << rank;
         for (const auto& name : set) {
-            std::cout << " " << name;
+            std::cout << " " << name << ", ";
         }
         std::cout << std::endl;
     }

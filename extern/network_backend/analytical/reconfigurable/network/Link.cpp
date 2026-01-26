@@ -126,12 +126,12 @@ unsigned long Link::schedule_chunk_transmission(std::unique_ptr<Chunk> chunk) no
 
 unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency reconfig_time) noexcept{
     if (bandwidth == this->bandwidth && latency == this->latency) {
-        std::cout << "No reconfiguration needed" << std::endl;
-        if(busy) {
-            std::cout << "Link is busy during no-op reconfiguration" << std::endl;
-            std::cout << "Current time: " << Link::event_queue->get_current_time() << " ns" << std::endl;
-            std::cout << "Chunk end time: " << pending_chunk_end_time << " ns" << std::endl;
-        }
+        // std::cout << "No reconfiguration needed" << std::endl;
+        // if(busy) {
+        //     std::cout << "Link is busy during no-op reconfiguration" << std::endl;
+        //     std::cout << "Current time: " << Link::event_queue->get_current_time() << " ns" << std::endl;
+        //     std::cout << "Chunk end time: " << pending_chunk_end_time << " ns" << std::endl;
+        // }
         return Link::event_queue->get_current_time();
     }
 
@@ -139,8 +139,8 @@ unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency re
     const auto current_time = Link::event_queue->get_current_time();
     set_busy();
 
-    printf("Reconfiguring link from bandwidth %.2f GB/s to %.2f GB/s and latency %.2f ns to %.2f ns at time %lu ns\n",
-           this->bandwidth, bandwidth, this->latency, latency, current_time);
+    //printf("Reconfiguring link from bandwidth %.2f GB/s to %.2f GB/s and latency %.2f ns to %.2f ns at time %lu ns\n",
+    //       this->bandwidth, bandwidth, this->latency, latency, current_time);
 
     this->bandwidth = bandwidth;
     this->latency = latency;

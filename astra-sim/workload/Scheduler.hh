@@ -21,12 +21,12 @@ private:
     std::unordered_map<int, std::vector<int>> comm_group_to_start_indexes;
 
     int cur_comm_idx = -1;
-    bool reconfigure(int cur_comm_group_id, int prev_comm_group_id);
+    bool reconfigure(int cur_comm_group_id, int prev_comm_group_id, int skip_inflight = 0);
 
 public:
     Scheduler(){};
     Scheduler(AstraSim::Sys* system, std::string provision_config);
-    bool pre_reconfig(int cur_comm_group_id, int prev_comm_group_id);
+    bool pre_reconfig(int cur_comm_group_id, int prev_comm_group_id, int skip_inflight = 0);
     bool post_reconfig(int cur_comm_group_id);
 };
 }

@@ -65,7 +65,8 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     pending_chunks[link_id].pop_front();
 
     if(links[link_id]->get_bandwidth() == Bandwidth(0)){
-        std::cout << "ERROR Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
+        std::cout << "LINK FREE ERROR Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
+        assert(false);
         return;
     }
     auto next_link_free_time = links[link_id]->send(std::move(chunk));
@@ -115,8 +116,9 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     // }
 
     if (routes[chunk->next_device()->get_id()].empty()) {
-        std::cerr << "ERROR Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
-        std::cout << "ERROR Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
+        std::cout << "Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
+        std::cout << "Inserting Chunk to pending queue for device " << chunk->next_device()->get_id() << ", pending queue size: " << pending_chunks[chunk->next_device()->get_id()].size() << std::endl;
+        pending_chunks[chunk->next_device()->get_id()].push_back(std::move(chunk));
         return;
     }
 
@@ -139,7 +141,7 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     if (link->is_busy() || link->get_bandwidth() == Bandwidth(0) || chunk->get_topology_iteration() > topology_iteration) {
         // link is busy, add the chunk to pending chunks
         pending_chunks[next_dest_id].push_back(std::move(chunk));
-        std::cout << "Device " << device_id << ": link to " << next_dest_id << " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " << pending_chunks[next_dest_id].size() << std::endl;
+        //std::cout << "Device " << device_id << ": link to " << next_dest_id << " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " << pending_chunks[next_dest_id].size() << std::endl;
         return;
     }
 
@@ -147,7 +149,8 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     // delegate this task to the link
 
     if(links[next_dest_id]->get_bandwidth() == Bandwidth(0)){
-        std::cout << "ERROR Device " << device_id << ": link to " << next_dest_id << " IS EMPTY" << pending_chunks[next_dest_id].size() << std::endl;
+        std::cout << "SEND ERROR Device " << device_id << ": link to " << next_dest_id << " IS EMPTY" << pending_chunks[next_dest_id].size() << std::endl;
+        assert(false);
         return;
     }
 
@@ -189,7 +192,7 @@ void Device::reconfigure(std::vector<Bandwidth> bandwidth, std::vector<Route> ro
         // update the route
         this->routes[id] = routes[id];
         // reconfigure the link
-        printf("Device %d: Reconfiguring link to %d, pending chunk size: %ld, new bandwidth: %f\n", device_id, id, pending_chunks[id].size(), bandwidth[id]);
+        //printf("Device %d: Reconfiguring link to %d, pending chunk size: %ld, new bandwidth: %f\n", device_id, id, pending_chunks[id].size(), bandwidth[id]);
         auto free_time = link->reconfigure(bandwidth[id], latency[id], reconfig_time);
         // create a callback argument for the link free event
 
