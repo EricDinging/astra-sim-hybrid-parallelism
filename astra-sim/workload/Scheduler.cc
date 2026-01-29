@@ -56,8 +56,8 @@ bool AstraSim::Scheduler::reconfigure(int cur_comm_group_id, int prev_comm_group
     
     bool can_config = this->sys->comm_NI->sim_reconfig(topo_id, skip_inflight);
     if (!can_config) {
-        printf("\033[1;33mScheduler: %d Switching to comm group failed: %d\033[0m\n", this->sys->id, cur_comm_group_id);
-        this->sys->comm_NI->print_on_going_comms();
+        //printf("\033[1;33mScheduler: %d Switching to comm group failed: %d\033[0m\n", this->sys->id, cur_comm_group_id);
+        //this->sys->comm_NI->print_on_going_comms();
         return false;
     }
     return true;

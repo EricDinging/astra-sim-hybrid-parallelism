@@ -127,9 +127,9 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
 
     if ((is_reconfiguring() || inflight_coll > 0) && skip_inflight == 0) {
         // TODO check condition
-        std::cout << "\033[1;31m\nTM: new topo_id " << topo_id << " cur_topo_id " << cur_topo_id << std::endl;
-        std::cout << "\033[1;31m\nTM: trying to reconfig, inflight coll: " << inflight_coll << ", is reconfiguring? " << is_reconfiguring() << ", is event queue finished? " << event_queue->finished() << "\033[0m" << std::endl;
-        // event_queue->proceed();
+        // std::cout << "\033[1;31m\nTM: new topo_id " << topo_id << " cur_topo_id " << cur_topo_id << std::endl;
+        // std::cout << "\033[1;31m\nTM: trying to reconfig, inflight coll: " << inflight_coll << ", is reconfiguring? " << is_reconfiguring() << ", is event queue finished? " << event_queue->finished() << "\033[0m" << std::endl;
+        // // event_queue->proceed();
         return false;
     }
 

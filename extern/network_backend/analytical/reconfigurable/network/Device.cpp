@@ -65,7 +65,12 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     pending_chunks[link_id].pop_front();
 
     if(links[link_id]->get_bandwidth() == Bandwidth(0)){
-        std::cout << "LINK FREE ERROR Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
+        // chunk->update_route(routes[link_id], chunk->get_topology_iteration()+1);
+        // pending_chunks[link_id].push_back(std::move(chunk));
+        // std::cout << "UNROUTEABLE CHUNK, SAVING FOR NEXT TOPOLOGY Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
+        // link_become_free(link_id);
+        // std::cout << "LINK FREE ERROR Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
+        // std::cout << "Chunk topology iteration: " << chunk->get_topology_iteration() << ", current topology iteration: " << topology_iteration << std::endl;
         assert(false);
         return;
     }
@@ -151,6 +156,7 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     if(links[next_dest_id]->get_bandwidth() == Bandwidth(0)){
         std::cout << "SEND ERROR Device " << device_id << ": link to " << next_dest_id << " IS EMPTY" << pending_chunks[next_dest_id].size() << std::endl;
         assert(false);
+        pending_chunks[next_dest_id].push_back(std::move(chunk));
         return;
     }
 

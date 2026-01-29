@@ -42,16 +42,37 @@ void Workload::vote(int comm_group_id) {
         group_node_vote_count[comm_group_id] = std::map<int, int>();
     }
 
+    if (group_node_finish_count.find(comm_group_id) ==
+        group_node_finish_count.end()) {
+        group_node_finish_count[comm_group_id] = std::map<int, int>();
+    }
+
     if (group_node_vote_count[comm_group_id].find(this->sys->id) ==
         group_node_vote_count[comm_group_id].end()) {
         group_node_vote_count[comm_group_id][this->sys->id] = 0;
+    }
+
+    if (group_node_finish_count[comm_group_id].find(this->sys->id) ==
+        group_node_finish_count[comm_group_id].end()) {
+        group_node_finish_count[comm_group_id][this->sys->id] = 0;
     }
 
     if (vote_rounds.find(comm_group_id) == vote_rounds.end()) {
         vote_rounds[comm_group_id] = 0;
     }
 
-    group_node_vote_count[comm_group_id][this->sys->id] += 1;
+    if (finish_rounds.find(comm_group_id) == finish_rounds.end()) {
+        finish_rounds[comm_group_id] = 0;
+    }
+
+    if (group_node_vote_count[comm_group_id][this->sys->id] >
+        group_node_finish_count[comm_group_id][this->sys->id]) {
+        std::cout << "RANK: " << this->sys->id << " has already voted for comm group "
+                 << comm_group_id << " in this round." << std::endl;
+    }
+    else{
+        group_node_vote_count[comm_group_id][this->sys->id] += 1;
+    }
     std::cout << "RANK: " << this->sys->id << " Vote for comm group "
               << comm_group_id << ", current node vote count: "
               << group_node_vote_count[comm_group_id][this->sys->id]
@@ -83,25 +104,31 @@ void Workload::finish(int comm_group_id) {
 bool Workload::check_vote(int comm_group_id) {
     int required_votes = comm_groups[comm_group_id]->involved_NPUs.size();
     int current_votes = 0;
-    std::cout << "Votes for comm group " << comm_group_id << ": ";
+    if (group_node_vote_count[comm_group_id][this->sys->id] - finish_rounds[comm_group_id] > 1) {
+        std::cout << "RANK: " << this->sys->id << " is ahead, previous comm has not finished yet." << std::endl;
+        return false;
+    }
+
+
+    std::cout << "RANK: " << this->sys->id << " checking votes for comm group " << comm_group_id << ": ";
     if (group_node_vote_count.find(comm_group_id) !=
         group_node_vote_count.end()) {
         for (const auto& pair : group_node_vote_count[comm_group_id]) {
-            if (pair.second > vote_rounds[comm_group_id]) {
+            if (pair.second > finish_rounds[comm_group_id]) {
                 current_votes += 1;
                 std::cout << pair.first << " ";
             }
         }
     }
 
-    std::cout << " -- (" << current_votes << "/" << required_votes << ") [" << vote_rounds[comm_group_id] << "]\n";
+    std::cout << " -- (" << current_votes << "/" << required_votes << ") [" << finish_rounds[comm_group_id] << "]\n";
     return current_votes >= required_votes;
 }
 
 bool Workload::check_finish(int comm_group_id) {
     int required_finishes = comm_groups[comm_group_id]->involved_NPUs.size();
     int current_finishes = 0;
-    std::cout << "Finishes for comm group " << comm_group_id << ": ";
+    std::cout << "RANK: " << this->sys->id << " checking finishes for comm group " << comm_group_id << ": ";
     if (group_node_finish_count.find(comm_group_id) !=
         group_node_finish_count.end()) {
         for (const auto& pair : group_node_finish_count[comm_group_id]) {
@@ -262,13 +289,13 @@ void Workload::issue_dep_free_nodes() {
         std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
         if (hw_resource->is_available(node)) {
             success = issue(node);
-            if (!success) {
-                std::cout << "Workload::issue failed, sys->id=" << sys->id 
-                          << ", node->id=" << node->id()
-                          << ", node->name=" << node->name()
-                          << ", node->type=" << static_cast<uint64_t>(node->type())
-                          << std::endl;
-            }
+            // if (!success) {
+            //     std::cout << "Workload::issue failed, sys->id=" << sys->id 
+            //               << ", node->id=" << node->id()
+            //               << ", node->name=" << node->name()
+            //               << ", node->type=" << static_cast<uint64_t>(node->type())
+            //               << std::endl;
+            // }
         }
     }
 }
@@ -510,26 +537,37 @@ bool Workload::issue_coll_comm(
     // TODO in addition to comm group detection, also check topo id change
     // Lazy reconfiguration
 
-    vote(comm_group->get_id());
-
     int comm_id = comm_group->get_id();
-    if(comm_to_topo[comm_id].size() > 1) {
-        std::cout << "TP COMM pattern detected!" << std::endl;
+    
+ 
+
+
+    vote(comm_id);
+    int passed_vote = check_vote(comm_id);
+    if (passed_vote) {
+        if (vote_rounds[comm_id] == finish_rounds[comm_id]){
+            if(comm_to_topo[comm_id].size() > 1) {
+                std::cout << "TP COMM pattern detected!" << std::endl;
+            } else {
+                bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id, 0);
+                if (!reconfig_success) return false;
+            }
+
+            group_leader_npu_id[comm_group->get_id()] = this->sys->id;
+            std::cout << "RANK: " << this->sys->id << " is the leader for comm group " << comm_group->get_id() << " in round " << vote_rounds[comm_id] << std::endl;
+            sys->increment_inflight_coll(this->sys->id, "COLL COMM " + std::to_string(node->id()) + " COMM GROUP " + std::to_string(comm_group->get_id()));
+            vote_rounds[comm_group->get_id()] += 1;
+        }
+    } else {
+        std::cout << "RANK: " << this->sys->id << " waiting for other nodes to vote for comm group " << comm_group->get_id() << std::endl;
+        return false;
     }
-    else if (check_vote(comm_group->get_id())) {
-        bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id, 0);
-        if (!reconfig_success) return false;
-    }
+    
 
     std::cout << "\033[0;32mRANK: " << this->sys->id << " at time " << Sys::boostedTick() << " Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
     std::cout << " COLL COMM NODE: " << node->id() << " of comm group " << comm_group->get_id() << std::endl;
-    previous_group_id = comm_group->get_id();
-
-    if (check_vote(comm_id)) {
-        group_leader_npu_id[comm_group->get_id()] = this->sys->id;
-        sys->increment_inflight_coll(this->sys->id, "COLL COMM " + std::to_string(node->id()) + " COMM GROUP " + std::to_string(comm_group->get_id()));
-        vote_rounds[comm_group->get_id()] += 1;
-    }
+    
+    previous_group_id = comm_id;
 
     std::cout << "\033[0;32mRANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << "\033[0m" << std::endl;
 
@@ -612,7 +650,7 @@ bool Workload::issue_send_comm(
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
 
-    std::cout << "Send comm node: " << node->id() << " from " << src << " to " << dst << " size " << size << std::endl;
+    //std::cout << "Send comm node: " << node->id() << " from " << src << " to " << dst << " size " << size << std::endl;
 
     // stg_tp2_pp2
     int cur_comm_group_id = -1;
