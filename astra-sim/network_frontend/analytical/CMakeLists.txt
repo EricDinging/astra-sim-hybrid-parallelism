@@ -61,10 +61,11 @@ endif ()
 # Compile Congestion Aware Backend
 if (BUILDTARGET STREQUAL "all" OR BUILDTARGET STREQUAL "congestion_aware")
     add_executable(AstraSim_Analytical_Congestion_Aware ${srcs_congestion_aware} ${srcs_common})
+    target_compile_definitions(AstraSim_Analytical_Congestion_Aware PRIVATE CONGESTION_AWARE)
     target_sources(AstraSim_Analytical_Congestion_Aware PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/congestion_aware/main.cc)
 
     # Link libraries
-    target_link_libraries(AstraSim_Analytical_Congestion_Aware LINK_PRIVATE AstraSim)
+    target_link_libraries(AstraSim_Analytical_Congestion_Aware LINK_PRIVATE AstraSim_CongestionAware)
     target_link_libraries(AstraSim_Analytical_Congestion_Aware LINK_PRIVATE Analytical_Congestion_Aware)
 
     # Include directories
@@ -89,7 +90,7 @@ if (BUILDTARGET STREQUAL "all" OR BUILDTARGET STREQUAL "reconfigurable")
     target_sources(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reconfigurable/main.cc)
 
     # Link libraries
-    target_link_libraries(AstraSim_Analytical_Reconfigurable LINK_PRIVATE AstraSim)
+    target_link_libraries(AstraSim_Analytical_Reconfigurable LINK_PRIVATE AstraSim_Reconfigurable)
     target_link_libraries(AstraSim_Analytical_Reconfigurable LINK_PRIVATE Analytical_Reconfigurable)
 
     # Include directories

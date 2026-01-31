@@ -77,7 +77,7 @@ void ReconfigurableNetworkApi::print_on_going_comms() {
     std::cout << "On going comms: " << std::endl;
     for (const auto& [rank, set] : on_going_comms) {
         if (set.empty()) continue;
-        std::cout << "Rank: " << rank;
+        std::cout << "Rank " << rank;
         for (const auto& name : set) {
             std::cout << " " << name << ", ";
         }

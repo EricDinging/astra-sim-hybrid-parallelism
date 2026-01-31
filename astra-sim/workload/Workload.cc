@@ -538,9 +538,10 @@ bool Workload::issue_coll_comm(
     // Lazy reconfiguration
 
     int comm_id = comm_group->get_id();
-    
- 
 
+
+    // BEGIN RECONFIGURATION LOGIC
+    #ifndef CONGESTION_AWARE
 
     vote(comm_id);
     int passed_vote = check_vote(comm_id);
@@ -562,7 +563,8 @@ bool Workload::issue_coll_comm(
         std::cout << "RANK: " << this->sys->id << " waiting for other nodes to vote for comm group " << comm_group->get_id() << std::endl;
         return false;
     }
-    
+
+    #endif
 
     std::cout << "\033[0;32mRANK: " << this->sys->id << " at time " << Sys::boostedTick() << " Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
     std::cout << " COLL COMM NODE: " << node->id() << " of comm group " << comm_group->get_id() << std::endl;
@@ -652,10 +654,17 @@ bool Workload::issue_send_comm(
 
     //std::cout << "Send comm node: " << node->id() << " from " << src << " to " << dst << " size " << size << std::endl;
 
+
     // stg_tp2_pp2
     int cur_comm_group_id = -1;
+
+    // BEGIN RECONFIGURATION LOGIC
+    #ifndef CONGESTION_AWARE
+
     bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
     if (!reconfig_success) return false;
+
+    #endif
 
     std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing SEND " << src << "-" << dst << std::endl;
     previous_group_id = cur_comm_group_id;
@@ -752,6 +761,7 @@ void Workload::call(EventType event, CallData* data) {
         
         printf("\033[0;32mRANK: %d at time %ld finish collective: %lu of comm group %lu, inflight collective %d\033[0m\n", this->sys->id, Sys::boostedTick(), coll_comm_id, comm_group_id, sys->get_inflight_coll());
 
+        #ifndef CONGESTION_AWARE
 
         finish(comm_group_id);
         if (check_finish(comm_group_id)) {
@@ -760,6 +770,8 @@ void Workload::call(EventType event, CallData* data) {
             group_leader_npu_id.erase(comm_group_id);
             finish_rounds[comm_group_id] += 1;
         }
+
+        #endif
 
         current_comm_group_idx++;
         //TODO edit coll_comm_id to comm group

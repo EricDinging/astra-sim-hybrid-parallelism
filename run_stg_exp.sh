@@ -4,10 +4,10 @@ STG_DIR="/home/soxehli/work/symbolic_tensor_graph"
 EXAMPLE_DIR="${SCRIPT_DIR}/examples"
 TEMPLATE_DIR="${EXAMPLE_DIR}/stg-template"
 
-TP=2
-PP=2
-DP=2
-MB=-1
+TP=4
+PP=4
+DP=4
+MB=16
 WS=0
 NS=10
 
@@ -30,7 +30,7 @@ cp -r ${TEMPLATE_DIR}/* ${OUT_DIR}/
 cd ${OUT_DIR} 
 
 #  Usage: python topo_gen.py <dp> <tp> <pp> [<dp_bw>] [<tp_bw>] [<pp_bw>
-python ${EXAMPLE_DIR}/helpers/topo_gen.py ${DP} ${TP} ${PP} 25 100 25
+python ${EXAMPLE_DIR}/helpers/topo_gen.py ${DP} ${TP} ${PP} 100 450 100 true
 
 sed -i "s/REPLACE_NPU_COUNT/${NPU_COUNT}/g" network.yml
 

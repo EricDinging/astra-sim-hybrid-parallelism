@@ -67,7 +67,7 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     if(links[link_id]->get_bandwidth() == Bandwidth(0)){
         // chunk->update_route(routes[link_id], chunk->get_topology_iteration()+1);
         // pending_chunks[link_id].push_back(std::move(chunk));
-        // std::cout << "UNROUTEABLE CHUNK, SAVING FOR NEXT TOPOLOGY Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
+        std::cout << "UNROUTEABLE CHUNK, SAVING FOR NEXT TOPOLOGY Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
         // link_become_free(link_id);
         // std::cout << "LINK FREE ERROR Device " << device_id << ": link to " << link_id << " IS EMPTY" << pending_chunks[link_id].size() << std::endl;
         // std::cout << "Chunk topology iteration: " << chunk->get_topology_iteration() << ", current topology iteration: " << topology_iteration << std::endl;
@@ -122,7 +122,7 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     if (routes[chunk->next_device()->get_id()].empty()) {
         std::cout << "Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
-        std::cout << "Inserting Chunk to pending queue for device " << chunk->next_device()->get_id() << ", pending queue size: " << pending_chunks[chunk->next_device()->get_id()].size() << std::endl;
+        std::cout << "Inserting Chunk to pending queue for device " << chunk->next_device()->get_id() << ", previous pending queue size: " << pending_chunks[chunk->next_device()->get_id()].size() << std::endl;
         pending_chunks[chunk->next_device()->get_id()].push_back(std::move(chunk));
         return;
     }
