@@ -179,9 +179,6 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename, str
     this->is_finished = false;
 
     this->scheduler = new Scheduler(sys, provision_config);
-    // choose a non-relavant comm group to trigger initial reconfiguration
-    this->scheduler->post_reconfig(-10);
-
     std::cout << "Workload::Workload, sys->id=" << sys->id << " Comm groups: ";
     for(int comm_group_id : this->comm_group_list) {
         std::cout << comm_group_id << " ";
@@ -535,36 +532,9 @@ bool Workload::issue_coll_comm(
     // std::cout << std::endl;
 
     // TODO in addition to comm group detection, also check topo id change
-    // Lazy reconfiguration
 
     int comm_id = comm_group->get_id();
 
-
-    // BEGIN RECONFIGURATION LOGIC
-    #ifndef CONGESTION_AWARE
-
-    vote(comm_id);
-    int passed_vote = check_vote(comm_id);
-    if (passed_vote) {
-        if (vote_rounds[comm_id] == finish_rounds[comm_id]){
-            if(comm_to_topo[comm_id].size() > 1) {
-                std::cout << "TP COMM pattern detected!" << std::endl;
-            } else {
-                bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id, 0);
-                if (!reconfig_success) return false;
-            }
-
-            group_leader_npu_id[comm_group->get_id()] = this->sys->id;
-            std::cout << "RANK: " << this->sys->id << " is the leader for comm group " << comm_group->get_id() << " in round " << vote_rounds[comm_id] << std::endl;
-            sys->increment_inflight_coll(this->sys->id, "COLL COMM " + std::to_string(node->id()) + " COMM GROUP " + std::to_string(comm_group->get_id()));
-            vote_rounds[comm_group->get_id()] += 1;
-        }
-    } else {
-        std::cout << "RANK: " << this->sys->id << " waiting for other nodes to vote for comm group " << comm_group->get_id() << std::endl;
-        return false;
-    }
-
-    #endif
 
     std::cout << "\033[0;32mRANK: " << this->sys->id << " at time " << Sys::boostedTick() << " Issuing collective " << comm_group->to_string() << "\033[0m" << std::endl;
     std::cout << " COLL COMM NODE: " << node->id() << " of comm group " << comm_group->get_id() << std::endl;
@@ -658,20 +628,9 @@ bool Workload::issue_send_comm(
     // stg_tp2_pp2
     int cur_comm_group_id = -1;
 
-    // BEGIN RECONFIGURATION LOGIC
-    #ifndef CONGESTION_AWARE
-
-    bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
-    if (!reconfig_success) return false;
-
-    #endif
 
     std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing SEND " << src << "-" << dst << std::endl;
     previous_group_id = cur_comm_group_id;
-
-    //sys->increment_inflight_coll(this->sys->id, std::to_string((int)node->id()) + " " + std::to_string(this->sys->id) + " SEND TO " + std::to_string(dst));
-    std::cout << "RANK: " << this->sys->id << " inflight collective count: " << sys->get_inflight_coll() << std::endl;
-
 
     sim_request snd_req;
     snd_req.srcRank = src;
@@ -700,24 +659,8 @@ bool Workload::issue_recv_comm(
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
 
-    // stg_tp2_pp2 no need to reconfigure because recv is paired with send
-    // if(previous_group_id >= 0) {
-    //     // TODO use suitable topo_id
-    //     int topo_id = 1;
-    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-    //     if (!can_config) return false;
-    //     std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
-    // }
-
-    // previous_group_id = -1;
-
-    // int cur_comm_group_id = -1;
-    // bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
-    // if (!reconfig_success) return false;
 
     std::cout << "RANK: " << this->sys->id << " at time " << Sys::boostedTick() <<" Issuing RECV " << src << "-" << dst << std::endl;
-
-    // sys->increment_inflight_coll(this->sys->id, std::to_string((int)node->id()) + " " + std::to_string(this->sys->id) + " RECV FROM " + std::to_string(src));
 
     sim_request rcv_req;
     RecvPacketEventHandlerData* rcehd = new RecvPacketEventHandlerData;
@@ -761,42 +704,7 @@ void Workload::call(EventType event, CallData* data) {
         
         printf("\033[0;32mRANK: %d at time %ld finish collective: %lu of comm group %lu, inflight collective %d\033[0m\n", this->sys->id, Sys::boostedTick(), coll_comm_id, comm_group_id, sys->get_inflight_coll());
 
-        #ifndef CONGESTION_AWARE
-
-        finish(comm_group_id);
-        if (check_finish(comm_group_id)) {
-            sys->decrement_inflight_coll(group_leader_npu_id[comm_group_id], -1);
-            std::cout << "REMOVED inflight collective count for leader NPU " << group_leader_npu_id[comm_group_id] << ", current inflight collective count: " << sys->get_inflight_coll() << std::endl;
-            group_leader_npu_id.erase(comm_group_id);
-            finish_rounds[comm_group_id] += 1;
-        }
-
-        #endif
-
         current_comm_group_idx++;
-        //TODO edit coll_comm_id to comm group
-        if (this->sys->id == 0 || this->sys->id == 1) {
-            scheduler->post_reconfig(1);
-        } else {
-            scheduler->post_reconfig(2);
-        }
-
-        // if (current_comm_group_idx < comm_group_list.size()) {
-        //     int next_comm_group_id = comm_group_list[current_comm_group_idx];
-        //     int topo_id = 0;
-        //     if (next_comm_group_id == 3 || next_comm_group_id == 4) {
-        //         topo_id = 1;
-        //     }
-        //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        //     printf("RANK: %d attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
-        // }
-
-        // if (coll_comm_id == 1921) {
-        //     // TODO change coll_comm_id
-        //     int topo_id = 0;
-        //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        //     printf("RANK: %d hard-code attempted to provision to topo_id: %d, result: %d\n", this->sys->id, topo_id, can_config);
-        // }
 
         hw_resource->tics_gpu_comms += int_data->execution_time;
         uint64_t node_id = collective_comm_node_id_map[coll_comm_id];
@@ -864,8 +772,6 @@ void Workload::call(EventType event, CallData* data) {
                 // if(event == EventType::PacketSent)
                 //     sys->decrement_inflight_coll(this->sys->id, node->id());
                 
-                
-                scheduler->post_reconfig(-1);
 
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);
                 Tick execution_time =
