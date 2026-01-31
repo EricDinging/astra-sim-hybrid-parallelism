@@ -303,7 +303,7 @@ def parse_reconfig_time(directory: str) -> int:
         return 0
 
 
-def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = None, tp_size: int = None):
+def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = None, tp_size: int = None, topo_only: bool = False):
     """
     Create a flame graph style plot comparing provisioned, non-provisioned, and analytical runs,
     including per-rank activity bars.
@@ -400,15 +400,23 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
         _, topo_ids = parsed['topo']
         all_topo_ids.update(topo_ids)
 
+    # When topo_only, filter out traces that have no topology
+    if topo_only:
+        data = {k: v for k, v in data.items() if has_topology.get(k, False)}
+        if not data:
+            print("No traces with topology data found (--topo-only requires topology events)")
+            return
+
     # Calculate figure height based on content
     num_traces = len(data)
     # Count rows: traces with topology have 1 extra row for topo bar
     total_rows = 0
     for trace_key in data:
-        total_rows += num_ranks * 2  # comm + compute for each rank
+        if not topo_only:
+            total_rows += num_ranks * 2  # comm + compute for each rank
         if has_topology.get(trace_key, False):
             total_rows += 1  # topology row
-    fig_height = max(8, total_rows * 0.5 + 2)
+    fig_height = max(4 if topo_only else 8, total_rows * 0.5 + 2)
 
     # Create figure
     fig, ax = plt.subplots(figsize=(14, fig_height))
@@ -429,11 +437,12 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
 
         # Rank rows (bottom to top within each trace section)
         # Each rank has two rows: compute (bottom) and comm (top)
-        for rank in range(num_ranks - 1, -1, -1):
-            y_positions[trace_key]['compute'][rank] = current_y
-            current_y += row_spacing
-            y_positions[trace_key]['ranks'][rank] = current_y
-            current_y += row_spacing
+        if not topo_only:
+            for rank in range(num_ranks - 1, -1, -1):
+                y_positions[trace_key]['compute'][rank] = current_y
+                current_y += row_spacing
+                y_positions[trace_key]['ranks'][rank] = current_y
+                current_y += row_spacing
 
         # Topology row (only for traces with topology)
         if has_topology.get(trace_key, False):
@@ -504,69 +513,95 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
                         color='white'
                     )
 
-        # Draw rank activity bars
-        for rank in range(num_ranks):
-            rank_y = y_positions[trace_key]['ranks'][rank]
-            activities = rank_activities.get(rank, [])
-
-            for start_t, end_t, op_type, op_info in activities:
-                duration = end_t - start_t
-                if duration <= 0:
-                    duration = (end_time - min_time) * 0.005  # Minimum visible width
-
-                color = get_color_for_op(op_type)
-                rect = mpatches.FancyBboxPatch(
-                    (start_t, rank_y - bar_height / 2),
-                    duration,
-                    bar_height,
-                    boxstyle="round,pad=0,rounding_size=0",
-                    facecolor=color,
-                    edgecolor='none',
-                    alpha=0.9
-                )
-                ax.add_patch(rect)
-
-            # Draw rank finish marker if available
-            if rank in rank_finish_times:
-                finish_time = rank_finish_times[rank]
-                # Draw a vertical line marker at finish time
+        # In topo_only mode, draw rank finish markers as vertical lines on the topology bar
+        if topo_only and has_topology.get(trace_key, False) and y_positions[trace_key]['topo'] is not None:
+            topo_y = y_positions[trace_key]['topo']
+            for rank, finish_time in sorted(rank_finish_times.items()):
+                # Draw a solid marker on the topo bar itself
                 ax.plot(
                     [finish_time, finish_time],
-                    [rank_y - bar_height / 2, rank_y + bar_height / 2],
-                    color='#2ecc71',  # Green
-                    linewidth=3,
-                    solid_capstyle='round'
-                )
-                # Add a small triangle marker
-                ax.scatter(
-                    [finish_time],
-                    [rank_y],
-                    marker='|',
-                    s=200,
+                    [topo_y - bar_height / 2, topo_y + bar_height / 2],
                     color='#2ecc71',
+                    linewidth=2,
+                    solid_capstyle='round',
                     zorder=5
                 )
-
-            # Draw compute activity bars
-            compute_y = y_positions[trace_key]['compute'][rank]
-            computes = compute_activities.get(rank, [])
-
-            for start_t, end_t, node_id in computes:
-                duration = end_t - start_t
-                if duration <= 0:
-                    duration = (end_time - min_time) * 0.002  # Minimum visible width
-
-                color = get_color_for_op('compute')
-                rect = mpatches.FancyBboxPatch(
-                    (start_t, compute_y - bar_height / 2),
-                    duration,
-                    bar_height,
-                    boxstyle="round,pad=0,rounding_size=0",
-                    facecolor=color,
-                    edgecolor='none',
-                    alpha=0.9
+                # Label with rank number above the topo bar
+                ax.text(
+                    finish_time,
+                    topo_y + bar_height / 2 + 0.1,
+                    f'R{rank}',
+                    ha='center',
+                    va='bottom',
+                    fontsize=7,
+                    color='#2ecc71',
+                    fontweight='bold'
                 )
-                ax.add_patch(rect)
+
+        # Draw rank activity bars (skip in topo_only mode)
+        if not topo_only:
+            for rank in range(num_ranks):
+                rank_y = y_positions[trace_key]['ranks'][rank]
+                activities = rank_activities.get(rank, [])
+
+                for start_t, end_t, op_type, op_info in activities:
+                    duration = end_t - start_t
+                    if duration <= 0:
+                        duration = (end_time - min_time) * 0.005  # Minimum visible width
+
+                    color = get_color_for_op(op_type)
+                    rect = mpatches.FancyBboxPatch(
+                        (start_t, rank_y - bar_height / 2),
+                        duration,
+                        bar_height,
+                        boxstyle="round,pad=0,rounding_size=0",
+                        facecolor=color,
+                        edgecolor='none',
+                        alpha=0.9
+                    )
+                    ax.add_patch(rect)
+
+                # Draw rank finish marker if available
+                if rank in rank_finish_times:
+                    finish_time = rank_finish_times[rank]
+                    # Draw a vertical line marker at finish time
+                    ax.plot(
+                        [finish_time, finish_time],
+                        [rank_y - bar_height / 2, rank_y + bar_height / 2],
+                        color='#2ecc71',  # Green
+                        linewidth=3,
+                        solid_capstyle='round'
+                    )
+                    # Add a small triangle marker
+                    ax.scatter(
+                        [finish_time],
+                        [rank_y],
+                        marker='|',
+                        s=200,
+                        color='#2ecc71',
+                        zorder=5
+                    )
+
+                # Draw compute activity bars
+                compute_y = y_positions[trace_key]['compute'][rank]
+                computes = compute_activities.get(rank, [])
+
+                for start_t, end_t, node_id in computes:
+                    duration = end_t - start_t
+                    if duration <= 0:
+                        duration = (end_time - min_time) * 0.002  # Minimum visible width
+
+                    color = get_color_for_op('compute')
+                    rect = mpatches.FancyBboxPatch(
+                        (start_t, compute_y - bar_height / 2),
+                        duration,
+                        bar_height,
+                        boxstyle="round,pad=0,rounding_size=0",
+                        facecolor=color,
+                        edgecolor='none',
+                        alpha=0.9
+                    )
+                    ax.add_patch(rect)
 
     # Configure axes
     ax.set_xlim(min_time - (end_time - min_time) * 0.02, end_time * 1.02)
@@ -593,23 +628,24 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
             y_labels.append(f'{trace_label}\nTopology')
 
         # Rank labels - single label centered between comm and compute rows
-        for rank in range(num_ranks):
-            # Position label between compute and comm rows
-            compute_y = y_positions[trace_key]['compute'][rank]
-            comm_y = y_positions[trace_key]['ranks'][rank]
-            center_y = (compute_y + comm_y) / 2
+        if not topo_only:
+            for rank in range(num_ranks):
+                # Position label between compute and comm rows
+                compute_y = y_positions[trace_key]['compute'][rank]
+                comm_y = y_positions[trace_key]['ranks'][rank]
+                center_y = (compute_y + comm_y) / 2
 
-            y_ticks.append(center_y)
-            finish_info = ""
-            if trace_key in data and rank in data[trace_key]['rank_finish_times']:
-                finish_ns = data[trace_key]['rank_finish_times'][rank]
-                finish_info = f"\n({format_time(finish_ns)})"
-            # Include trace label for analytical since it has no topology row
-            rank_label = f'Rank {rank}{finish_info}'
-            if not has_topology.get(trace_key, False) and rank == num_ranks - 1:
-                # Add trace label to the top rank for traces without topology
-                rank_label = f'{trace_label}\n{rank_label}'
-            y_labels.append(rank_label)
+                y_ticks.append(center_y)
+                finish_info = ""
+                if trace_key in data and rank in data[trace_key]['rank_finish_times']:
+                    finish_ns = data[trace_key]['rank_finish_times'][rank]
+                    finish_info = f"\n({format_time(finish_ns)})"
+                # Include trace label for analytical since it has no topology row
+                rank_label = f'Rank {rank}{finish_info}'
+                if not has_topology.get(trace_key, False) and rank == num_ranks - 1:
+                    # Add trace label to the top rank for traces without topology
+                    rank_label = f'{trace_label}\n{rank_label}'
+                y_labels.append(rank_label)
 
     ax.set_yticks(y_ticks)
     ax.set_yticklabels(y_labels, fontsize=9)
@@ -620,7 +656,8 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
 
     ax.xaxis.set_major_formatter(ticker.FuncFormatter(ns_to_seconds_formatter))
     ax.set_xlabel('Time (seconds)', fontsize=12)
-    ax.set_title('Topology Reconfiguration & Rank Activity Timeline', fontsize=14)
+    title = 'Topology Reconfiguration Timeline' if topo_only else 'Topology Reconfiguration & Rank Activity Timeline'
+    ax.set_title(title, fontsize=14)
 
     # Create legend
     legend_patches = []
@@ -631,13 +668,14 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
             mpatches.Patch(color=get_color_for_topo(tid), label=f'Topo {tid}')
         )
 
-    # Operation type colors
-    legend_patches.append(mpatches.Patch(color='#3498db', label='SEND/RECV'))
-    legend_patches.append(mpatches.Patch(color='#e74c3c', label='Collective'))
-    if tp_size:
-        legend_patches.append(mpatches.Patch(color=TP_COLOR, label='TP Comm'))
-    legend_patches.append(mpatches.Patch(color='#9b59b6', label='Compute'))
-    legend_patches.append(mpatches.Patch(color='#2ecc71', label='Rank Finished'))
+    # Operation type colors (skip in topo_only mode)
+    if not topo_only:
+        legend_patches.append(mpatches.Patch(color='#3498db', label='SEND/RECV'))
+        legend_patches.append(mpatches.Patch(color='#e74c3c', label='Collective'))
+        if tp_size:
+            legend_patches.append(mpatches.Patch(color=TP_COLOR, label='TP Comm'))
+        legend_patches.append(mpatches.Patch(color='#9b59b6', label='Compute'))
+        legend_patches.append(mpatches.Patch(color='#2ecc71', label='Rank Finished'))
     if reconfig_time_ns > 0:
         legend_patches.append(mpatches.Patch(facecolor='#7f8c8d', hatch='///', label='Reconfig Downtime'))
 
@@ -666,6 +704,7 @@ def main():
     parser.add_argument('-o', '--output', help='Output path for the plot (PNG/PDF). If not specified, displays interactively.')
     parser.add_argument('-n', '--num-ranks', type=int, default=None, help='Number of ranks to display (auto-detected if not specified)')
     parser.add_argument('--tp', type=int, default=None, help='Tensor Parallelism size for identifying TP communications')
+    parser.add_argument('--topo-only', action='store_true', help='Only show topology bars, ignore rank activity and compute')
     parser.add_argument('--print-events', action='store_true', help='Print all reconfiguration events')
 
     args = parser.parse_args()
@@ -703,7 +742,7 @@ def main():
                 for rank, finish_time in sorted(parsed['rank_finish_times'].items()):
                     print(f"  Rank {rank}: {format_time(finish_time)} ({finish_time:,} ns)")
 
-    plot_flame_graph(args.directory, args.output, args.num_ranks, args.tp)
+    plot_flame_graph(args.directory, args.output, args.num_ranks, args.tp, args.topo_only)
 
 
 if __name__ == '__main__':

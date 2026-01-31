@@ -32,7 +32,8 @@ def changed_comm_groups(comm_idx_map):
         for idx in sorted(idx_map.keys()):
             group_id = idx_map[idx]
             if group_id != last_group_id:
-                changed_map[rank][idx] = group_id
+                if last_group_id is not None:
+                    changed_map[rank][idx] = group_id
                 last_group_id = group_id
     return changed_map
 
