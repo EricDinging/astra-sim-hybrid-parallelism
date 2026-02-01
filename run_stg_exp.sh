@@ -4,9 +4,9 @@ STG_DIR="/home/soxehli/work/symbolic_tensor_graph"
 EXAMPLE_DIR="${SCRIPT_DIR}/examples"
 TEMPLATE_DIR="${EXAMPLE_DIR}/stg-template"
 
-TP=8
-PP=2
-DP=2
+TP=4
+PP=4
+DP=4
 MB=-1
 WS=0
 NS=100

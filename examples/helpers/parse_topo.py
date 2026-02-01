@@ -27,44 +27,42 @@ import yaml
 
 TP_COLOR = "#000000"  # TP communications
 
-def is_tp_communication(npu_list: list, tp_size: int) -> bool:
+def is_tp_communication(npu_list: list, tp_size: int, dp_size: int) -> bool:
     """
     Check if a communication is a TP (Tensor Parallelism) collective.
 
     TP communication requires:
     1. NPU list length matches TP size
-    2. NPUs are sequential (consecutive IDs)
+    2. NPUs are a sequence with offset == DP size
     3. First NPU is a multiple of TP size
 
-    Examples with tp_size=2:
-        [0, 1] -> True (starts at 0, len=2)
-        [2, 3] -> True (starts at 2, len=2)
-        [1, 2] -> False (1 is not multiple of 2)
+    Examples with tp_size=2, dp_size=2:
+        [0, 2] -> True
+        [1, 3] -> True
+        [0, 1] -> False
 
-    Examples with tp_size=4:
-        [0, 1, 2, 3] -> True
-        [4, 5, 6, 7] -> True
+    Examples with tp_size=4, dp_size=4:
+        [0, 4, 8, 12] -> True
+        [4, 8, 12, 16] -> True
         [1, 2, 3, 4] -> False
     """
     if tp_size is None or tp_size <= 1:
         return False
     if len(npu_list) != tp_size:
         return False
-    # Check if sequential
-    expected = list(range(npu_list[0], npu_list[0] + len(npu_list)))
-    if npu_list != expected:
-        return False
-    # Check if starts at multiple of tp_size
-    return npu_list[0] % tp_size == 0
+    # Check if sequential with offset == dp_size
+    sorted_npu_list = sorted(npu_list)
+    expected = list(range(sorted_npu_list[0], sorted_npu_list[0] + tp_size * dp_size, dp_size))
+    return sorted_npu_list == expected
 
-
-def parse_trace_file(filepath: str, tp_size: int = None) -> dict:
+def parse_trace_file(filepath: str, tp_size: int = None, dp_size: int = None) -> dict:
     """
     Parse a trace file and extract topology reconfiguration events and rank activities.
 
     Args:
         filepath: Path to the trace file
-
+        tp_size: Tensor Parallelism size for identifying TP communications (optional)
+        dp_size: Data Parallelism size for identifying TP communications (optional)
     Returns:
         Dictionary with 'topo', 'ranks', and 'rank_finish_times' data
     """
@@ -160,7 +158,7 @@ def parse_trace_file(filepath: str, tp_size: int = None) -> dict:
                 op_info = f"{src_npu}-{dst_npu}"
                 # Check if this is TP communication (point-to-point between adjacent NPUs in same TP group)
                 npu_list = sorted([src_npu, dst_npu])
-                is_tp = is_tp_communication(npu_list, tp_size) if tp_size and len(npu_list) == tp_size else False
+                is_tp = is_tp_communication(npu_list, tp_size, dp_size) if tp_size and len(npu_list) == tp_size else False
                 # For SEND/RECV with tp_size=2, check if both NPUs are in same TP group
                 if tp_size and tp_size == 2:
                     is_tp = (npu_list[1] - npu_list[0] == 1) and (npu_list[0] % tp_size == 0)
@@ -177,7 +175,7 @@ def parse_trace_file(filepath: str, tp_size: int = None) -> dict:
                 npu_list_str = coll_match.group(4)
                 # Parse NPU list: "0, 1" or "0, 1, 2, 3"
                 npu_list = [int(x.strip()) for x in npu_list_str.split(',')]
-                is_tp = is_tp_communication(npu_list, tp_size)
+                is_tp = is_tp_communication(npu_list, tp_size, dp_size)
                 op_type = 'collective_tp' if is_tp else 'collective'
                 pending_ops[rank] = (op_time, op_type, f'CG{cg_id}')
                 continue
@@ -303,7 +301,7 @@ def parse_reconfig_time(directory: str) -> int:
         return 0
 
 
-def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = None, tp_size: int = None, topo_only: bool = False):
+def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = None, tp_size: int = None, dp_size: int = None, topo_only: bool = False):
     """
     Create a flame graph style plot comparing provisioned, non-provisioned, and analytical runs,
     including per-rank activity bars.
@@ -313,6 +311,7 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
         output_path: Optional path to save the plot
         num_ranks: Number of ranks to display (auto-detected if None)
         tp_size: Tensor Parallelism size for identifying TP communications (optional)
+        dp_size: Data Parallelism size for identifying TP communications (optional)
     """
     provision_file = os.path.join(directory, 'debug_provision.txt')
     no_provision_file = os.path.join(directory, 'debug_no_provision.txt')
@@ -326,13 +325,16 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
     if tp_size:
         print(f"TP size: {tp_size}")
 
+    if dp_size:
+        print(f"DP size: {dp_size}")
+
     # Parse all files
     data = {}
     # Track which traces have topology (for conditional rendering)
     has_topology = {}
 
     if os.path.exists(provision_file):
-        parsed = parse_trace_file(provision_file, tp_size)
+        parsed = parse_trace_file(provision_file, tp_size, dp_size)
         if parsed['topo'][0]:
             data['provision'] = parsed
             has_topology['provision'] = True
@@ -342,7 +344,7 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
                 print(f"  Rank finish times: {parsed['rank_finish_times']}")
 
     if os.path.exists(no_provision_file):
-        parsed = parse_trace_file(no_provision_file, tp_size)
+        parsed = parse_trace_file(no_provision_file, tp_size, dp_size)
         if parsed['topo'][0]:
             data['no_provision'] = parsed
             has_topology['no_provision'] = True
@@ -352,7 +354,7 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
                 print(f"  Rank finish times: {parsed['rank_finish_times']}")
 
     if os.path.exists(analytical_file):
-        parsed = parse_trace_file(analytical_file, tp_size)
+        parsed = parse_trace_file(analytical_file, tp_size, dp_size)
         # Analytical trace may not have topology reconfig events - that's okay
         if parsed['ranks'] or parsed['compute'] or parsed['rank_finish_times']:
             data['analytical'] = parsed
@@ -376,9 +378,11 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
 
     if detected_ranks:
         max_detected = max(detected_ranks) + 1  # ranks are 0-indexed
-        if num_ranks is None or num_ranks < max_detected:
+        if num_ranks is None:
             num_ranks = max_detected
             print(f"Auto-detected {num_ranks} ranks from trace data")
+        else:
+            print(f"Showing {num_ranks} of {max_detected} detected ranks")
     elif num_ranks is None:
         num_ranks = 4  # fallback default
 
@@ -407,23 +411,20 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
             print("No traces with topology data found (--topo-only requires topology events)")
             return
 
+    bar_height = 0.7       # Height for TOPO bars
+    rank_bar_height = 0.03  # Height for rank rows (line-like)
+    rank_row_spacing = 0.03 # Spacing between rank rows (very compact)
+    trace_spacing = 1.5     # Extra space between provision/no_provision sections
+
     # Calculate figure height based on content
     num_traces = len(data)
-    # Count rows: traces with topology have 1 extra row for topo bar
-    total_rows = 0
-    for trace_key in data:
-        if not topo_only:
-            total_rows += num_ranks * 2  # comm + compute for each rank
-        if has_topology.get(trace_key, False):
-            total_rows += 1  # topology row
-    fig_height = max(4 if topo_only else 8, total_rows * 0.5 + 2)
+    # Count rows: topo rows are full-size, rank rows are thin
+    topo_rows = sum(1 for k in data if has_topology.get(k, False))
+    rank_rows = 0 if topo_only else num_ranks * 2 * num_traces  # comm + compute per rank per trace
+    fig_height = max(4 if topo_only else 6, topo_rows * (bar_height + 0.8) + rank_rows * rank_row_spacing + 2)
 
     # Create figure
     fig, ax = plt.subplots(figsize=(14, fig_height))
-
-    bar_height = 0.7
-    row_spacing = 1.0
-    trace_spacing = 1.5  # Extra space between provision/no_provision sections
 
     # Calculate y positions
     current_y = 0.5
@@ -436,18 +437,20 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
         y_positions[trace_key] = {'topo': None, 'ranks': {}, 'compute': {}}
 
         # Rank rows (bottom to top within each trace section)
-        # Each rank has two rows: compute (bottom) and comm (top)
+        # Each rank has two rows: compute (bottom) and comm (top), using thin spacing
         if not topo_only:
             for rank in range(num_ranks - 1, -1, -1):
                 y_positions[trace_key]['compute'][rank] = current_y
-                current_y += row_spacing
+                current_y += rank_row_spacing
                 y_positions[trace_key]['ranks'][rank] = current_y
-                current_y += row_spacing
+                current_y += rank_row_spacing
 
         # Topology row (only for traces with topology)
         if has_topology.get(trace_key, False):
+            if not topo_only:
+                current_y += bar_height / 2 + 0.1  # gap so topo bar doesn't overlap ranks
             y_positions[trace_key]['topo'] = current_y
-            current_y += trace_spacing
+            current_y += bar_height / 2 + 0.3  # space after topo bar top edge
         else:
             # Still add some spacing between trace sections
             current_y += trace_spacing * 0.5
@@ -551,9 +554,9 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
 
                     color = get_color_for_op(op_type)
                     rect = mpatches.FancyBboxPatch(
-                        (start_t, rank_y - bar_height / 2),
+                        (start_t, rank_y - rank_bar_height / 2),
                         duration,
-                        bar_height,
+                        rank_bar_height,
                         boxstyle="round,pad=0,rounding_size=0",
                         facecolor=color,
                         edgecolor='none',
@@ -567,17 +570,17 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
                     # Draw a vertical line marker at finish time
                     ax.plot(
                         [finish_time, finish_time],
-                        [rank_y - bar_height / 2, rank_y + bar_height / 2],
+                        [rank_y - rank_bar_height / 2, rank_y + rank_bar_height / 2],
                         color='#2ecc71',  # Green
-                        linewidth=3,
+                        linewidth=2,
                         solid_capstyle='round'
                     )
-                    # Add a small triangle marker
+                    # Add a small marker
                     ax.scatter(
                         [finish_time],
                         [rank_y],
                         marker='|',
-                        s=200,
+                        s=50,
                         color='#2ecc71',
                         zorder=5
                     )
@@ -593,9 +596,9 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
 
                     color = get_color_for_op('compute')
                     rect = mpatches.FancyBboxPatch(
-                        (start_t, compute_y - bar_height / 2),
+                        (start_t, compute_y - rank_bar_height / 2),
                         duration,
-                        bar_height,
+                        rank_bar_height,
                         boxstyle="round,pad=0,rounding_size=0",
                         facecolor=color,
                         edgecolor='none',
@@ -627,28 +630,17 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
             y_ticks.append(y_positions[trace_key]['topo'])
             y_labels.append(f'{trace_label}\nTopology')
 
-        # Rank labels - single label centered between comm and compute rows
-        if not topo_only:
-            for rank in range(num_ranks):
-                # Position label between compute and comm rows
-                compute_y = y_positions[trace_key]['compute'][rank]
-                comm_y = y_positions[trace_key]['ranks'][rank]
-                center_y = (compute_y + comm_y) / 2
-
+        # For traces without a topology row, add a single label for the rank block
+        if not topo_only and not has_topology.get(trace_key, False):
+            # Place a single trace label at the center of the rank block
+            all_rank_ys = list(y_positions[trace_key]['compute'].values()) + list(y_positions[trace_key]['ranks'].values())
+            if all_rank_ys:
+                center_y = (min(all_rank_ys) + max(all_rank_ys)) / 2
                 y_ticks.append(center_y)
-                finish_info = ""
-                if trace_key in data and rank in data[trace_key]['rank_finish_times']:
-                    finish_ns = data[trace_key]['rank_finish_times'][rank]
-                    finish_info = f"\n({format_time(finish_ns)})"
-                # Include trace label for analytical since it has no topology row
-                rank_label = f'Rank {rank}{finish_info}'
-                if not has_topology.get(trace_key, False) and rank == num_ranks - 1:
-                    # Add trace label to the top rank for traces without topology
-                    rank_label = f'{trace_label}\n{rank_label}'
-                y_labels.append(rank_label)
+                y_labels.append(trace_label)
 
     ax.set_yticks(y_ticks)
-    ax.set_yticklabels(y_labels, fontsize=9)
+    ax.set_yticklabels(y_labels, fontsize=6)
 
     # Format x-axis to display seconds
     def ns_to_seconds_formatter(x, pos):
@@ -704,6 +696,7 @@ def main():
     parser.add_argument('-o', '--output', help='Output path for the plot (PNG/PDF). If not specified, displays interactively.')
     parser.add_argument('-n', '--num-ranks', type=int, default=None, help='Number of ranks to display (auto-detected if not specified)')
     parser.add_argument('--tp', type=int, default=None, help='Tensor Parallelism size for identifying TP communications')
+    parser.add_argument('--dp', type=int, default=None, help='Data Parallelism size for identifying TP communications')
     parser.add_argument('--topo-only', action='store_true', help='Only show topology bars, ignore rank activity and compute')
     parser.add_argument('--print-events', action='store_true', help='Print all reconfiguration events')
 
@@ -713,7 +706,7 @@ def main():
         for filename in ['debug_provision.txt', 'debug_no_provision.txt', 'debug_analytical.txt']:
             filepath = os.path.join(args.directory, filename)
             if os.path.exists(filepath):
-                parsed = parse_trace_file(filepath, args.tp)
+                parsed = parse_trace_file(filepath, args.tp, args.dp)
                 times, topo_ids = parsed['topo']
                 print(f"\n{filename}:")
                 print("=" * 60)
@@ -742,7 +735,7 @@ def main():
                 for rank, finish_time in sorted(parsed['rank_finish_times'].items()):
                     print(f"  Rank {rank}: {format_time(finish_time)} ({finish_time:,} ns)")
 
-    plot_flame_graph(args.directory, args.output, args.num_ranks, args.tp, args.topo_only)
+    plot_flame_graph(args.directory, args.output, args.num_ranks, args.tp, args.dp,args.topo_only)
 
 
 if __name__ == '__main__':
