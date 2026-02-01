@@ -132,7 +132,8 @@ unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency re
         //     std::cout << "Current time: " << Link::event_queue->get_current_time() << " ns" << std::endl;
         //     std::cout << "Chunk end time: " << pending_chunk_end_time << " ns" << std::endl;
         // }
-        return Link::event_queue->get_current_time();
+        set_busy();
+        return Link::event_queue->get_current_time() + 1;
     }
 
     // assert(!busy);
@@ -149,7 +150,7 @@ unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency re
     // printf("Link bandwidth updated to %.2f B/ns and latency updated to %.2f ns\n",
     //        this->bandwidth_Bpns, this->latency);
 
-    const auto reconfig_completion_time = current_time + reconfig_time;
+    const auto reconfig_completion_time = current_time + reconfig_time + 1;
 
     auto* const link_ptr = static_cast<void*>(this);
     return reconfig_completion_time;

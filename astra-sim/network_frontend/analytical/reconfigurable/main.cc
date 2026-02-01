@@ -255,6 +255,9 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < npus_count; i++) {
                 systems[i]->workload->issue_dep_free_nodes();
             }
+            for (int i = 0; i < npus_count; i++) {
+                systems[i]->workload->issue_dep_free_nodes();
+            }
         }
         if(event_queue->finished())
             break;

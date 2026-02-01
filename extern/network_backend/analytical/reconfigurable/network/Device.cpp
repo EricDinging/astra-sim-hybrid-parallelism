@@ -49,12 +49,11 @@ void Device::link_become_free(DeviceId link_id) noexcept {
 
 
     // process pending chunks if one exist
-    if(pending_chunks[link_id].empty() || pending_chunks[link_id].front()->get_topology_iteration() > topology_iteration) {
+    if(pending_chunks[link_id].empty() || links[link_id]->get_bandwidth() == Bandwidth(0)){
     // std::cout << "Device " << device_id << ": link to " << link_id << " is free but no pending chunks or chunk from future topology iteration. Pending queue size: " << pending_chunks[link_id].size() << std::endl;
         if(drain_all_flow){
             increment_callback();
         }
-
         return;
     }
 
@@ -120,19 +119,19 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     //     std::cout << std::endl;
     // }
 
-    if (routes[chunk->next_device()->get_id()].empty()) {
-        std::cout << "Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
-        std::cout << "Inserting Chunk to pending queue for device " << chunk->next_device()->get_id() << ", previous pending queue size: " << pending_chunks[chunk->next_device()->get_id()].size() << std::endl;
-        pending_chunks[chunk->next_device()->get_id()].push_back(std::move(chunk));
-        return;
-    }
+    // if (routes[chunk->next_device()->get_id()].empty()) {
+    //     std::cout << "Device " << device_id << ": No route to device " << chunk->next_device()->get_id() << std::endl;
+    //     std::cout << "Inserting Chunk to pending queue for device " << chunk->next_device()->get_id() << ", previous pending queue size: " << pending_chunks[chunk->next_device()->get_id()].size() << std::endl;
+    //     pending_chunks[chunk->next_device()->get_id()].push_back(std::move(chunk));
+    //     return;
+    // }
 
-    chunk->update_route(routes[chunk->next_device()->get_id()], chunk->get_topology_iteration());
-    //std::cout << "Device " << device_id << ": Sending chunk of size " << chunk->get_size() << " to device " << chunk->next_device()->get_id() << " via route: ";
-    for (const auto& device : chunk->route) {
-        std::cout << device->get_id() << " ";
-    }
-    std::cout << std::endl;
+    // chunk->update_route(routes[chunk->next_device()->get_id()], chunk->get_topology_iteration());
+    // //std::cout << "Device " << device_id << ": Sending chunk of size " << chunk->get_size() << " to device " << chunk->next_device()->get_id() << " via route: ";
+    // for (const auto& device : chunk->route) {
+    //     std::cout << device->get_id() << " ";
+    // }
+    // std::cout << std::endl;
 
     // get next dest
     const auto next_dest = chunk->next_device();
@@ -143,7 +142,7 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     auto link = links[next_dest_id];
 
-    if (link->is_busy() || link->get_bandwidth() == Bandwidth(0) || chunk->get_topology_iteration() > topology_iteration) {
+    if (link->is_busy() || link->get_bandwidth() == Bandwidth(0)) {
         // link is busy, add the chunk to pending chunks
         pending_chunks[next_dest_id].push_back(std::move(chunk));
         //std::cout << "Device " << device_id << ": link to " << next_dest_id << " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " << pending_chunks[next_dest_id].size() << std::endl;
@@ -153,12 +152,12 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     // send the chunk to the next dest
     // delegate this task to the link
 
-    if(links[next_dest_id]->get_bandwidth() == Bandwidth(0)){
-        std::cout << "SEND ERROR Device " << device_id << ": link to " << next_dest_id << " IS EMPTY" << pending_chunks[next_dest_id].size() << std::endl;
-        assert(false);
-        pending_chunks[next_dest_id].push_back(std::move(chunk));
-        return;
-    }
+    // if(links[next_dest_id]->get_bandwidth() == Bandwidth(0)){
+    //     std::cout << "SEND ERROR Device " << device_id << ": link to " << next_dest_id << " IS EMPTY" << pending_chunks[next_dest_id].size() << std::endl;
+    //     assert(false);
+    //     pending_chunks[next_dest_id].push_back(std::move(chunk));
+    //     return;
+    // }
 
     auto link_free_time = links[next_dest_id]->send(std::move(chunk));
     LinkFreeCallbackArg* args = new LinkFreeCallbackArg{shared_from_this(), next_dest_id};

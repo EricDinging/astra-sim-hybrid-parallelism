@@ -251,9 +251,9 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
     DeviceId src = chunk->current_device()->get_id();
     assert(src >= 0 && src < devices_count);
 
-    if(chunk->get_topology_iteration() == -1){
-        chunk->update_route(route(src, chunk->next_device()->get_id()), topology_iteration);
-    }
+    // if(chunk->get_topology_iteration() == -1){
+    //     chunk->update_route(route(src, chunk->next_device()->get_id()), topology_iteration);
+    // }
 
     // printf("TM: Sending chunk from %d to %d, in topo iter %d, route: ", chunk->current_device()->get_id(), chunk->next_device()->get_id(), chunk->get_topology_iteration());
     // for(auto device : chunk->route){

@@ -1,9 +1,39 @@
 from sys import argv
 import yaml
 
-def parse_comm_groups(file_path):
+def parse_tp_groups(file_path):
+    with open(file_path, 'r') as f:
+        tp_groups = []
+        group_map = {}
+        
+        for line in f:
+            """
+            Mapped Comm Group 1 to Topology 0
+            """
+            # Groups that map to multiple topologies are TP groups
+            if "Mapped Comm Group" in line:
+                parts = line.split('to')
+                group_part = parts[0].strip()
+                topo_part = parts[1].strip()
+
+                group_id = int(group_part.split()[3])
+                topo_id = int(topo_part.split()[1])
+
+                if group_id not in group_map:
+                    group_map[group_id] = []
+                group_map[group_id].append(topo_id)
+
+        for group_id, topo_ids in group_map.items():
+            if len(topo_ids) > 1:
+                tp_groups.append(topo_ids)
+            
+    return tp_groups
+
+
+def parse_comm_groups(file_path, tp_groups=[]):
     with open(file_path, 'r') as f:
         comm_idx_map = {}
+
         for line in f:
             """
             [1;33mScheduler: 3 current comm idx: 147, target comm group id: 2[0m
@@ -20,7 +50,7 @@ def parse_comm_groups(file_path):
 
                 if rank not in comm_idx_map:
                     comm_idx_map[rank] = {}
-                if current_comm_idx != -1:
+                if current_comm_idx != -1 and target_group_id not in tp_groups:
                     comm_idx_map[rank][current_comm_idx] = target_group_id
     return comm_idx_map
 
@@ -52,7 +82,8 @@ def write_rank_comm_groups_yaml(changed_map, output_file):
 if __name__ == "__main__":
     assert len(argv) == 2, "Usage: python trace_parser.py <trace_file_path>"
     file_path = argv[1]
-    comm_groups = parse_comm_groups(file_path)
+    tp_groups = parse_tp_groups(file_path)
+    comm_groups = parse_comm_groups(file_path, tp_groups)
     changed_groups = changed_comm_groups(comm_groups)
     for rank, changes in changed_groups.items():
         print(f"Rank {rank}:")

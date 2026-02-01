@@ -543,25 +543,30 @@ bool Workload::issue_coll_comm(
     // BEGIN RECONFIGURATION LOGIC
     #ifndef CONGESTION_AWARE
 
-    vote(comm_id);
-    int passed_vote = check_vote(comm_id);
-    if (passed_vote) {
-        if (vote_rounds[comm_id] == finish_rounds[comm_id]){
-            if(comm_to_topo[comm_id].size() > 1) {
-                std::cout << "TP COMM pattern detected!" << std::endl;
-            } else {
-                bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id, 0);
-                if (!reconfig_success) return false;
-            }
-
-            group_leader_npu_id[comm_group->get_id()] = this->sys->id;
-            std::cout << "RANK: " << this->sys->id << " is the leader for comm group " << comm_group->get_id() << " in round " << vote_rounds[comm_id] << std::endl;
-            sys->increment_inflight_coll(this->sys->id, "COLL COMM " + std::to_string(node->id()) + " COMM GROUP " + std::to_string(comm_group->get_id()));
-            vote_rounds[comm_group->get_id()] += 1;
-        }
+    if (comm_to_topo[comm_id].size() > 1) {
+        std::cout << "TP COMM pattern detected!" << std::endl;
     } else {
-        std::cout << "RANK: " << this->sys->id << " waiting for other nodes to vote for comm group " << comm_group->get_id() << std::endl;
-        return false;
+        vote(comm_id);
+        int passed_vote = check_vote(comm_id);
+        if (passed_vote) {
+            if (vote_rounds[comm_id] == finish_rounds[comm_id]){
+                if(comm_to_topo[comm_id].size() > 1) {
+                    std::cout << "TP COMM pattern detected!" << std::endl;
+                } else {
+                    bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id, 0);
+                    if (!reconfig_success) return false;
+                }
+
+                group_leader_npu_id[comm_group->get_id()] = this->sys->id;
+                std::cout << "RANK: " << this->sys->id << " is the leader for comm group " << comm_group->get_id() << " in round " << vote_rounds[comm_id] << std::endl;
+                sys->increment_inflight_coll(this->sys->id, "COLL COMM " + std::to_string(node->id()) + " COMM GROUP " + std::to_string(comm_group->get_id()));
+                vote_rounds[comm_group->get_id()] += 1;
+            }
+        } else {
+            std::cout << "RANK: " << this->sys->id << " waiting for other nodes to vote for comm group " << comm_group->get_id() << std::endl;
+            return false;
+        }
+
     }
 
     #endif
@@ -763,12 +768,16 @@ void Workload::call(EventType event, CallData* data) {
 
         #ifndef CONGESTION_AWARE
 
-        finish(comm_group_id);
-        if (check_finish(comm_group_id)) {
-            sys->decrement_inflight_coll(group_leader_npu_id[comm_group_id], -1);
-            std::cout << "REMOVED inflight collective count for leader NPU " << group_leader_npu_id[comm_group_id] << ", current inflight collective count: " << sys->get_inflight_coll() << std::endl;
-            group_leader_npu_id.erase(comm_group_id);
-            finish_rounds[comm_group_id] += 1;
+        if (comm_to_topo[comm_group_id].size() > 1) {
+            std::cout << "TP COMM pattern detected!" << std::endl;
+        } else {
+            finish(comm_group_id);
+            if (check_finish(comm_group_id)) {
+                sys->decrement_inflight_coll(group_leader_npu_id[comm_group_id], -1);
+                std::cout << "REMOVED inflight collective count for leader NPU " << group_leader_npu_id[comm_group_id] << ", current inflight collective count: " << sys->get_inflight_coll() << std::endl;
+                group_leader_npu_id.erase(comm_group_id);
+                finish_rounds[comm_group_id] += 1;
+            }
         }
 
         #endif

@@ -14,12 +14,13 @@ PROJECT_DIR="${SCRIPT_DIR:?}/../.."
 EXAMPLE_DIR="${SCRIPT_DIR:?}"
 
 # paths
-ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Aware"
+ASTRA_SIM="/home/soxehli/work/astra-sim-hier-analytical/build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable"
 WORKLOAD="${EXAMPLE_DIR:?}/workload"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"
 REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
 COMM_GROUP="${EXAMPLE_DIR:?}/workload.json"
+CIRCUIT_SCHEDULES="${EXAMPLE_DIR:?}/schedules-collapsed.txt"
 
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
@@ -41,7 +42,8 @@ export ASAN_OPTIONS=detect_container_overflow=0
     --system-configuration="${SYSTEM:?}" \
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
     --network-configuration="${NETWORK:?}" \
-    --comm-group-configuration="${COMM_GROUP:?}"
+    --comm-group-configuration="${COMM_GROUP:?}" \
+    --circuit-schedules="${CIRCUIT_SCHEDULES:?}" > debug_analytical.txt
 
 # finalize
 echo ""
