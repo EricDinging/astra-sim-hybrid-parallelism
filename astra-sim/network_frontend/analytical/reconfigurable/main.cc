@@ -228,6 +228,15 @@ int main(int argc, char* argv[]) {
         queues_per_dim.push_back(num_queues_per_dim);
     }
 
+    AstraSim::Scheduler::pp_stages = int(log2(bw_matrix_map.size()));
+    std::cout << "PP Stages set to: " << AstraSim::Scheduler::pp_stages << std::endl;
+    AstraSim::Scheduler::num_npu_per_pp = npus_count / AstraSim::Scheduler::pp_stages;
+    std::cout << "Num NPU per PP set to: " << AstraSim::Scheduler::num_npu_per_pp << std::endl;
+    for(int i = 0; i < AstraSim::Scheduler::pp_stages; i++){
+        AstraSim::Scheduler::stage_dp_or_pp.push_back(0);
+    }
+
+
     for (int i = 0; i < npus_count; i++) {
         // create network and system
         auto network_api = std::make_unique<ReconfigurableNetworkApi>(i);
@@ -241,6 +250,8 @@ int main(int argc, char* argv[]) {
         network_apis.push_back(std::move(network_api));
         systems.push_back(system);
     }
+
+    AstraSim::Workload::num_bw_matrix = bw_matrix_map.size();
 
     // Initiate ASTRA-sim simulation
     for (int i = 0; i < npus_count; i++) {

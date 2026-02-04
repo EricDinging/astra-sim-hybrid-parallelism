@@ -28,6 +28,10 @@ public:
     Scheduler(AstraSim::Sys* system, std::string provision_config);
     bool pre_reconfig(int cur_comm_group_id, int prev_comm_group_id, int skip_inflight = 0);
     bool post_reconfig(int cur_comm_group_id);
+
+    static std::vector<int> stage_dp_or_pp;
+    static int pp_stages;
+    static int num_npu_per_pp;
 };
 }
 

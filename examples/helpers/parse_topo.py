@@ -226,10 +226,9 @@ def format_time(ns: int) -> str:
         return f"{ns}ns"
 
 
-def get_color_for_topo(topo_id: int, cmap_name: str = 'tab10') -> tuple:
-    """Get a distinct color for each topology ID."""
-    cmap = plt.get_cmap(cmap_name)
-    return cmap(topo_id % 10)
+def get_color_for_topo(_topo_id: int = None) -> str:
+    """Get a neutral color for topology bars (same for all topologies)."""
+    return '#5dade2'  # Light blue - neutral color for all topology bars
 
 
 def get_color_for_op(op_type: str) -> tuple:
@@ -398,12 +397,6 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
     min_time = min(all_times) if all_times else 0
     end_time = max(global_end_time, max_time * 1.05)
 
-    # Find all unique topo_ids for legend (always include 0)
-    all_topo_ids = {0}
-    for parsed in data.values():
-        _, topo_ids = parsed['topo']
-        all_topo_ids.update(topo_ids)
-
     # When topo_only, filter out traces that have no topology
     if topo_only:
         data = {k: v for k, v in data.items() if has_topology.get(k, False)}
@@ -503,18 +496,17 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
                 )
                 ax.add_patch(rect)
 
-                # Add topo_id label if bar is wide enough
-                if bar_duration > (end_time - min_time) * 0.03:
-                    ax.text(
-                        bar_start + bar_duration / 2,
-                        topo_y,
-                        str(topo_id),
-                        ha='center',
-                        va='center',
-                        fontsize=9,
-                        fontweight='bold',
-                        color='white'
-                    )
+                # Add topo_id label on top of the bar
+                ax.text(
+                    bar_start + bar_duration / 2,
+                    topo_y + bar_height / 2 + 0.05,
+                    f'T{topo_id}',
+                    ha='center',
+                    va='bottom',
+                    fontsize=8,
+                    fontweight='bold',
+                    color='#2c3e50'
+                )
 
         # In topo_only mode, draw rank finish markers as vertical lines on the topology bar
         if topo_only and has_topology.get(trace_key, False) and y_positions[trace_key]['topo'] is not None:
@@ -654,11 +646,10 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
     # Create legend
     legend_patches = []
 
-    # Topology colors
-    for tid in sorted(all_topo_ids):
-        legend_patches.append(
-            mpatches.Patch(color=get_color_for_topo(tid), label=f'Topo {tid}')
-        )
+    # Single topology color (IDs shown as labels on bars)
+    legend_patches.append(
+        mpatches.Patch(color=get_color_for_topo(), label='Topology')
+    )
 
     # Operation type colors (skip in topo_only mode)
     if not topo_only:
@@ -673,7 +664,7 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
 
     ax.legend(
         handles=legend_patches,
-        loc='upper right',
+        loc='lower right',
         ncol=min(len(legend_patches), 6),
         fontsize=8
     )

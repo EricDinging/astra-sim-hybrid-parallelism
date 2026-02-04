@@ -36,6 +36,8 @@ std::map<int, int> Workload::finish_rounds = std::map<int, int>();
 std::map<int, std::map<int, int>> Workload::group_node_vote_count = std::map<int, std::map<int, int>>();
 std::map<int, std::map<int, int>> Workload::group_node_finish_count = std::map<int, std::map<int, int>>();
 
+int Workload::num_bw_matrix = 0;
+
 void Workload::vote(int comm_group_id) {
     if (group_node_vote_count.find(comm_group_id) ==
         group_node_vote_count.end()) {
@@ -543,17 +545,17 @@ bool Workload::issue_coll_comm(
     // BEGIN RECONFIGURATION LOGIC
     #ifndef CONGESTION_AWARE
 
-    if (comm_to_topo[comm_id].size() > 1) {
+    if (comm_to_topo[comm_id].size() == num_bw_matrix) {
         std::cout << "TP COMM pattern detected!" << std::endl;
     } else {
         vote(comm_id);
         int passed_vote = check_vote(comm_id);
         if (passed_vote) {
             if (vote_rounds[comm_id] == finish_rounds[comm_id]){
-                if(comm_to_topo[comm_id].size() > 1) {
+                if(comm_to_topo[comm_id].size() == num_bw_matrix) {
                     std::cout << "TP COMM pattern detected!" << std::endl;
                 } else {
-                    bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), previous_group_id, 0);
+                    bool reconfig_success = this->scheduler->pre_reconfig(comm_group->get_id(), -1, 0);
                     if (!reconfig_success) return false;
                 }
 
@@ -666,7 +668,7 @@ bool Workload::issue_send_comm(
     // BEGIN RECONFIGURATION LOGIC
     #ifndef CONGESTION_AWARE
 
-    bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
+    bool reconfig_success = this->scheduler->pre_reconfig(dst, 1);
     if (!reconfig_success) return false;
 
     #endif
@@ -686,8 +688,10 @@ bool Workload::issue_send_comm(
     sehd->callable = this;
     sehd->wlhd = new WorkloadLayerHandlerData;
     sehd->wlhd->node_id = node->id();
+    sehd->wlhd->src = src;
+    sehd->wlhd->dst = dst;
     sehd->event = EventType::PacketSent;
-    sys->front_end_sim_send(0, Sys::dummy_data, size, UINT8, dst, tag, &snd_req,
+    sys->front_end_sim_send(0, (void *)((long)dst), size, UINT8, dst, tag, &snd_req,
                             Sys::FrontEndSendRecvType::NATIVE,
                             &Sys::handleEvent, sehd);
     return true;
@@ -714,6 +718,10 @@ bool Workload::issue_recv_comm(
     //     std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV group " << std::endl;
     // }
 
+    // int cur_comm_group_id = -1;
+    // bool reconfig_success = this->scheduler->pre_reconfig(cur_comm_group_id, previous_group_id);
+    // if (!reconfig_success) return false;
+
     // previous_group_id = -1;
 
     // int cur_comm_group_id = -1;
@@ -730,7 +738,9 @@ bool Workload::issue_recv_comm(
     rcehd->wlhd->node_id = node->id();
     rcehd->workload = this;
     rcehd->event = EventType::PacketReceived;
-    sys->front_end_sim_recv(0, Sys::dummy_data, size, UINT8, src, tag, &rcv_req,
+    rcehd->wlhd->src = src;
+    rcehd->wlhd->dst = dst;
+    sys->front_end_sim_recv(0, (void *)((long)src), size, UINT8, src, tag, &rcv_req,
                             Sys::FrontEndSendRecvType::NATIVE,
                             &Sys::handleEvent, rcehd);
     return true;
@@ -768,7 +778,7 @@ void Workload::call(EventType event, CallData* data) {
 
         #ifndef CONGESTION_AWARE
 
-        if (comm_to_topo[comm_group_id].size() > 1) {
+        if (comm_to_topo[comm_group_id].size() == num_bw_matrix) {
             std::cout << "TP COMM pattern detected!" << std::endl;
         } else {
             finish(comm_group_id);
@@ -784,10 +794,11 @@ void Workload::call(EventType event, CallData* data) {
 
         current_comm_group_idx++;
         //TODO edit coll_comm_id to comm group
-        if (this->sys->id == 0 || this->sys->id == 1) {
-            scheduler->post_reconfig(1);
+
+        if (comm_to_topo[comm_group_id].size() == num_bw_matrix) {
+            scheduler->post_reconfig(-2);
         } else {
-            scheduler->post_reconfig(2);
+            scheduler->post_reconfig(-1);
         }
 
         // if (current_comm_group_idx < comm_group_list.size()) {
@@ -873,8 +884,13 @@ void Workload::call(EventType event, CallData* data) {
                 // if(event == EventType::PacketSent)
                 //     sys->decrement_inflight_coll(this->sys->id, node->id());
                 
+                if (event == EventType::PacketSent) {
+                    scheduler->post_reconfig((long)wlhd->dst);
+                } else if (event == EventType::PacketReceived) {
+                    scheduler->post_reconfig((long)wlhd->src);
+                }
                 
-                scheduler->post_reconfig(-1);
+                // scheduler->post_reconfig((long)data);
 
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);
                 Tick execution_time =

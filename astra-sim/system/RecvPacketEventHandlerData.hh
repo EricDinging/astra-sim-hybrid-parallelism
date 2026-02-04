@@ -31,6 +31,7 @@ class RecvPacketEventHandlerData : public BasicEventHandlerData {
     int stream_id;
     bool message_end;
     Tick ready_time;
+    int src;
 };
 
 }  // namespace AstraSim

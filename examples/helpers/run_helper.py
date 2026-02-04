@@ -16,6 +16,9 @@ def extract_last_cycles(file_path):
     with open(file_path, 'r') as f:
         for line in f:
             if "finished" in line and "exposed communication" in line:
+                # Only parse after "[WORKLOAD] [INFO]"
+                line = line.split("[info]")[-1].strip()
+
                 parts = line.split(',')
                 cycles_part = parts[1].strip()
                 exposed_part = parts[2].strip()

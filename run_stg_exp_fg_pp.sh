@@ -5,15 +5,16 @@ EXAMPLE_DIR="${SCRIPT_DIR}/examples"
 TEMPLATE_DIR="${EXAMPLE_DIR}/stg-template"
 
 TP=8
-PP=2
-DP=4
-MB=-1
+PP=4
+DP=16
+
 WS=0
 NS=100
 
 SEQ_LEN=4096
 
 BATCH=$((DP / 2 * 64))
+MB=-1
 
 NPU_COUNT=$((DP * TP * PP))
 
@@ -35,9 +36,10 @@ cp -r ${TEMPLATE_DIR}/* ${OUT_DIR}/
 
 cd ${OUT_DIR} 
 
-#  Usage: python topo_gen.py <dp> <tp> <pp> [<dp_bw>] [<tp_bw>] [<pp_bw>
-python ${EXAMPLE_DIR}/helpers/topo_gen.py ${DP} ${TP} ${PP} 100 450 100 true
-python ${EXAMPLE_DIR}/helpers/topo_gen.py ${DP} ${TP} ${PP} 100 450 100 true --collapse-topo
+#  Usage: Usage: python topo_gen.py <dp> <tp> <pp> <dp_bw> <tp_bw> <pp_bw> <swap_dp_tp> <mono-pp|analy|fg-pp>
+python ${EXAMPLE_DIR}/helpers/topo_gen_pp_split.py ${DP} ${TP} ${PP} 100 450 100 true analy
+# python ${EXAMPLE_DIR}/helpers/topo_gen_pp_split.py ${DP} ${TP} ${PP} 100 450 100 false mono-pp
+python ${EXAMPLE_DIR}/helpers/topo_gen_pp_split.py ${DP} ${TP} ${PP} 100 450 100 true fg-pp
 
 sed -i "s/REPLACE_NPU_COUNT/${NPU_COUNT}/g" network.yml
 

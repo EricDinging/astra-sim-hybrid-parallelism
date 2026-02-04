@@ -50,8 +50,10 @@ def parse_comm_groups(file_path, tp_groups=[]):
 
                 if rank not in comm_idx_map:
                     comm_idx_map[rank] = {}
-                if current_comm_idx != -1 and target_group_id not in tp_groups:
+                if current_comm_idx != -1 and target_group_id != -2:
                     comm_idx_map[rank][current_comm_idx] = target_group_id
+                    # if rank == 0:
+                    #     print(f"[DEBUG] Rank {rank} parsed Comm Index {current_comm_idx} -> Group ID {target_group_id}")
     return comm_idx_map
 
 def changed_comm_groups(comm_idx_map):
@@ -59,12 +61,18 @@ def changed_comm_groups(comm_idx_map):
     for rank, idx_map in comm_idx_map.items():
         changed_map[rank] = {}
         last_group_id = None
+        last_idx = 0
         for idx in sorted(idx_map.keys()):
             group_id = idx_map[idx]
+            # if rank == 0:
+            #     print(f"[DEBUG] Rank {rank} checking Comm Index {idx} -> Group ID {group_id}")
             if group_id != last_group_id:
-                if last_group_id is not None:
-                    changed_map[rank][idx] = group_id
+                #if last_group_id is not None:
+                changed_map[rank][last_idx] = group_id
+                # if rank == 0:
+                #     print(f"[DEBUG] Rank {rank} changed Comm Index after {last_idx} -> Group ID {group_id}")
                 last_group_id = group_id
+            last_idx = idx
     return changed_map
 
 def write_rank_comm_groups_yaml(changed_map, output_file):
@@ -85,9 +93,9 @@ if __name__ == "__main__":
     tp_groups = parse_tp_groups(file_path)
     comm_groups = parse_comm_groups(file_path, tp_groups)
     changed_groups = changed_comm_groups(comm_groups)
-    for rank, changes in changed_groups.items():
-        print(f"Rank {rank}:")
-        for idx, group_id in changes.items():
-            print(f"  Comm Index {idx} -> Group ID {group_id}") 
+    # for rank, changes in changed_groups.items():
+    #     print(f"Rank {rank}:")
+    #     for idx, group_id in changes.items():
+    #         print(f"  Comm Index {idx} -> Group ID {group_id}") 
     write_rank_comm_groups_yaml(changed_groups, 'rank_comm_groups.yaml')
 

@@ -79,6 +79,8 @@ class Workload : public Callable {
     static std::map<int, int> vote_rounds;
     static std::map<int, int> finish_rounds;
 
+    static int num_bw_matrix;
+
     void vote(int comm_group_id);
     void finish(int comm_group_id);
 
