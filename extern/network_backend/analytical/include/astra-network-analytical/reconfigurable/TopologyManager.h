@@ -13,6 +13,7 @@ LICENSE file in the root directory of this source tree.
 #include "reconfigurable/Link.h"
 #include <memory>
 #include <vector>
+#include <fstream>
 
 using namespace NetworkAnalytical;
 
@@ -52,6 +53,8 @@ class TopologyManager {
         cur_topo_id = topo_id;
         return;
     };
+
+    void report_link_stats(std::ofstream& file) noexcept;
     
     int inflight_coll;
 

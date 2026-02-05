@@ -207,36 +207,13 @@ void TopologyManager::precomputeRoutes() noexcept {
     std::queue<int> q;
 
     for (int s = 0; s < devices_count; ++s) {
-        // BFS init
-        fill(dist.begin(), dist.end(), INF);
-        fill(parent.begin(), parent.end(), -1);
-        while (!q.empty()) q.pop();
-        dist[s] = 0;
-        q.push(s);
-
-        // BFS
-        while (!q.empty()) {
-            int u = q.front(); q.pop();
-            for (int v : adj[u]) {
-                if (dist[v] == INF) {
-                    dist[v] = dist[u] + 1;
-                    parent[v] = u;
-                    q.push(v);
-                }
-            }
-        }
 
         // Reconstruct a path s -> t for all t
         for (int t = 0; t < devices_count; ++t) {
             if (s == t) {
                 precomputed_routes[s][t] = {topology->get_device(s)};
-            } else if (parent[t] == -1) {
-                precomputed_routes[s][t] = {}; // Unreachable, stub route
             } else {
-                Route path;
-                for (int cur = t; cur != -1; cur = parent[cur]) path.push_back(topology->get_device(cur));
-                reverse(path.begin(), path.end());
-                precomputed_routes[s][t] = move(path);
+                precomputed_routes[s][t] = {topology->get_device(s), topology->get_device(t)};
             }
         }
     }
@@ -277,4 +254,20 @@ Route TopologyManager::route(DeviceId src, DeviceId dest) const noexcept {
     // Create a route that includes the src and dest devices
     route.push_back(topology->get_device(dest));
     return route;
+}
+
+void TopologyManager::report_link_stats(std::ofstream& file) noexcept {
+    file << "Link Statistics Report at time " << event_queue->get_current_time() << ":\n";
+    file << "Total Devices: " << devices_count << "\n";
+    for (int i = 0; i < devices_count; ++i) {
+        auto device = topology->get_device(i);
+        for (int j = 0; j < devices_count; ++j) {
+            if (i != j) {
+                auto link = device->get_link(j);
+                if (link) {
+                    file << "Link " << i << " -> " << j << ": Total Transmitted Size = " << link->get_total_transmitted_size() << " bytes\n";
+                }
+            }
+        }
+    }
 }

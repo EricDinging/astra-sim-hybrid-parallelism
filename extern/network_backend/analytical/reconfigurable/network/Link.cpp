@@ -53,6 +53,7 @@ Link::Link(const Bandwidth bandwidth, const Latency latency) noexcept
     // convert bandwidth from GB/s to B/ns
     bandwidth_Bpns = bw_GBps_to_Bpns(bandwidth);
     pending_chunk_end_time = 0;
+    total_transmitted_size = 0;
 }
 
 bool Link::is_busy() const noexcept {
@@ -119,6 +120,7 @@ unsigned long Link::schedule_chunk_transmission(std::unique_ptr<Chunk> chunk) no
     
     // schedule link free time
     const auto serialization_time = serialization_delay(chunk_size);
+    total_transmitted_size += chunk_size;
     const auto link_free_time = current_time + serialization_time + 2 * latency;
     pending_chunk_end_time = link_free_time;
     return link_free_time;
