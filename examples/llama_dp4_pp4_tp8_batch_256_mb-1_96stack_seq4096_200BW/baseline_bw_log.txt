@@ -1,0 +1,1 @@
+python topo_gen_baseline.py <dp> <tp> <pp> <scale_out_bw> <scale_up_bw>
