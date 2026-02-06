@@ -104,8 +104,11 @@ def plot_reconfig_latency(folder_path, title=None, output_path=None):
     latencies_str = [l for l in latencies_str if latency_str_to_seconds(l) <= 1.0]
     latencies_sec = [latency_str_to_seconds(l) for l in latencies_str]
 
-    # Convert to milliseconds for x-axis
-    latencies_plot = [l * 1e3 for l in latencies_sec]
+    # Convert to milliseconds for tick labels
+    latencies_ms = [l * 1e3 for l in latencies_sec]
+
+    # Use indices for equal spacing on x-axis
+    x_indices = list(range(len(latencies_str)))
 
     # Normalize: time / analytical (analytical = 1.0)
     rt_norm = [reconfig_rt[l] / analytical for l in latencies_str]
@@ -118,35 +121,36 @@ def plot_reconfig_latency(folder_path, title=None, output_path=None):
 
     # Opus (Reconfigurable, 1st row per latency)
     ax.plot(
-        latencies_plot, rt_norm,
+        x_indices, rt_norm,
         color="#1f77b4", marker="s", linestyle="-",
         label="Opus", markersize=7, linewidth=1.5,
         markerfacecolor="none", markeredgecolor="#1f77b4", markeredgewidth=1.5,
     )
     # Opus w/ Provisioning (Reconfigurable, 2nd row per latency)
     ax.plot(
-        latencies_plot, pp_norm,
+        x_indices, pp_norm,
         color="#ff7f0e", marker="x", linestyle="--",
         label="Opus+Provision", markersize=8, linewidth=1.5,
         markerfacecolor="none", markeredgecolor="#ff7f0e", markeredgewidth=1.5,
     )
     # EPS (Analytical) – constant at 1.0
     ax.plot(
-        latencies_plot, [1.0] * len(latencies_plot),
+        x_indices, [1.0] * len(x_indices),
         color="#d62728", marker="v", linestyle="-",
         label="EPS", markersize=7, linewidth=1.5,
         markerfacecolor="none", markeredgecolor="#d62728", markeredgewidth=1.5,
     )
     # Ideal (Baseline) – constant across latencies
     ax.plot(
-        latencies_plot, [baseline_norm] * len(latencies_plot),
+        x_indices, [baseline_norm] * len(x_indices),
         color="#9467bd", marker="^", linestyle="--",
         label="Ideal", markersize=7, linewidth=1.5,
         markerfacecolor="none", markeredgecolor="#9467bd", markeredgewidth=1.5,
     )
 
     ax.set_xlabel("Reconfiguration Latency (ms)")
-    ax.set_xscale("log")
+    ax.set_xticks(x_indices)
+    ax.set_xticklabels([f"{int(l)}" if l >= 1 else f"{l:.1f}" for l in latencies_ms])
     ax.set_ylabel("Norm. Step Latency")
     ax.set_ylim(bottom=0.9)
     ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
@@ -165,6 +169,78 @@ def plot_reconfig_latency(folder_path, title=None, output_path=None):
     print(f"Saved plot to {output_path}")
 
 
+def plot_reconfig_latency_raw(folder_path, title=None, output_path=None):
+    """Plot raw (non-normalized) step latency values."""
+    results_path = os.path.join(folder_path, "results_for_sheet_import.txt")
+    analytical, baseline, reconfig_rt, reconfig_pp = parse_results(results_path)
+
+    # Sort latencies numerically, drop points above 1 second
+    latencies_str = sorted(reconfig_rt.keys(), key=latency_str_to_seconds)
+    latencies_str = [l for l in latencies_str if latency_str_to_seconds(l) <= 1.0]
+    latencies_sec = [latency_str_to_seconds(l) for l in latencies_str]
+
+    # Convert to milliseconds for tick labels
+    latencies_ms = [l * 1e3 for l in latencies_sec]
+
+    # Use indices for equal spacing on x-axis
+    x_indices = list(range(len(latencies_str)))
+
+    # Raw values (convert to seconds)
+    rt_raw = [reconfig_rt[l] / 1e9 for l in latencies_str]  # ns -> s
+    pp_raw = [reconfig_pp[l] / 1e9 for l in latencies_str]
+    analytical_s = analytical / 1e9
+    baseline_s = baseline / 1e9
+
+    # ── Plot ───────────────────────────────────────────────────────────────
+    matplotlib.rcParams.update({"font.size": 14})
+    fig, ax = plt.subplots(figsize=(5, 3))
+
+    # Opus (Reconfigurable, 1st row per latency)
+    ax.plot(
+        x_indices, rt_raw,
+        color="#1f77b4", marker="s", linestyle="-",
+        label="Opus", markersize=7, linewidth=1.5,
+        markerfacecolor="none", markeredgecolor="#1f77b4", markeredgewidth=1.5,
+    )
+    # Opus w/ Provisioning (Reconfigurable, 2nd row per latency)
+    ax.plot(
+        x_indices, pp_raw,
+        color="#ff7f0e", marker="x", linestyle="--",
+        label="Opus+Provision", markersize=8, linewidth=1.5,
+        markerfacecolor="none", markeredgecolor="#ff7f0e", markeredgewidth=1.5,
+    )
+    # EPS (Analytical) – constant
+    ax.plot(
+        x_indices, [analytical_s] * len(x_indices),
+        color="#d62728", marker="v", linestyle="-",
+        label="EPS", markersize=7, linewidth=1.5,
+        markerfacecolor="none", markeredgecolor="#d62728", markeredgewidth=1.5,
+    )
+    # Ideal (Baseline) – constant across latencies
+    ax.plot(
+        x_indices, [baseline_s] * len(x_indices),
+        color="#9467bd", marker="^", linestyle="--",
+        label="Ideal", markersize=7, linewidth=1.5,
+        markerfacecolor="none", markeredgecolor="#9467bd", markeredgewidth=1.5,
+    )
+
+    ax.set_xlabel("Reconfiguration Latency (ms)")
+    ax.set_xticks(x_indices)
+    ax.set_xticklabels([f"{int(l)}" if l >= 1 else f"{l:.1f}" for l in latencies_ms])
+    ax.set_ylabel("Step Latency (s)")
+    ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
+    ax.legend(loc="upper left", framealpha=0.9)
+
+    ax.grid(True, alpha=0.3)
+    fig.tight_layout()
+
+    if output_path is None:
+        output_path = os.path.join(folder_path, "reconfig_latency_raw.pdf")
+    fig.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.show()
+    print(f"Saved plot to {output_path}")
+
+
 def plot_reconfig_latency_normalized(folder_path, title=None, output_path=None):
     results_path = os.path.join(folder_path, "results_for_sheet_import.txt")
     analytical, baseline, reconfig_rt, reconfig_pp = parse_results(results_path)
@@ -173,7 +249,12 @@ def plot_reconfig_latency_normalized(folder_path, title=None, output_path=None):
     latencies_str = sorted(reconfig_rt.keys(), key=latency_str_to_seconds)
     latencies_str = [l for l in latencies_str if latency_str_to_seconds(l) <= 1.0]
     latencies_sec = [latency_str_to_seconds(l) for l in latencies_str]
-    latencies_plot = [l * 1e3 for l in latencies_sec]
+
+    # Convert to milliseconds for tick labels
+    latencies_ms = [l * 1e3 for l in latencies_sec]
+
+    # Use indices for equal spacing on x-axis
+    x_indices = list(range(len(latencies_str)))
 
     # Performance: analytical = 100%, others = analytical / time * 100
     rt_norm = [analytical / reconfig_rt[l] * 100 for l in latencies_str]
@@ -186,35 +267,36 @@ def plot_reconfig_latency_normalized(folder_path, title=None, output_path=None):
 
     # Opus (Reconfigurable, 1st row per latency)
     ax.plot(
-        latencies_plot, rt_norm,
+        x_indices, rt_norm,
         color="#1f77b4", marker="s", linestyle="-",
         label="Opus", markersize=7, linewidth=1.5,
         markerfacecolor="none", markeredgecolor="#1f77b4", markeredgewidth=1.5,
     )
     # Opus w/ Provisioning (Reconfigurable, 2nd row per latency)
     ax.plot(
-        latencies_plot, pp_norm,
+        x_indices, pp_norm,
         color="#ff7f0e", marker="x", linestyle="--",
         label="Opus+Provision", markersize=8, linewidth=1.5,
         markerfacecolor="none", markeredgecolor="#ff7f0e", markeredgewidth=1.5,
     )
     # EPS (Analytical) – always 100%
     ax.plot(
-        latencies_plot, [100.0] * len(latencies_plot),
+        x_indices, [100.0] * len(x_indices),
         color="#d62728", marker="v", linestyle="-",
         label="EPS", markersize=7, linewidth=1.5,
         markerfacecolor="none", markeredgecolor="#d62728", markeredgewidth=1.5,
     )
     # Ideal (Baseline) – constant across latencies
     ax.plot(
-        latencies_plot, [baseline_norm] * len(latencies_plot),
+        x_indices, [baseline_norm] * len(x_indices),
         color="#9467bd", marker="^", linestyle="--",
         label="Ideal", markersize=7, linewidth=1.5,
         markerfacecolor="none", markeredgecolor="#9467bd", markeredgewidth=1.5,
     )
 
     ax.set_xlabel("Reconfiguration Latency (ms)")
-    ax.set_xscale("log")
+    ax.set_xticks(x_indices)
+    ax.set_xticklabels([f"{int(l)}" if l >= 1 else f"{l:.1f}" for l in latencies_ms])
     ax.set_ylabel("Performance (%)")
     ax.set_ylim(bottom=0)
     ax.yaxis.set_major_formatter(FormatStrFormatter("%.1f"))
@@ -248,4 +330,5 @@ if __name__ == "__main__":
 
     title = args.title or os.path.basename(folder_path)
     plot_reconfig_latency(folder_path, title=title)
+    plot_reconfig_latency_raw(folder_path, title=title)
     plot_reconfig_latency_normalized(folder_path, title=title)

@@ -4,11 +4,11 @@ STG_DIR="/home/soxehli/work/symbolic_tensor_graph"
 EXAMPLE_DIR="${SCRIPT_DIR}/examples"
 TEMPLATE_DIR="${EXAMPLE_DIR}/stg-template"
 
-TP=32
-PP=2
-DP=2
+TP=8
+PP=4
+DP=4
 
-MIXED_PRECISION=0
+MIXED_PRECISION=1
 
 SCALE_UP_BW=450
 
@@ -89,6 +89,7 @@ for bw in "${SCALE_OUT_SWEEPS[@]}"; do
     sed -i "s/REPLACE_PP/${PP}/g" run_network_analytical.sh
 
     sed -i "s/REPLACE_SCALE_OUT_BW/${SCALE_OUT_BW}/g" run_network_analytical.sh
+    sed -i "s/REPLACE_SCALE_UP_BW/${SCALE_UP_BW}/g" run_network_analytical.sh
 
     # Replace "REPLACE_LOCAL_MEM_BW" and "REPLACE_PEAK_PERF" in system.json
     sed -i "s/REPLACE_LOCAL_MEM_BW/${NPU_PEAK_MEM_BW}/g" system.json

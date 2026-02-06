@@ -6,26 +6,19 @@ TEMPLATE_DIR="${EXAMPLE_DIR}/stg-template"
 
 TP=32
 PP=8
-DP=8
+DP=16
 
 MIXED_PRECISION=1
 
 SCALE_UP_BW=1800
 
-SCALE_OUT_SWEEPS=(12.5 25 50 100 200)
+SCALE_OUT_SWEEPS=(200)
 
 SCALE_OUT_BW=200
 
 WS=0
-NS=96
 
 SEQ_LEN=4096
-
-# Weak Scaling Batch Size
-# BATCH=$((DP / 2 * 64))
-
-# Strong Scaling Batch Size
-BATCH=256
 
 MB=-1
 
@@ -38,11 +31,7 @@ for bw in "${SCALE_OUT_SWEEPS[@]}"; do
     echo "Generating experiment with SCALE_OUT_BW=${bw} ..."
     SCALE_OUT_BW=${bw}
 
-    if [ ${MIXED_PRECISION} -eq 1 ]; then
-        OUT_DIR="$EXAMPLE_DIR/gb200_llama_dp${DP}_pp${PP}_tp${TP}_batch_${BATCH}_mb${MB}_${NS}stack_seq${SEQ_LEN}_${SCALE_OUT_BW}BW"
-    else
-        OUT_DIR="$EXAMPLE_DIR/gb200_stg_dp${DP}_pp${PP}_tp${TP}_batch_${BATCH}_mb${MB}_${NS}stack_seq${SEQ_LEN}_${SCALE_OUT_BW}BW"
-    fi
+    OUT_DIR="$EXAMPLE_DIR/gb200_llama_405B_dp${DP}_pp${PP}_tp${TP}_${SCALE_OUT_BW}BW"
 
 
     echo "Output directory: ${OUT_DIR}"
@@ -59,11 +48,16 @@ for bw in "${SCALE_OUT_SWEEPS[@]}"; do
                 --output_name workload.%d.et \
                 --dp ${DP} --pp ${PP} --tp ${TP} \
                 --micro_batch ${MB} \
-                --batch ${BATCH} \
+                --batch 256 \
                 --weight_sharded ${WS} \
-                --seq ${SEQ_LEN} \
-                --num_stacks ${NS} \
-                --mixed_precision ${MIXED_PRECISION}
+                --mixed_precision ${MIXED_PRECISION} \
+                --dmodel 16384 \
+                --dff 53248 \
+                --num_stacks 128 \
+                --head 128 \
+                --kvhead 8 \
+                --dvocal 32000 \
+                --seq 8192
 
 
     echo "Copying run template files..."

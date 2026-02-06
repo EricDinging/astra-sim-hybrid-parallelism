@@ -3,6 +3,7 @@ import itertools
 import math
 
 SCALE_OUT_BW = 100
+SCALE_UP_BW = 450
 
 def gen_topo(dp, tp, pp, dp_bw=5, tp_bw=10, pp_bw=5, pp_groups=[], swap_dp_tp=False):
     # Node layout: node = pp_idx * (dp * tp) + dp_idx * tp + tp_idx
@@ -112,7 +113,7 @@ def parse_link_stats_file(filename="link_stats_report.txt"):
 #     tp_idx = npu_id % tp
 #     return dp_idx, tp_idx, pp_idx
 
-def total_bw(mat):
+def calculate_total_bw(mat):
     total = 0
     for i in range(len(mat)):
         for j in range(len(mat)):
@@ -146,12 +147,13 @@ def analyze_link_stats(links, dp, tp, pp):
     # write_matrix(0, mat_dp, filename="schedules_analysis.txt")
 
     print(f"Scale Out BW: {SCALE_OUT_BW}")
+    print(f"Scale Up BW: {SCALE_UP_BW}")
     
-    total_bw = max(pp_links, dp_links) * SCALE_OUT_BW + tp_links * 450
+    total_configured_bw = max(pp_links, dp_links) * SCALE_OUT_BW + tp_links * SCALE_UP_BW
 
 
     print(f"DP Links: {dp_links}, TP Links: {tp_links}, PP Links: {pp_links}")
-    print(f"Total Configured BW: {total_bw}")
+    print(f"Total Configured BW: {total_configured_bw}")
 
     for i in range(total_npu):
         #i_dp, i_tp, i_pp = get_dp_tp_pp_indices(i, dp, tp, pp)
@@ -175,7 +177,7 @@ def analyze_link_stats(links, dp, tp, pp):
     print(f"Total TP Traffic: {tp_traffic}")
     print(f"Total PP Traffic: {pp_traffic}")
 
-    return dp_traffic, tp_traffic, pp_traffic, dp_links, tp_links, pp_links, total_bw
+    return dp_traffic, tp_traffic, pp_traffic, dp_links, tp_links, pp_links, total_configured_bw
 
 def allocate_bw(dp_traffic, tp_traffic, pp_traffic, dp_links, tp_links, pp_links, total_bw, simple=False):
 
@@ -200,15 +202,15 @@ def allocate_bw(dp_traffic, tp_traffic, pp_traffic, dp_links, tp_links, pp_links
 
 if __name__ == "__main__":
 
-    if len(argv) != 5:
-        print("python topo_gen_baseline.py <dp> <tp> <pp> <scale_out_bw>")
+    if len(argv) != 6:
+        print("python topo_gen_baseline.py <dp> <tp> <pp> <scale_out_bw> <scale_up_bw>")
         exit(1)
 
     dp = int(argv[1])
     tp = int(argv[2])
     pp = int(argv[3])
     SCALE_OUT_BW = float(argv[4])
-
+    SCALE_UP_BW = float(argv[5])
 
     traffics = parse_link_stats_file(filename="link_stats_report.txt")
     dp_traffic, tp_traffic, pp_traffic, dp_links, tp_links, pp_links, total_bw = analyze_link_stats(traffics, dp, tp, pp)

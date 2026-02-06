@@ -1,6 +1,5 @@
 # Run ./run_network_reconfig.sh but edit the network.yml's reconfig_time according to input list
 import os
-import sys
 import yaml
 import subprocess
 
@@ -35,29 +34,44 @@ def extract_last_cycles(file_path):
                     
     return last_cycles, last_exposed, sys0_cycles, sys0_exposed
 
-def run_with_reconfig_times(reconfig_times, base_dir):
+def run_with_reconfig_times(reconfig_times, base_dir, skip_analytical=False):
     results = {}
 
-    print(f"Running with fake analytical: ")
-    subprocess.run(['bash', 'run_network_analytical.sh'], cwd=base_dir)
-    output_analytical = os.path.join(base_dir, 'debug_analytical.txt')
-    output_baseline = os.path.join(base_dir, 'debug_baseline.txt')
-    cycles_analytical, exposed_analytical, sys0_cycles_analytical, sys0_exposed_analytical = extract_last_cycles(output_analytical)
-    cycles_baseline, exposed_baseline, sys0_cycles_baseline, sys0_exposed_baseline = extract_last_cycles(output_baseline)
+    if skip_analytical:
+        print("Skipping analytical run")
+        results['analytical'] = {
+            'cycles': None,
+            'exposed_cycles': None,
+            'sys0_cycles': None,
+            'sys0_exposed_cycles': None
+        }
+        results['baseline'] = {
+            'cycles': None,
+            'exposed_cycles': None,
+            'sys0_cycles': None,
+            'sys0_exposed_cycles': None
+        }
+    else:
+        print(f"Running with fake analytical: ")
+        subprocess.run(['bash', 'run_network_analytical.sh'], cwd=base_dir)
+        output_analytical = os.path.join(base_dir, 'debug_analytical.txt')
+        output_baseline = os.path.join(base_dir, 'debug_baseline.txt')
+        cycles_analytical, exposed_analytical, sys0_cycles_analytical, sys0_exposed_analytical = extract_last_cycles(output_analytical)
+        cycles_baseline, exposed_baseline, sys0_cycles_baseline, sys0_exposed_baseline = extract_last_cycles(output_baseline)
 
-    results['analytical'] = {
-        'cycles': cycles_analytical,
-        'exposed_cycles': exposed_analytical,
-        'sys0_cycles': sys0_cycles_analytical,
-        'sys0_exposed_cycles': sys0_exposed_analytical
-    }
+        results['analytical'] = {
+            'cycles': cycles_analytical,
+            'exposed_cycles': exposed_analytical,
+            'sys0_cycles': sys0_cycles_analytical,
+            'sys0_exposed_cycles': sys0_exposed_analytical
+        }
 
-    results['baseline'] = {
-        'cycles': cycles_baseline,
-        'exposed_cycles': exposed_baseline,
-        'sys0_cycles': sys0_cycles_baseline,
-        'sys0_exposed_cycles': sys0_exposed_baseline
-    }
+        results['baseline'] = {
+            'cycles': cycles_baseline,
+            'exposed_cycles': exposed_baseline,
+            'sys0_cycles': sys0_cycles_baseline,
+            'sys0_exposed_cycles': sys0_exposed_baseline
+        }
 
     for time in reconfig_times:
         # Load the existing network.yml
@@ -127,18 +141,28 @@ def write_result_for_sheet_import(results, filename):
             f.write(f"{time_str}\t{p_str}\n")
 
 if __name__ == "__main__":
-    assert len(sys.argv) >= 2, "Usage: python run_helper.py <base_dir> [reconfig_times_comma_separated]"
-    base_dir = sys.argv[1]
-    reconfig_times_str = sys.argv[2] if len(sys.argv) > 2 else "0,0.01,0.05,0.1,0.25,0.5,0.75,1"
+    import argparse
 
-    reconfig_times = [float(x) for x in reconfig_times_str.split(',')]
+    parser = argparse.ArgumentParser(description="Run reconfig experiments with different reconfig times")
+    parser.add_argument("base_dir", help="Base directory containing the experiment files")
+    parser.add_argument("--reconfig-times", default="0,0.01,0.05,0.1,0.25,0.5,0.75,1",
+                        help="Comma-separated list of reconfig times in seconds (default: 0,0.01,0.05,0.1,0.25,0.5,0.75,1)")
+    parser.add_argument("--skip-analytical", action="store_true",
+                        help="Skip running the analytical/baseline experiments")
+    args = parser.parse_args()
 
-    results = run_with_reconfig_times(reconfig_times, base_dir)
+    base_dir = args.base_dir
+    reconfig_times = [float(x) for x in args.reconfig_times.split(',')]
+
+    results = run_with_reconfig_times(reconfig_times, base_dir, skip_analytical=args.skip_analytical)
 
     print("Results:")
-    print(f"Analytical - Cycles: {results['analytical']['cycles']}, Exposed Cycles: {results['analytical']['exposed_cycles']}")
-
-    print(f"Baseline   - Cycles: {results['baseline']['cycles']}, Exposed Cycles: {results['baseline']['exposed_cycles']}")
+    if not args.skip_analytical:
+        print(f"Analytical - Cycles: {results['analytical']['cycles']}, Exposed Cycles: {results['analytical']['exposed_cycles']}")
+        print(f"Baseline   - Cycles: {results['baseline']['cycles']}, Exposed Cycles: {results['baseline']['exposed_cycles']}")
+    else:
+        print("Analytical - Skipped")
+        print("Baseline   - Skipped")
 
     for time, data in results.items():
         if time == 'analytical':

@@ -191,7 +191,7 @@ def plot_bandwidth_sweep(base_folder, latency_str="10 ms", output_path=None):
         markerfacecolor="none", markeredgecolor="#9467bd", markeredgewidth=1.5,
     )
 
-    ax.set_xlabel("Bandwidth (Gbps)")
+    ax.set_xlabel("Scale-Out Bandwidth (Gbps)")
     ax.set_ylabel("Norm. Step Latency")
     ax.set_xticks(x_indices)
     ax.set_xticklabels([f"{int(bw)}" for bw in bandwidths])
@@ -278,7 +278,7 @@ def plot_bandwidth_sweep_raw(base_folder, latency_str="10 ms", output_path=None)
         markerfacecolor="none", markeredgecolor="#9467bd", markeredgewidth=1.5,
     )
 
-    ax.set_xlabel("Bandwidth (Gbps)")
+    ax.set_xlabel("Scale-Out Bandwidth (Gbps)")
     ax.set_ylabel("Step Latency (s)")
     ax.set_xticks(x_indices)
     ax.set_xticklabels([f"{int(bw)}" for bw in bandwidths])
@@ -370,7 +370,7 @@ def plot_bandwidth_sweep_normalized(base_folder, latency_str="10 ms", output_pat
         markerfacecolor="none", markeredgecolor="#9467bd", markeredgewidth=1.5,
     )
 
-    ax.set_xlabel("Bandwidth (Gbps)")
+    ax.set_xlabel("Scale-Out Bandwidth (Gbps)")
     ax.set_ylabel("Performance (%)")
     ax.set_xticks(x_indices)
     ax.set_xticklabels([f"{int(bw)}" for bw in bandwidths])
