@@ -278,3 +278,18 @@ Route TopologyManager::route(DeviceId src, DeviceId dest) const noexcept {
     route.push_back(topology->get_device(dest));
     return route;
 }
+
+void TopologyManager::report_link_stats(std::ofstream& file) noexcept {
+    file << "Link Statistics Report at time " << event_queue->get_current_time() << ":\n";
+    for (int i = 0; i < devices_count; ++i) {
+        auto device = topology->get_device(i);
+        for (int j = 0; j < devices_count; ++j) {
+            if (i != j) {
+                auto link = device->get_link(j);
+                if (link) {
+                    file << "Link " << i << " -> " << j << ": Total Transmitted Size = " << link->get_total_transmitted_size() << " bytes\n";
+                }
+            }
+        }
+    }
+}

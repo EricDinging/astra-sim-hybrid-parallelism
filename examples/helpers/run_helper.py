@@ -41,13 +41,22 @@ def run_with_reconfig_times(reconfig_times, base_dir):
     print(f"Running with fake analytical: ")
     subprocess.run(['bash', 'run_network_analytical.sh'], cwd=base_dir)
     output_analytical = os.path.join(base_dir, 'debug_analytical.txt')
+    output_baseline = os.path.join(base_dir, 'debug_baseline.txt')
     cycles_analytical, exposed_analytical, sys0_cycles_analytical, sys0_exposed_analytical = extract_last_cycles(output_analytical)
+    cycles_baseline, exposed_baseline, sys0_cycles_baseline, sys0_exposed_baseline = extract_last_cycles(output_baseline)
 
     results['analytical'] = {
         'cycles': cycles_analytical,
         'exposed_cycles': exposed_analytical,
         'sys0_cycles': sys0_cycles_analytical,
         'sys0_exposed_cycles': sys0_exposed_analytical
+    }
+
+    results['baseline'] = {
+        'cycles': cycles_baseline,
+        'exposed_cycles': exposed_baseline,
+        'sys0_cycles': sys0_cycles_baseline,
+        'sys0_exposed_cycles': sys0_exposed_baseline
     }
 
     for time in reconfig_times:
@@ -96,12 +105,17 @@ def run_with_reconfig_times(reconfig_times, base_dir):
 
 def write_result_for_sheet_import(results, filename):
     with open(filename, 'w') as f:
-        f.write("Analytical")
+        f.write("Analytical\n")
         a_str = "\t".join([str(results['analytical']['sys0_cycles']), str(results['analytical']['cycles']), str(results['analytical']['exposed_cycles'])])
         f.write(a_str + "\n")
+        f.write("\nBaseline\n")
+        b_str = "\t".join([str(results['baseline']['sys0_cycles']), str(results['baseline']['cycles']), str(results['baseline']['exposed_cycles'])])
+        f.write(b_str + "\n")
         f.write("\nReconfigurable\n")
         for time, data in results.items():
             if time == 'analytical':
+                continue
+            if time == 'baseline':
                 continue
             np_str = "\t".join([str(data['no_provision']['sys0_cycles']), str(data['no_provision']['cycles']), str(data['no_provision']['exposed_cycles'])])
             time_str = f"{int(time)} s"
@@ -115,7 +129,7 @@ def write_result_for_sheet_import(results, filename):
 if __name__ == "__main__":
     assert len(sys.argv) >= 2, "Usage: python run_helper.py <base_dir> [reconfig_times_comma_separated]"
     base_dir = sys.argv[1]
-    reconfig_times_str = sys.argv[2] if len(sys.argv) > 2 else "0,0.01,0.05,0.1,0.25,0.5,0.75,1,2,3"
+    reconfig_times_str = sys.argv[2] if len(sys.argv) > 2 else "0,0.01,0.05,0.1,0.25,0.5,0.75,1"
 
     reconfig_times = [float(x) for x in reconfig_times_str.split(',')]
 
@@ -124,8 +138,12 @@ if __name__ == "__main__":
     print("Results:")
     print(f"Analytical - Cycles: {results['analytical']['cycles']}, Exposed Cycles: {results['analytical']['exposed_cycles']}")
 
+    print(f"Baseline   - Cycles: {results['baseline']['cycles']}, Exposed Cycles: {results['baseline']['exposed_cycles']}")
+
     for time, data in results.items():
         if time == 'analytical':
+            continue
+        if time == 'baseline':
             continue
         print(f"Reconfig Time: {time} seconds")
         print(f"  No Provision - Cycles: {data['no_provision']['cycles']}, Exposed Cycles: {data['no_provision']['exposed_cycles']}")

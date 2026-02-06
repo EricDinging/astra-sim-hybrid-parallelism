@@ -73,6 +73,10 @@ class Link {
 
     static int get_current_time() noexcept;
 
+    [[nodiscard]] ChunkSize get_total_transmitted_size() const noexcept {
+        return total_transmitted_size;
+    }
+
     /**
      * Get the bandwidth of the link in GB/s.
      *
@@ -99,6 +103,8 @@ class Link {
 
     /// Duration of the link
     EventTime duration;
+
+    ChunkSize total_transmitted_size;
 
     bool draining;
 

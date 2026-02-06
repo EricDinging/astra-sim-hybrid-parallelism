@@ -315,6 +315,7 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
     provision_file = os.path.join(directory, 'debug_provision.txt')
     no_provision_file = os.path.join(directory, 'debug_no_provision.txt')
     analytical_file = os.path.join(directory, 'debug_analytical.txt')
+    baseline_file = os.path.join(directory, 'debug_baseline.txt')
 
     # Parse reconfig time from network.yml
     reconfig_time_ns = parse_reconfig_time(directory)
@@ -363,9 +364,20 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
             if parsed['rank_finish_times']:
                 print(f"  Rank finish times: {parsed['rank_finish_times']}")
 
+    if os.path.exists(baseline_file):
+        parsed = parse_trace_file(baseline_file, tp_size, dp_size)
+        # Baseline trace may not have topology reconfig events - that's okay
+        if parsed['ranks'] or parsed['compute'] or parsed['rank_finish_times']:
+            data['baseline'] = parsed
+            has_topology['baseline'] = False  # No topology bar for baseline
+            print(f"Baseline: {len(parsed['ranks'])} ranks with activity, "
+                  f"{len(parsed['compute'])} ranks with compute")
+            if parsed['rank_finish_times']:
+                print(f"  Rank finish times: {parsed['rank_finish_times']}")
+
     if not data:
         print(f"No debug files found in {directory}")
-        print(f"  Looking for: debug_provision.txt, debug_no_provision.txt, debug_analytical.txt")
+        print(f"  Looking for: debug_provision.txt, debug_no_provision.txt, debug_analytical.txt, debug_baseline.txt")
         return
 
     # Auto-detect number of ranks from the data if not explicitly limited
@@ -423,7 +435,7 @@ def plot_flame_graph(directory: str, output_path: str = None, num_ranks: int = N
     current_y = 0.5
     y_positions = {}
 
-    for trace_key in ['analytical', 'no_provision', 'provision']:
+    for trace_key in ['analytical', 'no_provision', 'provision', 'baseline']:
         if trace_key not in data:
             continue
 

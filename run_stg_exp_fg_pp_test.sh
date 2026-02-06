@@ -4,9 +4,9 @@ STG_DIR="/home/soxehli/work/symbolic_tensor_graph"
 EXAMPLE_DIR="${SCRIPT_DIR}/examples"
 TEMPLATE_DIR="${EXAMPLE_DIR}/stg-template"
 
-TP=2
-PP=3
-DP=2
+TP=8
+PP=8
+DP=8
 MB=-1
 WS=0
 NS=100
@@ -41,6 +41,6 @@ python ${EXAMPLE_DIR}/helpers/topo_gen_pp_split.py ${DP} ${TP} ${PP} 100 450 100
 # python ${EXAMPLE_DIR}/helpers/topo_gen_pp_split.py ${DP} ${TP} ${PP} 100 450 100 false mono-pp
 python ${EXAMPLE_DIR}/helpers/topo_gen_pp_split.py ${DP} ${TP} ${PP} 100 450 100 false fg-pp
 
-sed -i "s/REPLACE_NPU_COUNT/${NPU_COUNT}/g" network.yml
+# sed -i "s/REPLACE_NPU_COUNT/${NPU_COUNT}/g" network.yml
 
 

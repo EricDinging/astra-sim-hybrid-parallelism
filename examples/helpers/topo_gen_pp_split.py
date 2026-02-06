@@ -28,7 +28,8 @@ def gen_topo(dp, tp, pp, dp_bw=5, tp_bw=10, pp_bw=5, pp_groups=[], swap_dp_tp=Fa
                 prev_pp = (i_pp + pp - 1) % pp
                 next_pp = (i_pp + 1) % pp
                 if not ((pp_groups[prev_pp] and pp_groups[i_pp]) or (pp_groups[next_pp] and pp_groups[i_pp])):
-                    bw_matrix[i][j] = dp_bw
+                    if abs(i_dp - j_dp) == 1 or abs(i_dp - j_dp) == dp - 1:
+                        bw_matrix[i][j] = dp_bw
 
     if swap_dp_tp:
         # Swap DP and TP connections
@@ -68,7 +69,7 @@ def write_matrix(id, bw_mat, filename="schedules.txt"):
     with open(filename, "a") as f:
         f.write(f"BW {id}\n")
         for row in bw_mat:
-            f.write(" ".join(f"{x:3d}" for x in row) + "\n")
+            f.write(" ".join(f"{x:3f}" for x in row) + "\n")
         f.write("END\n\n")
 
 if __name__ == "__main__":
@@ -79,9 +80,9 @@ if __name__ == "__main__":
     dp = int(argv[1])
     tp = int(argv[2])
     pp = int(argv[3])
-    dp_bw = int(argv[4])
-    tp_bw = int(argv[5])
-    pp_bw = int(argv[6])
+    dp_bw = float(argv[4])
+    tp_bw = float(argv[5])
+    pp_bw = float(argv[6])
     swap_dp_tp = argv[7].lower() == "true"
     collapse_topo = "collapse-topo" in argv
 

@@ -288,6 +288,9 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    std::ofstream link_stats_file("link_stats_report.txt");
+    tm->report_link_stats(link_stats_file);
+
     // terminate simulation
     AstraSim::LoggerFactory::shutdown();
     return 0;

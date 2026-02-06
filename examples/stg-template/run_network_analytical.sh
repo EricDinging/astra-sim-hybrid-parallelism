@@ -21,6 +21,8 @@ NETWORK="${EXAMPLE_DIR:?}/network.yml"
 REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
 COMM_GROUP="${EXAMPLE_DIR:?}/workload.json"
 CIRCUIT_SCHEDULES="${EXAMPLE_DIR:?}/schedules-collapsed.txt"
+BASELINE_SCHEDULES="${EXAMPLE_DIR:?}/schedules_baseline.txt"
+BASELINE_TP_GEN="${EXAMPLE_DIR:?}/baseline_bw_log.txt"
 
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
@@ -48,3 +50,25 @@ export ASAN_OPTIONS=detect_container_overflow=0
 # finalize
 echo ""
 echo "[ASTRA-sim] Finished the execution."
+
+python ../helpers/topo_gen_baseline.py REPLACE_DP REPLACE_TP REPLACE_PP REPLACE_SCALE_OUT_BW > "${BASELINE_TP_GEN:?}"
+
+"${ASTRA_SIM:?}" \
+    --workload-configuration="${WORKLOAD}" \
+    --system-configuration="${SYSTEM:?}" \
+    --remote-memory-configuration="${REMOTE_MEMORY:?}" \
+    --network-configuration="${NETWORK:?}" \
+    --comm-group-configuration="${COMM_GROUP:?}" \
+    --circuit-schedules="${BASELINE_SCHEDULES:?}" > debug_baseline.txt
+
+# finalize
+echo ""
+echo "[ASTRA-sim] Finished the execution."
+
+echo ""
+echo "ANALYTICAL RUN OUTPUT:"
+tail -n 20 debug_analytical.txt
+
+echo ""
+echo "BASELINE RUN OUTPUT:"
+tail -n 20 debug_baseline.txt

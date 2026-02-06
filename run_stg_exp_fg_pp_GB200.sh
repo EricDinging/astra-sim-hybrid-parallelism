@@ -31,17 +31,17 @@ MB=-1
 
 NPU_COUNT=$((DP * TP * PP))
 
-NPU_PEAK_MEM_BW=4800
-NPU_PEAK_PERF=989
+NPU_PEAK_MEM_BW=8000
+NPU_PEAK_PERF=1250
 
 for bw in "${SCALE_OUT_SWEEPS[@]}"; do
     echo "Generating experiment with SCALE_OUT_BW=${bw} ..."
     SCALE_OUT_BW=${bw}
 
     if [ ${MIXED_PRECISION} -eq 1 ]; then
-        OUT_DIR="$EXAMPLE_DIR/llama_dp${DP}_pp${PP}_tp${TP}_batch_${BATCH}_mb${MB}_${NS}stack_seq${SEQ_LEN}_${SCALE_OUT_BW}BW"
+        OUT_DIR="$EXAMPLE_DIR/gb200_llama_dp${DP}_pp${PP}_tp${TP}_batch_${BATCH}_mb${MB}_${NS}stack_seq${SEQ_LEN}_${SCALE_OUT_BW}BW"
     else
-        OUT_DIR="$EXAMPLE_DIR/stg_dp${DP}_pp${PP}_tp${TP}_batch_${BATCH}_mb${MB}_${NS}stack_seq${SEQ_LEN}_${SCALE_OUT_BW}BW"
+        OUT_DIR="$EXAMPLE_DIR/gb200_stg_dp${DP}_pp${PP}_tp${TP}_batch_${BATCH}_mb${MB}_${NS}stack_seq${SEQ_LEN}_${SCALE_OUT_BW}BW"
     fi
 
 
