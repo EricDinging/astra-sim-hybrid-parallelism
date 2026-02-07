@@ -271,7 +271,7 @@ def plot_combined(dp_folder_1, dp_folder_2, latency_str="10 ms",
     Each column is a different hardware configuration, sharing x-axis (Number of GPUs).
     """
 
-    matplotlib.rcParams.update({"font.size": 14})
+    matplotlib.rcParams.update({"font.size": 18})
     fig, axes = plt.subplots(3, 2, figsize=(10, 7), sharex='col')
 
     bar_width = 0.25
@@ -344,8 +344,8 @@ def plot_combined(dp_folder_1, dp_folder_2, latency_str="10 ms",
                          markerfacecolor="none", markeredgecolor=PERF_COLORS["ideal"], markeredgewidth=1.5)
 
         ax_perf.set_xticks(x_positions + bar_width)
-        ax_perf.set_ylabel("Step Latency (s)")
-        ax_perf.set_title(hw_name, fontsize=12, fontweight='bold')
+        ax_perf.set_ylabel("Latency (s)")
+        ax_perf.set_title(hw_name, fontsize=18, fontweight='bold')
         ax_perf.grid(True, alpha=0.3)
 
         # ── Row 1: Cost (use derived server counts) ───────────────────────────
@@ -360,7 +360,7 @@ def plot_combined(dp_folder_1, dp_folder_2, latency_str="10 ms",
             ax_cost.bar(x_positions + i * bar_width, costs_data[:, i] / 1e6, bar_width,
                         label=topology, color=TOPOLOGY_COLORS[i])
 
-        ax_cost.set_ylabel("Cost (Million $)")
+        ax_cost.set_ylabel("Cost (M $)")
         ax_cost.set_xticks(x_positions + bar_width)
         ax_cost.grid(True, alpha=0.3, axis='y')
 
@@ -391,12 +391,12 @@ def plot_combined(dp_folder_1, dp_folder_2, latency_str="10 ms",
 
     # First row: performance legends (4 items)
     fig.legend(handles_perf, labels_perf, loc='upper center', ncol=4,
-               bbox_to_anchor=(0.5, 1.04), fontsize=14)
+               bbox_to_anchor=(0.5, 1.04), fontsize=18)
     # Second row: topology legends (3 items)
     fig.legend(handles_topo, labels_topo, loc='upper center', ncol=3,
-               bbox_to_anchor=(0.5, 0.975), fontsize=14)
+               bbox_to_anchor=(0.5, 0.975), fontsize=18)
 
-    plt.tight_layout(rect=(0, 0, 1, 0.92), h_pad=0)
+    plt.tight_layout(rect=(0, 0, 1, 0.90), h_pad=0)
 
     if output_path is None:
         output_path = "combined_perf_cost_power.pdf"
