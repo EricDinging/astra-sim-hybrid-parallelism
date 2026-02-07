@@ -271,8 +271,8 @@ def plot_combined(dp_folder_1, dp_folder_2, latency_str="10 ms",
     Each column is a different hardware configuration, sharing x-axis (Number of GPUs).
     """
 
-    matplotlib.rcParams.update({"font.size": 12})
-    fig, axes = plt.subplots(3, 2, figsize=(10, 6), sharex='col')
+    matplotlib.rcParams.update({"font.size": 14})
+    fig, axes = plt.subplots(3, 2, figsize=(10, 7), sharex='col')
 
     bar_width = 0.25
 
@@ -383,19 +383,20 @@ def plot_combined(dp_folder_1, dp_folder_2, latency_str="10 ms",
         ax_power.grid(True, alpha=0.3, axis='y')
 
     # ══════════════════════════════════════════════════════════════════════════
-    # Shared legend on top
+    # Shared legend on top (two rows)
     # ══════════════════════════════════════════════════════════════════════════
 
     handles_perf, labels_perf = axes[0, 0].get_legend_handles_labels()
     handles_topo, labels_topo = axes[1, 0].get_legend_handles_labels()
 
-    # Combine both legends into one
-    all_handles = handles_perf + handles_topo
-    all_labels = labels_perf + labels_topo
-    fig.legend(all_handles, all_labels, loc='upper center', ncol=7,
-               bbox_to_anchor=(0.5, 1.02), fontsize=10)
+    # First row: performance legends (4 items)
+    fig.legend(handles_perf, labels_perf, loc='upper center', ncol=4,
+               bbox_to_anchor=(0.5, 1.04), fontsize=14)
+    # Second row: topology legends (3 items)
+    fig.legend(handles_topo, labels_topo, loc='upper center', ncol=3,
+               bbox_to_anchor=(0.5, 0.975), fontsize=14)
 
-    plt.tight_layout(rect=(0, 0, 1, 0.98), h_pad=0)
+    plt.tight_layout(rect=(0, 0, 1, 0.92), h_pad=0)
 
     if output_path is None:
         output_path = "combined_perf_cost_power.pdf"

@@ -134,4 +134,4 @@ ax1.legend(loc='upper left', ncol=1)
 plt.tight_layout(h_pad=0.)
 plt.show()
 # Save the figure to a PDF file
-fig.savefig("cost_energy_plots.pdf", format="pdf", bbox_inches='tight')
+fig.savefig("cost_energy_plots_H200.pdf", format="pdf", bbox_inches='tight')
