@@ -1,4 +1,5 @@
 Scale Out BW: 50.0
+Scale Up BW: 450.0
 DP Links: 512, TP Links: 1792, PP Links: 512
 Total Configured BW: 832000.0
 Total DP Traffic: 1050857701376

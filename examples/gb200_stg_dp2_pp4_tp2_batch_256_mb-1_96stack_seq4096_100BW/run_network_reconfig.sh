@@ -14,15 +14,15 @@ PROJECT_DIR="${SCRIPT_DIR:?}/../.."
 EXAMPLE_DIR="${SCRIPT_DIR:?}"
 
 # paths
-ASTRA_SIM="${PROJECT_DIR}/../analytical_backend/build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable"
+ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable"
 WORKLOAD="${EXAMPLE_DIR:?}/workload"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"
 REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
 COMM_GROUP="${EXAMPLE_DIR:?}/workload.json"
-CIRCUIT_SCHEDULES="${EXAMPLE_DIR:?}/schedules-collapsed.txt"
-BASELINE_SCHEDULES="${EXAMPLE_DIR:?}/schedules_baseline.txt"
-BASELINE_TP_GEN="${EXAMPLE_DIR:?}/baseline_bw_log.txt"
+CIRCUIT_SCHEDULES="${EXAMPLE_DIR:?}/schedules.txt"
+
+TRACE_PARSER_PATH="${PROJECT_DIR:?}/examples/helpers/trace_parser.py"
 
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
@@ -37,7 +37,7 @@ echo "[ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend..."
 echo ""
 
 # run ASTRA-sim
-export ASAN_OPTIONS=detect_container_overflow=0
+export ASAN_OPTIONS=detect_container_overflow=0:detect_leaks=0
 
 "${ASTRA_SIM:?}" \
     --workload-configuration="${WORKLOAD}" \
@@ -45,13 +45,11 @@ export ASAN_OPTIONS=detect_container_overflow=0
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
     --network-configuration="${NETWORK:?}" \
     --comm-group-configuration="${COMM_GROUP:?}" \
-    --circuit-schedules="${CIRCUIT_SCHEDULES:?}" > debug_analytical.txt
+    --circuit-schedules="${CIRCUIT_SCHEDULES:?}" > debug_no_provision.txt
 
-# finalize
-echo ""
-echo "[ASTRA-sim] Finished the execution."
+python ${TRACE_PARSER_PATH:?} debug_no_provision.txt
 
-python ../helpers/topo_gen_baseline.py 4 8 4 50 450 > "${BASELINE_TP_GEN:?}"
+PROVISION_CONFIG="${EXAMPLE_DIR:?}/rank_comm_groups.yaml"
 
 "${ASTRA_SIM:?}" \
     --workload-configuration="${WORKLOAD}" \
@@ -59,16 +57,14 @@ python ../helpers/topo_gen_baseline.py 4 8 4 50 450 > "${BASELINE_TP_GEN:?}"
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
     --network-configuration="${NETWORK:?}" \
     --comm-group-configuration="${COMM_GROUP:?}" \
-    --circuit-schedules="${BASELINE_SCHEDULES:?}" > debug_baseline.txt
+    --circuit-schedules="${CIRCUIT_SCHEDULES:?}" \
+    --provision-config="${PROVISION_CONFIG:?}" > debug_provision.txt
 
-# finalize
-echo ""
-echo "[ASTRA-sim] Finished the execution."
 
 echo ""
-echo "ANALYTICAL RUN OUTPUT:"
-tail -n 20 debug_analytical.txt
+echo "NON-PROVISIONED RUN OUTPUT:"
+tail -n 20 debug_no_provision.txt
 
 echo ""
-echo "BASELINE RUN OUTPUT:"
-tail -n 20 debug_baseline.txt
+echo "PROVISIONED RUN OUTPUT:"
+tail -n 20 debug_provision.txt

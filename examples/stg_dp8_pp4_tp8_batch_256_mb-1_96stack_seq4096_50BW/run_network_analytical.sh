@@ -14,7 +14,7 @@ PROJECT_DIR="${SCRIPT_DIR:?}/../.."
 EXAMPLE_DIR="${SCRIPT_DIR:?}"
 
 # paths
-ASTRA_SIM="/home/soxehli/work/astra-sim-hier-analytical/build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable"
+ASTRA_SIM="${PROJECT_DIR}/../analytical_backend/build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable"
 WORKLOAD="${EXAMPLE_DIR:?}/workload"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"
@@ -51,7 +51,7 @@ export ASAN_OPTIONS=detect_container_overflow=0
 echo ""
 echo "[ASTRA-sim] Finished the execution."
 
-python ../helpers/topo_gen_baseline.py 8 8 4 50 > "${BASELINE_TP_GEN:?}"
+python ../helpers/topo_gen_baseline.py 8 8 4 50 450 > "${BASELINE_TP_GEN:?}"
 
 "${ASTRA_SIM:?}" \
     --workload-configuration="${WORKLOAD}" \
