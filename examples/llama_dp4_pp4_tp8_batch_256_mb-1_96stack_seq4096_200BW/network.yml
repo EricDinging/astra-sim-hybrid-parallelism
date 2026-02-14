@@ -1,5 +1,10 @@
-topology: [ FullyConnected ]
-npus_count: [ 128 ]
-bandwidth: [ 25 ]  # GB/s
-latency: [ 936.25 ]  # ns
-reconfig_time: [ 10000000.0 ]  # 10 ms
+bandwidth:
+- 25
+latency:
+- 936.25
+npus_count:
+- 128
+reconfig_time:
+- 10000000.0
+topology:
+- FullyConnected

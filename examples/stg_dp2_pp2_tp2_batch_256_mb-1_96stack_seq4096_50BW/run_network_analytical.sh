@@ -51,7 +51,7 @@ export ASAN_OPTIONS=detect_container_overflow=0
 echo ""
 echo "[ASTRA-sim] Finished the execution."
 
-python ../helpers/topo_gen_baseline.py 4 32 4 100 1800 > "${BASELINE_TP_GEN:?}"
+python ../helpers/topo_gen_baseline.py 2 2 2 50 450 > "${BASELINE_TP_GEN:?}"
 
 "${ASTRA_SIM:?}" \
     --workload-configuration="${WORKLOAD}" \

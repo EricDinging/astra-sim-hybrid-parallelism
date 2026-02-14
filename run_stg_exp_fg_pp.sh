@@ -1,18 +1,24 @@
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 
-STG_DIR="/home/soxehli/work/symbolic_tensor_graph"
+: "${STG_DIR:=/home/soxehli/work/symbolic_tensor_graph}"
 EXAMPLE_DIR="${SCRIPT_DIR}/examples"
 TEMPLATE_DIR="${EXAMPLE_DIR}/stg-template"
 
-TP=8
-PP=4
-DP=4
+: "${TP:=2}"
+: "${PP:=2}"
+: "${DP:=2}"
 
-MIXED_PRECISION=1
+: "${MIXED_PRECISION:=0}"
 
 SCALE_UP_BW=450
 
-SCALE_OUT_SWEEPS=(12.5 25 50 100 200)
+if [ -z "${SCALE_OUT_SWEEPS}" ]; then
+    SCALE_OUT_SWEEPS=(12.5 25 50 100 200)
+else
+    # If passed as space-separated string, convert to array
+    read -ra SCALE_OUT_SWEEPS <<< "${SCALE_OUT_SWEEPS}"
+fi
+echo "SWEEPING over SCALE_OUT_BW values: ${SCALE_OUT_SWEEPS[*]}"
 
 SCALE_OUT_BW=200
 
