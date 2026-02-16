@@ -29,6 +29,13 @@ docker build -t astra-sim:latest -f Dockerfile .
 docker run -it --name astra-sim-latest  --shm-size=8g astra-sim:latest bash
 ```
 
+## Reconfiguration 
+
+```bash
+# examples/test-2-comm-group
+./run_network_reconfigurable.sh
+```
+
 
 ## Contact Us
 For any questions about using ASTRA-sim, you can email the ASTRA-sim User Mailing List: astrasim-users@googlegroups.com

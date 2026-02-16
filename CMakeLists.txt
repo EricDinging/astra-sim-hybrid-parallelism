@@ -55,39 +55,57 @@ file(GLOB srcs
     "${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/src/feeder_v3/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/extern/remote_memory_backend/analytical/*.cc")
 
-# Compile AstraSim Library
-add_library(AstraSim STATIC ${srcs})
+# Function to create AstraSim library variants with different compile definitions.
+# Usage: create_astrasim_variant(TargetName [DEFINE1 DEFINE2 ...])
+function(create_astrasim_variant TARGET_NAME)
+    add_library(${TARGET_NAME} STATIC ${srcs})
 
-# Link libraries
-target_link_libraries(AstraSim PUBLIC fmt::fmt)
-target_link_libraries(AstraSim PUBLIC spdlog::spdlog)
+    # Link libraries
+    target_link_libraries(${TARGET_NAME} PUBLIC fmt::fmt)
+    target_link_libraries(${TARGET_NAME} PUBLIC spdlog::spdlog)
 
-# Same as above.
-if(DEFINED ENV{PROTOBUF_FROM_SOURCE} AND "$ENV{PROTOBUF_FROM_SOURCE}" STREQUAL "True")
-    target_link_libraries(AstraSim PUBLIC protobuf::libprotobuf)
-else()
-    target_link_libraries(AstraSim PUBLIC ${Protobuf_LIBRARIES})
-endif()
+    # Same as above.
+    if(DEFINED ENV{PROTOBUF_FROM_SOURCE} AND "$ENV{PROTOBUF_FROM_SOURCE}" STREQUAL "True")
+        target_link_libraries(${TARGET_NAME} PUBLIC protobuf::libprotobuf)
+    else()
+        target_link_libraries(${TARGET_NAME} PUBLIC ${Protobuf_LIBRARIES})
+    endif()
 
+    # Include Directories
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+    # Include analytical network frontend public headers so system code can include
+    #+ them transitively (e.g., ReconfigurableNetworkApi includes common/CommonNetworkApi.hh)
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/network_backend/analytical/extern/yaml-cpp/include)
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/astra-sim/network_frontend/analytical/include)
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/network_backend/analytical/include)
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/network_backend/analytical/include/astra-network-analytical)
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/)
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/schema/protobuf)
+    target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/src/third_party/utils)
+    target_include_directories(${TARGET_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/extern/helper/)
+    target_include_directories(${TARGET_NAME} PUBLIC ${Protobuf_INCLUDE_DIR})
 
-# Include Directories
-target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/)
-target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/schema/protobuf)
-target_include_directories(AstraSim PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/src/third_party/utils)
-target_include_directories(AstraSim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/extern/helper/)
-target_include_directories(AstraSim PUBLIC ${Protobuf_INCLUDE_DIR})
+    # Same as above.
+    if(DEFINED ENV{PROTOBUF_FROM_SOURCE} AND "$ENV{PROTOBUF_FROM_SOURCE}" STREQUAL "True")
+        target_include_directories(${TARGET_NAME} PUBLIC ${Protobuf_INCLUDE_DIRS})
+    endif()
 
-# Same as above.
-if(DEFINED ENV{PROTOBUF_FROM_SOURCE} AND "$ENV{PROTOBUF_FROM_SOURCE}" STREQUAL "True")
-    target_include_directories(AstraSim PUBLIC ${Protobuf_INCLUDE_DIRS})
-endif()
+    # Properties
+    set_target_properties(${TARGET_NAME} PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
+    set_target_properties(${TARGET_NAME}
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../bin/
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../lib/
+        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../lib/
+    )
 
-# Properties
-set_target_properties(AstraSim PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
-set_target_properties(AstraSim
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../bin/
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../lib/
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../lib/
-)
+    # Apply additional compile definitions passed as extra arguments
+    foreach(DEF IN ITEMS ${ARGN})
+        target_compile_definitions(${TARGET_NAME} PRIVATE ${DEF})
+    endforeach()
+endfunction()
+
+# Create AstraSim library variants for each backend
+create_astrasim_variant(AstraSim)
+create_astrasim_variant(AstraSim_CongestionAware CONGESTION_AWARE)
+create_astrasim_variant(AstraSim_Reconfigurable RECONFIGURABLE)

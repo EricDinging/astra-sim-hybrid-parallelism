@@ -9,6 +9,7 @@ LICENSE file in the root directory of this source tree.
 #include <chrono>
 
 #include "astra-sim/common/AstraNetworkAPI.hh"
+#include "astra-sim/network_frontend/analytical/include/reconfigurable/ReconfigurableNetworkApi.hh"
 #include "astra-sim/common/AstraRemoteMemoryAPI.hh"
 #include "astra-sim/system/Callable.hh"
 #include "astra-sim/system/CollectivePhase.hh"
@@ -72,7 +73,9 @@ class Sys : public Callable {
         std::vector<int> queues_per_dim,
         double injection_scale,
         double comm_scale,
-        bool rendezvous_enabled);
+        bool rendezvous_enabled,
+        std::string provision_config,
+        std::map<int,std::vector<int>>& comm_to_topo);
     ~Sys();
     //---------------------------------------------------------------------------
 
@@ -231,6 +234,12 @@ class Sys : public Callable {
                  sim_request* request,
                  void (*msg_handler)(void* fun_arg),
                  void* fun_arg);
+
+    bool sim_reconfig(int topo_id);
+
+    void increment_inflight_coll(int rank, std::string name);
+    void decrement_inflight_coll(int rank, int node_id);
+    int get_inflight_coll();
 
     int sim_recv(Tick delay,
                  void* buffer,

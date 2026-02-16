@@ -65,6 +65,28 @@ class AstraNetworkAPI {
         return -1;
     };
 
+    // Optional: reconfigure network topology (default no-op; overridden by
+    // backends that support reconfiguration).
+    virtual bool sim_reconfig(int topo_id, int skip_inflight=0) {
+        return true;
+    }
+
+    virtual void increment_inflight_coll(int rank, std::string name){
+        return;
+    }
+
+    virtual void decrement_inflight_coll(int rank, int node_id){
+        return;
+    }
+
+    virtual int get_inflight_coll() {
+        return 0;
+    }
+
+    virtual void print_on_going_comms() {
+        return;
+    }
+
     // Notifies that the workload for this rank has finished. 
     // Note that we have one network handler per rank. 
     // Therefore, when implementing this function, the network handler must 
