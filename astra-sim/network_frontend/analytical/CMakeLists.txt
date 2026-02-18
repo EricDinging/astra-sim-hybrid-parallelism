@@ -29,10 +29,6 @@ file(GLOB srcs_congestion_aware
         ${CMAKE_CURRENT_SOURCE_DIR}/congestion_aware/*.cc
 )
 
-file(GLOB srcs_reconfigurable
-        ${CMAKE_CURRENT_SOURCE_DIR}/reconfigurable/*.cc
-)
-
 # Compile Congestion Unaware Backend
 if (BUILDTARGET STREQUAL "all" OR BUILDTARGET STREQUAL "congestion_unaware")
     add_executable(AstraSim_Analytical_Congestion_Unaware ${srcs_congestion_unaware} ${srcs_common})
@@ -61,11 +57,10 @@ endif ()
 # Compile Congestion Aware Backend
 if (BUILDTARGET STREQUAL "all" OR BUILDTARGET STREQUAL "congestion_aware")
     add_executable(AstraSim_Analytical_Congestion_Aware ${srcs_congestion_aware} ${srcs_common})
-    target_compile_definitions(AstraSim_Analytical_Congestion_Aware PRIVATE CONGESTION_AWARE)
     target_sources(AstraSim_Analytical_Congestion_Aware PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/congestion_aware/main.cc)
 
     # Link libraries
-    target_link_libraries(AstraSim_Analytical_Congestion_Aware LINK_PRIVATE AstraSim_CongestionAware)
+    target_link_libraries(AstraSim_Analytical_Congestion_Aware LINK_PRIVATE AstraSim)
     target_link_libraries(AstraSim_Analytical_Congestion_Aware LINK_PRIVATE Analytical_Congestion_Aware)
 
     # Include directories
@@ -83,29 +78,3 @@ if (BUILDTARGET STREQUAL "all" OR BUILDTARGET STREQUAL "congestion_aware")
             ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../lib/
     )
 endif ()
-
-# Compile Reconfigurable Backend
-if (BUILDTARGET STREQUAL "all" OR BUILDTARGET STREQUAL "reconfigurable")
-    add_executable(AstraSim_Analytical_Reconfigurable ${srcs_reconfigurable} ${srcs_common})
-    target_sources(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/reconfigurable/main.cc)
-
-    # Link libraries
-    target_link_libraries(AstraSim_Analytical_Reconfigurable LINK_PRIVATE AstraSim_Reconfigurable)
-    target_link_libraries(AstraSim_Analytical_Reconfigurable LINK_PRIVATE Analytical_Reconfigurable)
-
-    # Include directories
-    target_include_directories(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/)
-    target_include_directories(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/common/)
-    target_include_directories(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../extern/)
-    target_include_directories(AstraSim_Analytical_Reconfigurable PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../../extern/helper)
-
-    # Properties
-    set_target_properties(AstraSim_Analytical_Reconfigurable PROPERTIES COMPILE_WARNING_AS_ERROR OFF)
-    set_target_properties(AstraSim_Analytical_Reconfigurable
-            PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../bin/
-            LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../lib/
-            ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/../lib/
-    )
-endif ()
-

@@ -146,9 +146,7 @@ Sys::Sys(int id,
          vector<int> queues_per_dim,
          double injection_scale,
          double comm_scale,
-         bool rendezvous_enabled,
-         string provision_config,
-         std::map<int,std::vector<int>>& comm_to_topo) {
+         bool rendezvous_enabled) {
     if ((id + 1) > this->all_sys.size()) {
         this->all_sys.resize(id + 1);
     }
@@ -251,7 +249,7 @@ Sys::Sys(int id,
                         model_shared_bus, communication_delay, true);
 
     workload =
-        new Workload(this, workload_configuration, comm_group_configuration, provision_config, comm_to_topo);
+        new Workload(this, workload_configuration, comm_group_configuration);
 
     if (inter_dimension_scheduling == InterDimensionScheduling::OfflineGreedy ||
         inter_dimension_scheduling ==
@@ -1479,7 +1477,6 @@ int Sys::front_end_sim_send(Tick delay,
         return rendezvous_sim_send(delay, buffer, count, type, dst, tag,
                                    request, msg_handler, fun_arg);
     } else {
-        // printf("Issuing send from %d to %d\n", id, dst);
         return sim_send(delay, buffer, count, type, dst, tag, request,
                         msg_handler, fun_arg);
     }
@@ -1569,33 +1566,6 @@ int Sys::rendezvous_sim_recv(Tick delay,
     sim_send(delay, buffer, rendevouz_size, type, src, newTag, &newReq,
              &Sys::handleEvent, rrd);
     return 1;
-}
-
-bool Sys::sim_reconfig(int topo_id) {
-    // Call through virtual interface (no-op for backends that don't implement)
-    if (comm_NI) {
-        return comm_NI->sim_reconfig(topo_id);
-    }
-    return false;
-}
-
-void Sys::increment_inflight_coll(int rank, std::string name) {
-     if (comm_NI) {
-         comm_NI->increment_inflight_coll(rank, name);
-     }
-}
-
-void Sys::decrement_inflight_coll(int rank, int node_id) {
-     if (comm_NI) {
-         comm_NI->decrement_inflight_coll(rank, node_id);
-     }
-}
-
-int Sys::get_inflight_coll() {
-     if (comm_NI) {
-         return comm_NI->get_inflight_coll();
-     }
-     return 0;
 }
 
 int Sys::sim_send(Tick delay,
