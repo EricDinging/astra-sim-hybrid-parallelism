@@ -17,18 +17,6 @@ class IntData : public CallData {
     uint64_t execution_time;
 };
 
-
-class TwoIntData : public CallData {
-  public:
-    TwoIntData(int d1, int d2) {
-        data = d1;
-        data2 = d2;
-    }
-    int data;
-    int data2;
-    uint64_t execution_time;
-};
-
 }  // namespace AstraSim
 
 #endif /* __INT_DATA_HH__ */
