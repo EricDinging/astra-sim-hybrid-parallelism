@@ -11,22 +11,22 @@ set -e
 # find the absolute path to this script
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 PROJECT_DIR="${SCRIPT_DIR:?}/../.."
-EXAMPLE_DIR="${PROJECT_DIR:?}/examples/test-1-comm-group"
+EXAMPLE_DIR="${PROJECT_DIR:?}/examples/stg_dp2_pp2_tp2_ep2_batch_256_mb-1_96stack_seq4096_50BW"
 
 # paths
 ASTRA_SIM="${PROJECT_DIR:?}/build/astra_analytical/build/bin/AstraSim_Analytical_Congestion_Unaware"
-WORKLOAD="${EXAMPLE_DIR:?}/chakra_trace"
+WORKLOAD="${EXAMPLE_DIR:?}/workload"
 SYSTEM="${EXAMPLE_DIR:?}/system.json"
 NETWORK="${EXAMPLE_DIR:?}/network.yml"
 REMOTE_MEMORY="${EXAMPLE_DIR:?}/remote_memory.json"
-COMM_GROUP="${EXAMPLE_DIR:?}/comm_group.json"
+COMM_GROUP="${EXAMPLE_DIR:?}/workload.json"
 
 # start
 echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
 echo ""
 
 # Compile
-"${PROJECT_DIR:?}"/build/astra_analytical/build.sh
+# "${PROJECT_DIR:?}"/build/astra_analytical/build.sh
 
 echo ""
 echo "[ASTRA-sim] Compilation finished."
@@ -34,6 +34,8 @@ echo "[ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend..."
 echo ""
 
 # run ASTRA-sim
+export ASAN_OPTIONS=detect_container_overflow=0
+
 "${ASTRA_SIM:?}" \
     --workload-configuration="${WORKLOAD}" \
     --system-configuration="${SYSTEM:?}" \
