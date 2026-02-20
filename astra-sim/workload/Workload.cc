@@ -88,6 +88,10 @@ void Workload::initialize_comm_groups(string comm_group_filename) {
         std::string comm_group_name = it.key();
         int comm_group_id = std::stoi(comm_group_name);
 
+        std::cout << "Workload::initialize_comm_groups, sys->id=" << sys->id
+                  << ", comm_group_id=" << comm_group_id
+                  << ", involved_NPUs=" << it.value() << std::endl;
+
         std::vector<int> involved_NPUs;
         for (auto id : it.value()) {
             involved_NPUs.push_back(id);
@@ -188,6 +192,10 @@ void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
         } else if (node->type() == ChakraNodeType::COMM_COLL_NODE ||
                    node->type() == ChakraNodeType::COMM_SEND_NODE ||
                    node->type() == ChakraNodeType::COMM_RECV_NODE) {
+
+            std::cout << "Workload::issue, sys->id=" << sys->id
+                      << ", issue communication node, node_id=" << node->id()
+                      << ", node_name=" << node->name() << std::endl;
             issue_comm(node);
         } else if (node->type() == ChakraNodeType::INVALID_NODE) {
             skip_invalid(node);
