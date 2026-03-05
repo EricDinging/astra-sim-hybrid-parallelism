@@ -10,7 +10,9 @@ using namespace NetworkAnalyticalReconfigurable;
 TopologyManager::TopologyManager(int npus_count,
                                  int devices_count,
                                  EventQueue* event_queue,
-                                 std::map<int, std::vector<std::vector<Bandwidth>>> circuit_schedules) noexcept {
+                                 std::map<int, std::vector<std::vector<Bandwidth>>> circuit_schedules,
+                                 std::vector<int> npus_per_dim,
+                                 bool is_torus) noexcept {
     // Initialize the number of NPUs
     this->npus_count = npus_count;
     this->devices_count = devices_count;
@@ -45,6 +47,11 @@ TopologyManager::TopologyManager(int npus_count,
     topology_iteration = 0;
 
     inflight_coll = 0;
+
+    // Configure DOR routing if topology dimensions are provided
+    if (!npus_per_dim.empty()) {
+        set_topology_dims(npus_per_dim, is_torus);
+    }
 }
 
 std::shared_ptr<Device> TopologyManager::get_device(const DeviceId deviceId) noexcept {
@@ -169,7 +176,11 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     this->latencies = latencies;
     this->reconfig_time = reconfig_time;
 
-    precomputeRoutes();
+    if (use_dor && dims_count > 0) {
+        precomputeRoutes_DOR();
+    } else {
+        precomputeRoutes();
+    }
 
     reconfiguring = true;
     this->cur_topo_id = topo_id;
@@ -254,6 +265,119 @@ void TopologyManager::precomputeRoutes() noexcept {
                 reverse(path.begin(), path.end());
                 precomputed_routes[s][t] = move(path);
             }
+        }
+    }
+}
+
+void TopologyManager::set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus) noexcept {
+    assert(!npus_per_dim.empty());
+
+    // Validate that the product of dims matches the number of NPUs
+    int product = 1;
+    for (int d : npus_per_dim) {
+        assert(d > 0);
+        product *= d;
+    }
+    assert(product == npus_count);
+
+    this->npus_per_dim = npus_per_dim;
+    this->dims_count   = static_cast<int>(npus_per_dim.size());
+    this->is_torus     = is_torus;
+    this->use_dor      = true;  // enable DOR routing
+}
+
+void TopologyManager::precomputeRoutes_DOR() noexcept {
+    assert(dims_count > 0 && "call set_topology_dims() before precomputeRoutes_DOR()");
+
+    // -----------------------------------------------------------------------
+    // Helper: translate a flat device ID to a per-dimension coordinate vector.
+    //
+    // The linearization convention is X-fastest (dim 0 is innermost):
+    //   device_id = coord[0] + coord[1]*N0 + coord[2]*N0*N1 + ...
+    //
+    // To decode:
+    //   coord[0] = device_id % N0
+    //   coord[1] = (device_id / N0) % N1
+    //   coord[2] = (device_id / (N0*N1)) % N2
+    //   ...
+    // -----------------------------------------------------------------------
+    auto id_to_coord = [&](int id) -> std::vector<int> {
+        std::vector<int> coord(dims_count);
+        int remaining = id;
+        for (int d = 0; d < dims_count; ++d) {
+            coord[d] = remaining % npus_per_dim[d];
+            remaining /= npus_per_dim[d];
+        }
+        return coord;
+    };
+
+    // Helper: convert a coordinate vector back to a flat device ID.
+    auto coord_to_id = [&](const std::vector<int>& coord) -> int {
+        int id = 0;
+        int stride = 1;
+        for (int d = 0; d < dims_count; ++d) {
+            id += coord[d] * stride;
+            stride *= npus_per_dim[d];
+        }
+        return id;
+    };
+
+    // Initialise the precomputed_routes table (same size as before).
+    precomputed_routes = std::vector<std::vector<Route>>(
+        devices_count, std::vector<Route>(devices_count));
+
+    for (int s = 0; s < devices_count; ++s) {
+        for (int t = 0; t < devices_count; ++t) {
+            if (s == t) {
+                precomputed_routes[s][t] = {topology->get_device(s)};
+                continue;
+            }
+
+            Route path;
+            std::vector<int> cur_coord = id_to_coord(s);
+            // Always start the path at the source device.
+            path.push_back(topology->get_device(coord_to_id(cur_coord)));
+
+            const std::vector<int> dst_coord = id_to_coord(t);
+
+            // Traverse dimensions in order: dim 0 (X) first, then Y, then Z…
+            for (int d = 0; d < dims_count; ++d) {
+                int Nd    = npus_per_dim[d];
+                int delta = dst_coord[d] - cur_coord[d];  // signed displacement
+
+                if (delta == 0) {
+                    continue;  // already aligned on this dimension
+                }
+
+                // In a torus, choose the shorter of forward (+delta) or
+                // backward (wrapping) direction.
+                int step = 1;  // direction of movement (+1 or -1)
+                int hops;      // number of hops along this dimension
+
+                if (is_torus) {
+                    int forward_hops  = (delta + Nd) % Nd;   // always >= 0
+                    int backward_hops = Nd - forward_hops;   // always >= 0
+                    if (forward_hops <= backward_hops) {
+                        hops = forward_hops;
+                        step = +1;
+                    } else {
+                        hops = backward_hops;
+                        step = -1;
+                    }
+                } else {
+                    // Mesh: only one direction is possible.
+                    hops = std::abs(delta);
+                    step = (delta > 0) ? +1 : -1;
+                }
+
+                // Walk 'hops' steps along dimension d.
+                for (int h = 0; h < hops; ++h) {
+                    cur_coord[d] = (cur_coord[d] + step + Nd) % Nd;
+                    path.push_back(topology->get_device(coord_to_id(cur_coord)));
+                }
+            }
+
+            precomputed_routes[s][t] = std::move(path);
         }
     }
 }
