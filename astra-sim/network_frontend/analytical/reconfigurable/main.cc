@@ -117,6 +117,8 @@ int main(int argc, char* argv[]) {
     const auto injection_scale = cmd_line_parser.get<double>("injection-scale");
     const auto rendezvous_protocol =
         cmd_line_parser.get<bool>("rendezvous-protocol");
+    const auto npus_per_dim_str =
+        cmd_line_parser.get<std::string>("npus-per-dim");
 
     AstraSim::LoggerFactory::init(logging_configuration, logging_folder);
 
@@ -145,8 +147,21 @@ int main(int argc, char* argv[]) {
     parse_bw_matrix(circuit_schedules);
     AstraSim::LoggerFactory::get_logger("default")->debug("BW Matrix parsed");
 
+    // If --npus-per-dim was provided, parse it and enable DOR routing.
+    std::vector<int> npus_per_dim;
+    if (!npus_per_dim_str.empty()) {
+        std::istringstream ss(npus_per_dim_str);
+        std::string token;
+        while (std::getline(ss, token, ',')) {
+            int dim = std::stoi(token);
+            if (dim > 1) {
+                npus_per_dim.push_back(dim);
+            }
+        }
+    }
     tm = std::make_shared<TopologyManager>(npus_count, npus_count,
-                                           event_queue.get(), bw_matrix_map);
+                                           event_queue.get(), bw_matrix_map,
+                                           npus_per_dim, !npus_per_dim.empty());
 
     // Initialize the topology to the first topology in the map
     tm->reconfigure(bw_matrix_map[0], lt_matrix, 0, 0);

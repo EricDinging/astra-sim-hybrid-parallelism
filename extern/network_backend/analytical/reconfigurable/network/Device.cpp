@@ -107,7 +107,7 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     // Print out the route
     // for (const auto& [id, route] : routes) {
-    //     // std::cout << "Route to device " << id << ": ";
+    //     std::cout << "Route to device " << id << ": ";
     //     for (const auto& hop : route) {
     //         std::cout << hop->get_id() << " ";
     //     }
