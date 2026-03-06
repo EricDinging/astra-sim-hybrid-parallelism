@@ -54,17 +54,25 @@ class TopologyManager {
      * is the fastest-changing dimension:
      *   device_id = x + y * Nx + z * Nx * Ny + ...
      *
-     * @param npus_per_dim  number of NPUs along each dimension, e.g. {Nx, Ny, Nz}
-     * @param is_torus      true for torus (wrap-around links), false for mesh
+     * @param npus_per_dim   number of NPUs along each dimension, e.g. {Nx, Ny, Nz}
+     * @param is_torus       true for torus (wrap-around links), false for mesh
+     * @param bidi           when true, torus routing picks the shorter arc on
+     *                       each dimension; when false (default) routing always
+     *                       proceeds in the id-increasing (+1) direction.
      */
-    void set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus) noexcept;
+    void set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus,
+                           bool bidi) noexcept;
 
     /**
      * Populate precomputed_routes using Dimension-Order Routing (DOR).
      *
      * Routes always traverse dimensions in order: X first, then Y, then Z
-     * (i.e., dim 0, dim 1, ..., dim N-1).  For torus topologies the shorter
-     * direction on each dimension is always chosen.
+     * (i.e., dim 0, dim 1, ..., dim N-1).
+     *
+     * For torus topologies:
+     *   - If dor_shorter_path is false (default), routing always traverses in
+     *     the id-increasing (+1) direction regardless of path length.
+     *   - If dor_shorter_path is true, the shorter arc on each dimension is chosen.
      *
      * set_topology_dims() must be called at least once before this method.
      */
@@ -167,6 +175,10 @@ class TopologyManager {
     /// When true, precomputeRoutes_DOR() is used instead of the default BFS.
     /// Set automatically by set_topology_dims(); can also be toggled directly.
     bool use_dor = false;
+
+    /// When true (bidirectional), torus DOR picks the shorter arc on each dimension.
+    /// When false (default), DOR always routes in the id-increasing (+1) direction.
+    bool bidi = false;
 };
 
 }  // namespace NetworkAnalyticalReconfigurable

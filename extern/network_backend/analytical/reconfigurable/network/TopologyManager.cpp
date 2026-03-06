@@ -50,7 +50,7 @@ TopologyManager::TopologyManager(int npus_count,
 
     // Configure DOR routing if topology dimensions are provided
     if (!npus_per_dim.empty()) {
-        set_topology_dims(npus_per_dim, is_torus);
+        set_topology_dims(npus_per_dim, is_torus, false);
     }
 }
 
@@ -269,7 +269,8 @@ void TopologyManager::precomputeRoutes() noexcept {
     }
 }
 
-void TopologyManager::set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus) noexcept {
+void TopologyManager::set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus,
+                                        bool bidi) noexcept {
     assert(!npus_per_dim.empty());
 
     // Validate that the product of dims matches the number of NPUs
@@ -283,6 +284,7 @@ void TopologyManager::set_topology_dims(const std::vector<int>& npus_per_dim, bo
     this->npus_per_dim = npus_per_dim;
     this->dims_count   = static_cast<int>(npus_per_dim.size());
     this->is_torus     = is_torus;
+    this->bidi         = bidi;
     this->use_dor      = true;  // enable DOR routing
 }
 
@@ -349,20 +351,29 @@ void TopologyManager::precomputeRoutes_DOR() noexcept {
                     continue;  // already aligned on this dimension
                 }
 
-                // In a torus, choose the shorter of forward (+delta) or
-                // backward (wrapping) direction.
+                // In a torus, the direction depends on flag bidi:
+                //   false (default): always route in the id-increasing (+1) direction.
+                //   true:            pick the shorter arc (forward or backward).
                 int step = 1;  // direction of movement (+1 or -1)
                 int hops;      // number of hops along this dimension
 
                 if (is_torus) {
+                    // Forward hops: number of +1 steps to reach dst from src.
                     int forward_hops  = (delta + Nd) % Nd;   // always >= 0
                     int backward_hops = Nd - forward_hops;   // always >= 0
-                    if (forward_hops <= backward_hops) {
+                    if (bidi) {
+                        // Bidirectional: pick the shorter arc.
+                        if (forward_hops <= backward_hops) {
+                            hops = forward_hops;
+                            step = +1;
+                        } else {
+                            hops = backward_hops;
+                            step = -1;
+                        }
+                    } else {
+                        // Default: always route in the id-increasing (+1) direction.
                         hops = forward_hops;
                         step = +1;
-                    } else {
-                        hops = backward_hops;
-                        step = -1;
                     }
                 } else {
                     // Mesh: only one direction is possible.
