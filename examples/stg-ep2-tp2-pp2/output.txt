@@ -1,0 +1,496 @@
+[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend...
+
+-- {fmt} version: 11.0.2
+-- Build type: Release
+-- Build spdlog: 1.14.1
+-- Build type: Release
+-- Configuring done
+-- Generating done
+-- Build files have been written to: /workspace/astra-sim-hybrid-parallelism/build/astra_analytical/build
+Consolidate compiler generated dependencies of target fmt
+Consolidate compiler generated dependencies of target spdlog
+[  2%] Built target fmt
+[  7%] Built target spdlog
+Consolidate compiler generated dependencies of target yaml-cpp
+[ 27%] Built target yaml-cpp
+Consolidate compiler generated dependencies of target yaml-cpp-read
+Consolidate compiler generated dependencies of target yaml-cpp-sandbox
+Consolidate compiler generated dependencies of target yaml-cpp-parse
+Consolidate compiler generated dependencies of target Analytical_Congestion_Unaware
+Consolidate compiler generated dependencies of target Analytical_Congestion_Aware
+Consolidate compiler generated dependencies of target Analytical_Reconfigurable
+[ 28%] Built target yaml-cpp-read
+[ 30%] Built target yaml-cpp-sandbox
+[ 31%] Built target yaml-cpp-parse
+[ 39%] Built target Analytical_Congestion_Unaware
+[ 48%] Built target Analytical_Congestion_Aware
+[ 55%] Built target Analytical_Reconfigurable
+Consolidate compiler generated dependencies of target AstraSim
+[ 56%] Building CXX object AstraSim/CMakeFiles/AstraSim.dir/astra-sim/workload/Workload.cc.o
+[ 56%] Linking CXX static library ../lib/libAstraSim.a
+[ 89%] Built target AstraSim
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Unaware
+Consolidate compiler generated dependencies of target AstraSim_Analytical_Congestion_Aware
+[ 89%] Linking CXX executable ../bin/AstraSim_Analytical_Congestion_Unaware
+[ 90%] Linking CXX executable ../bin/AstraSim_Analytical_Congestion_Aware
+[100%] Built target AstraSim_Analytical_Congestion_Unaware
+[100%] Built target AstraSim_Analytical_Congestion_Aware
+
+[ASTRA-sim] Compilation finished.
+[ASTRA-sim] Running ASTRA-sim Example with Analytical Network Backend...
+
+[2026-03-11 00:59:51.282] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 8 index in ring: 0 offset: 1 total nodes in ring: 8
+[2026-03-11 00:59:51.282] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 8 index in ring: 0 offset: 1 total nodes in ring: 8
+[2026-03-11 00:59:51.282] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 8 index in ring: 0 offset: 1 total nodes in ring: 8
+[2026-03-11 00:59:51.282] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 8 index in ring: 0 offset: 1 total nodes in ring: 8
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=1, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=10, involved_NPUs=[4,5,6,7]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=11, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=12, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=13, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=14, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=15, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=16, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=17, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=18, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=2, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=3, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=4, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=5, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=6, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=7, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=8, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=0, comm_group_id=9, involved_NPUs=[0,1,2,3]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=1, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=10, involved_NPUs=[4,5,6,7]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=11, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=12, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=13, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=14, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=15, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=16, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=17, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=18, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=2, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=3, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=4, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=5, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=6, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=7, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=8, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=1, comm_group_id=9, involved_NPUs=[0,1,2,3]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=1, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=10, involved_NPUs=[4,5,6,7]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=11, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=12, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=13, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=14, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=15, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=16, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=17, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=18, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=2, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=3, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=4, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=5, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=6, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=7, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=8, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=2, comm_group_id=9, involved_NPUs=[0,1,2,3]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=1, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=10, involved_NPUs=[4,5,6,7]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=11, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=12, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=13, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=14, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=15, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=16, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=17, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=18, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=2, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=3, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=4, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=5, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=6, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=7, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=8, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=3, comm_group_id=9, involved_NPUs=[0,1,2,3]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=1, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=10, involved_NPUs=[4,5,6,7]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=11, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=12, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=13, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=14, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=15, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=16, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=17, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=18, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=2, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=3, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=4, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=5, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=6, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=7, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=8, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=4, comm_group_id=9, involved_NPUs=[0,1,2,3]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=1, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=10, involved_NPUs=[4,5,6,7]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=11, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=12, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=13, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=14, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=15, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=16, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=17, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=18, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=2, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=3, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=4, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=5, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=6, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=7, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=8, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=5, comm_group_id=9, involved_NPUs=[0,1,2,3]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=1, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=10, involved_NPUs=[4,5,6,7]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=11, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=12, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=13, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=14, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=15, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=16, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=17, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=18, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=2, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=3, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=4, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=5, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=6, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=7, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=8, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=6, comm_group_id=9, involved_NPUs=[0,1,2,3]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=1, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=10, involved_NPUs=[4,5,6,7]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=11, involved_NPUs=[0]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=12, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=13, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=14, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=15, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=16, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=17, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=18, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=2, involved_NPUs=[1]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=3, involved_NPUs=[2]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=4, involved_NPUs=[3]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=5, involved_NPUs=[4]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=6, involved_NPUs=[5]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=7, involved_NPUs=[6]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=8, involved_NPUs=[7]
+Workload::initialize_comm_groups, sys->id=7, comm_group_id=9, involved_NPUs=[0,1,2,3]
+Workload::issue, sys->id=0, node_type=COMM_RECV, collective=, pg=N/A, node_id=201, node_name=shadow_mb0.transformer.1.input_norm.dx@0_Y_RECV
+Workload::issue, sys->id=1, node_type=COMM_RECV, collective=, pg=N/A, node_id=201, node_name=shadow_mb0.transformer.1.input_norm.dx@0_Y_RECV
+Workload::issue, sys->id=2, node_type=COMM_RECV, collective=, pg=N/A, node_id=201, node_name=shadow_mb0.transformer.1.input_norm.dx@0_Y_RECV
+Workload::issue, sys->id=3, node_type=COMM_RECV, collective=, pg=N/A, node_id=201, node_name=shadow_mb0.transformer.1.input_norm.dx@0_Y_RECV
+Workload::issue, sys->id=4, node_type=COMM_RECV, collective=, pg=N/A, node_id=203, node_name=shadow_mb0.transformer.0.ffn_res.y@0_Y_RECV
+Workload::issue, sys->id=5, node_type=COMM_RECV, collective=, pg=N/A, node_id=203, node_name=shadow_mb0.transformer.0.ffn_res.y@0_Y_RECV
+Workload::issue, sys->id=6, node_type=COMM_RECV, collective=, pg=N/A, node_id=203, node_name=shadow_mb0.transformer.0.ffn_res.y@0_Y_RECV
+Workload::issue, sys->id=7, node_type=COMM_RECV, collective=, pg=N/A, node_id=203, node_name=shadow_mb0.transformer.0.ffn_res.y@0_Y_RECV
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=8, node_name=mb0.transformer.0.mha.qkv@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.qkv@0_X1COMM
+[2026-03-11 00:59:51.288] [system::topology::RingTopology] [info] custom ring, id: 0, dimension: local total nodes in ring: 4 index in ring: 0 total nodes in ring 4
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=8, node_name=mb0.transformer.0.mha.qkv@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.qkv@0_X1COMM
+[2026-03-11 00:59:51.288] [system::topology::RingTopology] [info] custom ring, id: 1, dimension: local total nodes in ring: 4 index in ring: 1 total nodes in ring 4
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=8, node_name=mb0.transformer.0.mha.qkv@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.qkv@0_X1COMM
+[2026-03-11 00:59:51.288] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 4 index in ring: 2 total nodes in ring 4
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=8, node_name=mb0.transformer.0.mha.qkv@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.qkv@0_X1COMM
+[2026-03-11 00:59:51.288] [system::topology::RingTopology] [info] custom ring, id: 3, dimension: local total nodes in ring: 4 index in ring: 3 total nodes in ring 4
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=28, node_name=mb0.transformer.0.mha.dwqkv@0_X2_COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.dwqkv@0_X2_COMM
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=28, node_name=mb0.transformer.0.mha.dwqkv@0_X2_COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.dwqkv@0_X2_COMM
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=28, node_name=mb0.transformer.0.mha.dwqkv@0_X2_COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.dwqkv@0_X2_COMM
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=28, node_name=mb0.transformer.0.mha.dwqkv@0_X2_COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.dwqkv@0_X2_COMM
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=16, node_name=mb0.transformer.0.mha.o@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.o@0_X1COMM
+[2026-03-11 00:59:51.289] [system::topology::RingTopology] [info] custom ring, id: 0, dimension: local total nodes in ring: 4 index in ring: 0 total nodes in ring 4
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=16, node_name=mb0.transformer.0.mha.o@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.o@0_X1COMM
+[2026-03-11 00:59:51.289] [system::topology::RingTopology] [info] custom ring, id: 1, dimension: local total nodes in ring: 4 index in ring: 1 total nodes in ring 4
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=16, node_name=mb0.transformer.0.mha.o@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.o@0_X1COMM
+[2026-03-11 00:59:51.289] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 4 index in ring: 2 total nodes in ring 4
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=16, node_name=mb0.transformer.0.mha.o@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.o@0_X1COMM
+[2026-03-11 00:59:51.289] [system::topology::RingTopology] [info] custom ring, id: 3, dimension: local total nodes in ring: 4 index in ring: 3 total nodes in ring 4
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=56, node_name=mb0.transformer.0.ffn.x00@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.x00@0_X1COMM
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=56, node_name=mb0.transformer.0.ffn.x00@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.x00@0_X1COMM
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=56, node_name=mb0.transformer.0.ffn.x00@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.x00@0_X1COMM
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=56, node_name=mb0.transformer.0.ffn.x00@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.x00@0_X1COMM
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=67, node_name=mb0.transformer.0.ffn.x01@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.x01@0_X1COMM
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=67, node_name=mb0.transformer.0.ffn.x01@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.x01@0_X1COMM
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=67, node_name=mb0.transformer.0.ffn.x01@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.x01@0_X1COMM
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=67, node_name=mb0.transformer.0.ffn.x01@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.x01@0_X1COMM
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=60, node_name=mb0.transformer.0.ffn.xdown@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.xdown@0_X1COMM
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=60, node_name=mb0.transformer.0.ffn.xdown@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.xdown@0_X1COMM
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=60, node_name=mb0.transformer.0.ffn.xdown@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.xdown@0_X1COMM
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=60, node_name=mb0.transformer.0.ffn.xdown@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.xdown@0_X1COMM
+Workload::issue, sys->id=0, node_type=COMM_SEND, collective=, pg=N/A, node_id=202, node_name=mb0.transformer.0.ffn_res.y@0_Y_SEND
+Workload::issue, sys->id=1, node_type=COMM_SEND, collective=, pg=N/A, node_id=202, node_name=mb0.transformer.0.ffn_res.y@0_Y_SEND
+Workload::issue, sys->id=2, node_type=COMM_SEND, collective=, pg=N/A, node_id=202, node_name=mb0.transformer.0.ffn_res.y@0_Y_SEND
+Workload::issue, sys->id=3, node_type=COMM_SEND, collective=, pg=N/A, node_id=202, node_name=mb0.transformer.0.ffn_res.y@0_Y_SEND
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=106, node_name=mb0.transformer.1.mha.qkv@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.qkv@0_X1COMM
+[2026-03-11 00:59:51.291] [system::topology::RingTopology] [info] custom ring, id: 4, dimension: local total nodes in ring: 4 index in ring: 0 total nodes in ring 4
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=106, node_name=mb0.transformer.1.mha.qkv@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.qkv@0_X1COMM
+[2026-03-11 00:59:51.291] [system::topology::RingTopology] [info] custom ring, id: 5, dimension: local total nodes in ring: 4 index in ring: 1 total nodes in ring 4
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=106, node_name=mb0.transformer.1.mha.qkv@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.qkv@0_X1COMM
+[2026-03-11 00:59:51.291] [system::topology::RingTopology] [info] custom ring, id: 6, dimension: local total nodes in ring: 4 index in ring: 2 total nodes in ring 4
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=106, node_name=mb0.transformer.1.mha.qkv@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.qkv@0_X1COMM
+[2026-03-11 00:59:51.291] [system::topology::RingTopology] [info] custom ring, id: 7, dimension: local total nodes in ring: 4 index in ring: 3 total nodes in ring 4
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=126, node_name=mb0.transformer.1.mha.dwqkv@0_X2_COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.dwqkv@0_X2_COMM
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=126, node_name=mb0.transformer.1.mha.dwqkv@0_X2_COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.dwqkv@0_X2_COMM
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=126, node_name=mb0.transformer.1.mha.dwqkv@0_X2_COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.dwqkv@0_X2_COMM
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=126, node_name=mb0.transformer.1.mha.dwqkv@0_X2_COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.dwqkv@0_X2_COMM
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=114, node_name=mb0.transformer.1.mha.o@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.o@0_X1COMM
+[2026-03-11 00:59:51.292] [system::topology::RingTopology] [info] custom ring, id: 4, dimension: local total nodes in ring: 4 index in ring: 0 total nodes in ring 4
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=114, node_name=mb0.transformer.1.mha.o@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.o@0_X1COMM
+[2026-03-11 00:59:51.292] [system::topology::RingTopology] [info] custom ring, id: 5, dimension: local total nodes in ring: 4 index in ring: 1 total nodes in ring 4
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=114, node_name=mb0.transformer.1.mha.o@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.o@0_X1COMM
+[2026-03-11 00:59:51.292] [system::topology::RingTopology] [info] custom ring, id: 6, dimension: local total nodes in ring: 4 index in ring: 2 total nodes in ring 4
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=114, node_name=mb0.transformer.1.mha.o@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.o@0_X1COMM
+[2026-03-11 00:59:51.292] [system::topology::RingTopology] [info] custom ring, id: 7, dimension: local total nodes in ring: 4 index in ring: 3 total nodes in ring 4
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=154, node_name=mb0.transformer.1.ffn.x00@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.x00@0_X1COMM
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=154, node_name=mb0.transformer.1.ffn.x00@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.x00@0_X1COMM
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=154, node_name=mb0.transformer.1.ffn.x00@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.x00@0_X1COMM
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=154, node_name=mb0.transformer.1.ffn.x00@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.x00@0_X1COMM
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=165, node_name=mb0.transformer.1.ffn.x01@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.x01@0_X1COMM
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=165, node_name=mb0.transformer.1.ffn.x01@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.x01@0_X1COMM
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=165, node_name=mb0.transformer.1.ffn.x01@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.x01@0_X1COMM
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=165, node_name=mb0.transformer.1.ffn.x01@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.x01@0_X1COMM
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=158, node_name=mb0.transformer.1.ffn.xdown@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.xdown@0_X1COMM
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=158, node_name=mb0.transformer.1.ffn.xdown@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.xdown@0_X1COMM
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=158, node_name=mb0.transformer.1.ffn.xdown@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.xdown@0_X1COMM
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=158, node_name=mb0.transformer.1.ffn.xdown@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.xdown@0_X1COMM
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=161, node_name=mb0.transformer.1.ffn.dxdown2@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.dxdown2@0_X1COMM
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=161, node_name=mb0.transformer.1.ffn.dxdown2@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.dxdown2@0_X1COMM
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=161, node_name=mb0.transformer.1.ffn.dxdown2@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.dxdown2@0_X1COMM
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=161, node_name=mb0.transformer.1.ffn.dxdown2@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.dxdown2@0_X1COMM
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=ALL_REDUCE, pg=10, node_id=198, node_name=out_emb.w@1_X2_COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=out_emb.w@1_X2_COMM
+[2026-03-11 00:59:51.293] [system::topology::RingTopology] [info] custom ring, id: 4, dimension: local total nodes in ring: 4 index in ring: 0 total nodes in ring 4
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=ALL_REDUCE, pg=10, node_id=198, node_name=out_emb.w@1_X2_COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=out_emb.w@1_X2_COMM
+[2026-03-11 00:59:51.293] [system::topology::RingTopology] [info] custom ring, id: 5, dimension: local total nodes in ring: 4 index in ring: 1 total nodes in ring 4
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=ALL_REDUCE, pg=10, node_id=198, node_name=out_emb.w@1_X2_COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=out_emb.w@1_X2_COMM
+[2026-03-11 00:59:51.294] [system::topology::RingTopology] [info] custom ring, id: 6, dimension: local total nodes in ring: 4 index in ring: 2 total nodes in ring 4
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=ALL_REDUCE, pg=10, node_id=198, node_name=out_emb.w@1_X2_COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=out_emb.w@1_X2_COMM
+[2026-03-11 00:59:51.294] [system::topology::RingTopology] [info] custom ring, id: 7, dimension: local total nodes in ring: 4 index in ring: 3 total nodes in ring 4
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=169, node_name=mb0.transformer.1.ffn.dx0@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.dx0@0_X1COMM
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=169, node_name=mb0.transformer.1.ffn.dx0@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.dx0@0_X1COMM
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=169, node_name=mb0.transformer.1.ffn.dx0@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.dx0@0_X1COMM
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=169, node_name=mb0.transformer.1.ffn.dx0@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.ffn.dx0@0_X1COMM
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=117, node_name=mb0.transformer.1.mha.do1@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.do1@0_X1COMM
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=117, node_name=mb0.transformer.1.mha.do1@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.do1@0_X1COMM
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=117, node_name=mb0.transformer.1.mha.do1@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.do1@0_X1COMM
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=ALL_GATHER, pg=10, node_id=117, node_name=mb0.transformer.1.mha.do1@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.do1@0_X1COMM
+Workload::issue, sys->id=4, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=129, node_name=mb0.transformer.1.mha.dx@0_X1COMM
+Workload::issue_coll_comm, sys->id=4, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.dx@0_X1COMM
+Workload::issue, sys->id=5, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=129, node_name=mb0.transformer.1.mha.dx@0_X1COMM
+Workload::issue_coll_comm, sys->id=5, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.dx@0_X1COMM
+Workload::issue, sys->id=6, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=129, node_name=mb0.transformer.1.mha.dx@0_X1COMM
+Workload::issue_coll_comm, sys->id=6, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.dx@0_X1COMM
+Workload::issue, sys->id=7, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=10, node_id=129, node_name=mb0.transformer.1.mha.dx@0_X1COMM
+Workload::issue_coll_comm, sys->id=7, pg=10, group_members=[4,5,6,7], node_name=mb0.transformer.1.mha.dx@0_X1COMM
+Workload::issue, sys->id=4, node_type=COMM_SEND, collective=, pg=N/A, node_id=200, node_name=mb0.transformer.1.input_norm.dx@0_Y_SEND
+Workload::issue, sys->id=5, node_type=COMM_SEND, collective=, pg=N/A, node_id=200, node_name=mb0.transformer.1.input_norm.dx@0_Y_SEND
+Workload::issue, sys->id=6, node_type=COMM_SEND, collective=, pg=N/A, node_id=200, node_name=mb0.transformer.1.input_norm.dx@0_Y_SEND
+Workload::issue, sys->id=7, node_type=COMM_SEND, collective=, pg=N/A, node_id=200, node_name=mb0.transformer.1.input_norm.dx@0_Y_SEND
+[2026-03-11 00:59:51.296] [workload] [info] sys[4] finished, 183649567 cycles, exposed communication 82969525 cycles.
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4]. Post statistics processing start.
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=63[2026-03-11 00:59:51.296] [statistics] [info] sys[4]. Post statistics processing end.
+, node_name=mb0.transformer.0.ffn.dxdown2@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.dxdown2@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4], Wall time: 183649567
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4], Comm time: 94598933
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=63, node_name=mb0.transformer.0.ffn.dxdown2@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.dxdown2@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4], GPU time: 100680042
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=63, node_name=mb0.transformer.0.ffn.dxdown2@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.dxdown2@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4], Total compute-communication overlap: 11629408
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=63, node_name=mb0.transformer.0.ffn.dxdown2@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.dxdown2@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4], Compute bound percentage: 98.860%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4], Average compute utilization: 98.878%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4], Average memory utilization: 2.542%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[4], Average operation intensity: 24376.602
+[2026-03-11 00:59:51.296] [workload] [info] sys[5] finished, 183649567 cycles, exposed communication 82969525 cycles.
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5]. Post statistics processing start.
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5]. Post statistics processing end.
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5], Wall time: 183649567
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5], Comm time: 94598933
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5], GPU time: 100680042
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5], Total compute-communication overlap: 11629408
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5], Compute bound percentage: 98.860%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5], Average compute utilization: 98.878%
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=71, node_name=mb0.transformer.0.ffn.dx0@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.dx0@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5], Average memory utilization: 2.542%
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=71, node_name=mb0.transformer.0.ffn.dx0@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.dx0@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[5], Average operation intensity: 24376.602
+[2026-03-11 00:59:51.296] [workload] [info] sys[6] finished, 183649567 cycles, exposed communication 82969525 cycles.
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6]. Post statistics processing start.
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=71, node_name=mb0.transformer.0.ffn.dx0@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.dx0@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6]. Post statistics processing end.
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=71, node_name=mb0.transformer.0.ffn.dx0@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.ffn.dx0@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6], Wall time: 183649567
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6], Comm time: 94598933
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6], GPU time: 100680042
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6], Total compute-communication overlap: 11629408
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6], Compute bound percentage: 98.860%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6], Average compute utilization: 98.878%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6], Average memory utilization: 2.542%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[6], Average operation intensity: 24376.602
+[2026-03-11 00:59:51.296] [workload] [info] sys[7] finished, 183649567 cycles, exposed communication 82969525 cycles.
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7]. Post statistics processing start.
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=19, node_name=mb0.transformer.0.mha.do1@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.do1@0_X1COMM
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=19, node_name=mb0.transformer.0.mha.do1@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.do1@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7]. Post statistics processing end.
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=19, node_name=mb0.transformer.0.mha.do1@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.do1@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7], Wall time: 183649567
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=ALL_GATHER, pg=9, node_id=19, node_name=mb0.transformer.0.mha.do1@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.do1@0_X1COMM
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7], Comm time: 94598933
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7], GPU time: 100680042
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7], Total compute-communication overlap: 11629408
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7], Compute bound percentage: 98.860%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7], Average compute utilization: 98.878%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7], Average memory utilization: 2.542%
+[2026-03-11 00:59:51.296] [statistics] [info] sys[7], Average operation intensity: 24376.602
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=31, node_name=mb0.transformer.0.mha.dx@0_X1COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.dx@0_X1COMM
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=31, node_name=mb0.transformer.0.mha.dx@0_X1COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.dx@0_X1COMM
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=31, node_name=mb0.transformer.0.mha.dx@0_X1COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.dx@0_X1COMM
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=REDUCE_SCATTER, pg=9, node_id=31, node_name=mb0.transformer.0.mha.dx@0_X1COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=mb0.transformer.0.mha.dx@0_X1COMM
+Workload::issue, sys->id=0, node_type=COMM_COLL, collective=ALL_REDUCE, pg=9, node_id=97, node_name=in_emb.w@1_X2_COMM
+Workload::issue_coll_comm, sys->id=0, pg=9, group_members=[0,1,2,3], node_name=in_emb.w@1_X2_COMM
+[2026-03-11 00:59:51.298] [system::topology::RingTopology] [info] custom ring, id: 0, dimension: local total nodes in ring: 4 index in ring: 0 total nodes in ring 4
+Workload::issue, sys->id=1, node_type=COMM_COLL, collective=ALL_REDUCE, pg=9, node_id=97, node_name=in_emb.w@1_X2_COMM
+Workload::issue_coll_comm, sys->id=1, pg=9, group_members=[0,1,2,3], node_name=in_emb.w@1_X2_COMM
+[2026-03-11 00:59:51.298] [system::topology::RingTopology] [info] custom ring, id: 1, dimension: local total nodes in ring: 4 index in ring: 1 total nodes in ring 4
+Workload::issue, sys->id=2, node_type=COMM_COLL, collective=ALL_REDUCE, pg=9, node_id=97, node_name=in_emb.w@1_X2_COMM
+Workload::issue_coll_comm, sys->id=2, pg=9, group_members=[0,1,2,3], node_name=in_emb.w@1_X2_COMM
+[2026-03-11 00:59:51.298] [system::topology::RingTopology] [info] custom ring, id: 2, dimension: local total nodes in ring: 4 index in ring: 2 total nodes in ring 4
+Workload::issue, sys->id=3, node_type=COMM_COLL, collective=ALL_REDUCE, pg=9, node_id=97, node_name=in_emb.w@1_X2_COMM
+Workload::issue_coll_comm, sys->id=3, pg=9, group_members=[0,1,2,3], node_name=in_emb.w@1_X2_COMM
+[2026-03-11 00:59:51.298] [system::topology::RingTopology] [info] custom ring, id: 3, dimension: local total nodes in ring: 4 index in ring: 3 total nodes in ring 4
+[2026-03-11 00:59:51.298] [workload] [info] sys[0] finished, 270237674 cycles, exposed communication 169637760 cycles.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0]. Post statistics processing start.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0]. Post statistics processing end.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0], Wall time: 270237674
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0], Comm time: 203245767
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0], GPU time: 100599914
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0], Total compute-communication overlap: 33608007
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0], Compute bound percentage: 98.938%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0], Average compute utilization: 98.955%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0], Average memory utilization: 2.465%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[0], Average operation intensity: 24396.014
+[2026-03-11 00:59:51.298] [workload] [info] sys[1] finished, 270237674 cycles, exposed communication 169637760 cycles.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1]. Post statistics processing start.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1]. Post statistics processing end.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1], Wall time: 270237674
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1], Comm time: 203245767
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1], GPU time: 100599914
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1], Total compute-communication overlap: 33608007
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1], Compute bound percentage: 98.938%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1], Average compute utilization: 98.955%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1], Average memory utilization: 2.465%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[1], Average operation intensity: 24396.014
+[2026-03-11 00:59:51.298] [workload] [info] sys[2] finished, 270237674 cycles, exposed communication 169637760 cycles.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2]. Post statistics processing start.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2]. Post statistics processing end.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2], Wall time: 270237674
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2], Comm time: 203245767
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2], GPU time: 100599914
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2], Total compute-communication overlap: 33608007
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2], Compute bound percentage: 98.938%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2], Average compute utilization: 98.955%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2], Average memory utilization: 2.465%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[2], Average operation intensity: 24396.014
+[2026-03-11 00:59:51.298] [workload] [info] sys[3] finished, 270237674 cycles, exposed communication 169637760 cycles.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3]. Post statistics processing start.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3]. Post statistics processing end.
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3], Wall time: 270237674
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3], Comm time: 203245767
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3], GPU time: 100599914
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3], Total compute-communication overlap: 33608007
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3], Compute bound percentage: 98.938%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3], Average compute utilization: 98.955%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3], Average memory utilization: 2.465%
+[2026-03-11 00:59:51.298] [statistics] [info] sys[3], Average operation intensity: 24396.014
+[2026-03-11 00:59:51.299] [system] [warning] Exiting
+
+[ASTRA-sim] Finished the execution.

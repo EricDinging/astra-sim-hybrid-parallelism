@@ -193,9 +193,32 @@ void Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
                    node->type() == ChakraNodeType::COMM_SEND_NODE ||
                    node->type() == ChakraNodeType::COMM_RECV_NODE) {
 
+            std::string node_type_str;
+            if (node->type() == ChakraNodeType::COMM_COLL_NODE) {
+                node_type_str = "COMM_COLL";
+            } else if (node->type() == ChakraNodeType::COMM_SEND_NODE) {
+                node_type_str = "COMM_SEND";
+            } else {
+                node_type_str = "COMM_RECV";
+            }
+            std::string coll_type_str;
+            if (node->type() == ChakraNodeType::COMM_COLL_NODE) {
+                auto ct = static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
+                if (ct == ChakraCollectiveCommType::ALL_REDUCE) coll_type_str = "ALL_REDUCE";
+                else if (ct == ChakraCollectiveCommType::ALL_GATHER) coll_type_str = "ALL_GATHER";
+                else if (ct == ChakraCollectiveCommType::REDUCE_SCATTER) coll_type_str = "REDUCE_SCATTER";
+                else if (ct == ChakraCollectiveCommType::ALL_TO_ALL) coll_type_str = "ALL_TO_ALL";
+                else if (ct == ChakraCollectiveCommType::BROADCAST) coll_type_str = "BROADCAST";
+                else coll_type_str = "UNKNOWN(" + std::to_string(node->comm_type<uint64_t>()) + ")";
+            }
+            std::string pg_name_str = node->pg_name<std::string>("");
             std::cout << "Workload::issue, sys->id=" << sys->id
-                      << ", issue communication node, node_id=" << node->id()
+                      << ", node_type=" << node_type_str
+                      << ", collective=" << coll_type_str
+                      << ", pg=" << (pg_name_str.empty() ? "N/A" : pg_name_str)
+                      << ", node_id=" << node->id()
                       << ", node_name=" << node->name() << std::endl;
+            
             issue_comm(node);
         } else if (node->type() == ChakraNodeType::INVALID_NODE) {
             skip_invalid(node);
@@ -343,6 +366,18 @@ void Workload::issue_coll_comm(
     }
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
+    if (comm_group != nullptr) {
+        std::string members_str = "[";
+        for (size_t i = 0; i < comm_group->involved_NPUs.size(); i++) {
+            if (i > 0) members_str += ",";
+            members_str += std::to_string(comm_group->involved_NPUs[i]);
+        }
+        members_str += "]";
+        std::cout << "Workload::issue_coll_comm, sys->id=" << sys->id
+                  << ", pg=" << node->pg_name<std::string>("")
+                  << ", group_members=" << members_str
+                  << ", node_name=" << node->name() << std::endl;
+    }
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
     const auto comm_size = node->comm_size<uint64_t>();
