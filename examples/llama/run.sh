@@ -41,8 +41,9 @@ cd ${STG:?}
 python main.py --output_dir ${EXAMPLE_DIR}/workload/ \
                              --output_name workload.%d.et \
                              --tp ${TP} --dp ${DP} --pp ${PP} \
-                             --weight_sharded 0 \
-                             --num_stacks 2
+                             --dmodel 4096 --dff 4096 --batch 32 --seq 1024 --dvocal 32000 \
+                             --head 32 --kvhead 32 --num_stacks 32 \
+                             --weight_sharded 0 --chakra_schema_version "v0.0.4"
 
 cd -
 
@@ -54,7 +55,7 @@ echo "[ASTRA-sim] Compiling ASTRA-sim with the Analytical Network Backend..."
 echo ""
 
 # Compile
-"${PROJECT_DIR:?}"/build/astra_analytical/build.sh
+# "${PROJECT_DIR:?}"/build/astra_analytical/build.sh
 
 echo ""
 echo "[ASTRA-sim] Compilation finished."
@@ -71,6 +72,14 @@ export ASAN_OPTIONS=detect_container_overflow=0
     --network-configuration="${NETWORK:?}" \
     --comm-group-configuration="${COMM_GROUP:?}" > output.txt
 
-# finalize
+# Extract and report statistics for sys[0-7], filtering only [statistics]
+for i in {0..7}; do
+    echo ""
+    echo "[ASTRA-sim] Statistics for sys[$i]:"
+    grep "\[statistics\]" output.txt | grep "sys\[$i\]" | while read -r line; do
+        echo "$line"
+    done
+done
+
 echo ""
 echo "[ASTRA-sim] Finished the execution."
