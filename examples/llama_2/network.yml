@@ -1,0 +1,8 @@
+# cluster configuration
+topology: [ Ring, Switch ]
+npus_count: [ 4, 4 ] # 4 npu per node x 4 nodes = 16 npus total
+bandwidth: [ 300, 25 ]  # GB/s
+latency: [ 500.0 ]  # ns
+
+# actual selected configuration
+# TODO comment out the previous config and add selected config
