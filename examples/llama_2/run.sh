@@ -25,7 +25,7 @@ rm -rf workload
 SCRIPT_DIR=$(dirname "$(realpath "$0")")
 PLAYGROUND_DIR="${SCRIPT_DIR:?}/../.."
 PROJECT_DIR="/app/astra-sim"
-EXAMPLE_DIR="${PLAYGROUND_DIR:?}/examples/llama"
+EXAMPLE_DIR="${PLAYGROUND_DIR:?}/examples/llama_2"
 
 # paths
 STG="${PROJECT_DIR:?}/symbolic_tensor_graph"
