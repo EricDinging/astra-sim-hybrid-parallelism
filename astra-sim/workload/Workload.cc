@@ -363,6 +363,8 @@ void Workload::issue_coll_comm(
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
     } else if (comm_type == ChakraCollectiveCommType::REDUCE_SCATTER) {
+        std::cout << "issue FTOL reduce scatter, comm_size=" << comm_size
+                  << " comm_priority=" << comm_priority << std::endl;
         DataSet* fp = sys->generate_reduce_scatter(comm_size, involved_dims,
                                                    comm_group, comm_priority);
         collective_comm_node_id_map[fp->my_id] = node->id();
