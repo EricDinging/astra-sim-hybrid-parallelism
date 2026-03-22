@@ -1,0 +1,9 @@
+# NVIDIA Vera Rubin NVL72 rack
+# 72 GPUs connected via NVLink Switch
+# NVLink 6.0: 1800 GB/s bidirectional per GPU
+# HBM4 memory bandwidth: 8000 GB/s per GPU
+# npus_count is set dynamically per run by the sweep script
+topology: [ Switch ]
+npus_count: [ 72 ]
+bandwidth: [ 1800 ]   # GB/s (NVLink 6.0)
+latency: [ 100.0 ]    # ns

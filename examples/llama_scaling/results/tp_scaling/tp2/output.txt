@@ -1,0 +1,283 @@
+[2026-03-22 15:42:02.737] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2026-03-22 15:42:02.737] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2026-03-22 15:42:02.737] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2026-03-22 15:42:02.737] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+issue FTOL reduce scatter, comm_size=536870912 comm_priority=0
+[2026-03-22 15:42:02.791] [workload] [info] sys[0] finished, 390569074 cycles, exposed communication 40458572 cycles.
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0]. Post statistics processing start.
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0]. Post statistics processing end.
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0], Wall time: 390569074
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0], GPU time: 350110502
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0], Comm time: 50029232
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0], Total compute-communication overlap: 9570660
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0], Compute bound percentage: 97.659%
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0], Average compute utilization: 97.692%
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0], Average memory utilization: 4.737%
+[2026-03-22 15:42:02.791] [statistics] [info] sys[0], Average operation intensity: 48860.137
+[2026-03-22 15:42:02.791] [workload] [info] sys[1] finished, 390569074 cycles, exposed communication 40458572 cycles.
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1]. Post statistics processing start.
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1]. Post statistics processing end.
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1], Wall time: 390569074
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1], GPU time: 350110502
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1], Comm time: 50029232
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1], Total compute-communication overlap: 9570660
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1], Compute bound percentage: 97.659%
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1], Average compute utilization: 97.692%
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1], Average memory utilization: 4.737%
+[2026-03-22 15:42:02.791] [statistics] [info] sys[1], Average operation intensity: 48860.137
+[2026-03-22 15:42:02.792] [system] [warning] Exiting

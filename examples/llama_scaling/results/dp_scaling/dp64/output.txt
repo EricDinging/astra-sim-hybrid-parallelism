@@ -1,0 +1,709 @@
+[2026-03-22 15:43:49.278] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 64 index in ring: 0 offset: 1 total nodes in ring: 64
+[2026-03-22 15:43:49.278] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 64 index in ring: 0 offset: 1 total nodes in ring: 64
+[2026-03-22 15:43:49.278] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 64 index in ring: 0 offset: 1 total nodes in ring: 64
+[2026-03-22 15:43:49.278] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 64 index in ring: 0 offset: 1 total nodes in ring: 64
+[2026-03-22 15:43:52.140] [workload] [info] sys[60] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.140] [statistics] [info] sys[60]. Post statistics processing start.
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60]. Post statistics processing end.
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60], Wall time: 15972413
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60], GPU time: 11561434
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60], Comm time: 11583784
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.174] [statistics] [info] sys[60], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.174] [workload] [info] sys[61] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.174] [statistics] [info] sys[61]. Post statistics processing start.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61]. Post statistics processing end.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61], Wall time: 15972413
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61], GPU time: 11561434
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61], Comm time: 11583784
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[61], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.175] [workload] [info] sys[62] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62]. Post statistics processing start.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62]. Post statistics processing end.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62], Wall time: 15972413
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62], GPU time: 11561434
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62], Comm time: 11583784
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[62], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.175] [workload] [info] sys[63] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63]. Post statistics processing start.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63]. Post statistics processing end.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63], Wall time: 15972413
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63], GPU time: 11561434
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63], Comm time: 11583784
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.175] [statistics] [info] sys[63], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.175] [workload] [info] sys[0] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.175] [statistics] [info] sys[0]. Post statistics processing start.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0]. Post statistics processing end.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0], Wall time: 15972413
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0], GPU time: 11561434
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0], Comm time: 11583784
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[0], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.176] [workload] [info] sys[1] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1]. Post statistics processing start.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1]. Post statistics processing end.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1], Wall time: 15972413
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1], GPU time: 11561434
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1], Comm time: 11583784
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[1], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.176] [workload] [info] sys[2] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2]. Post statistics processing start.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2]. Post statistics processing end.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2], Wall time: 15972413
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2], GPU time: 11561434
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2], Comm time: 11583784
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[2], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.176] [workload] [info] sys[3] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3]. Post statistics processing start.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3]. Post statistics processing end.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3], Wall time: 15972413
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3], GPU time: 11561434
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3], Comm time: 11583784
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[3], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.176] [workload] [info] sys[4] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4]. Post statistics processing start.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4]. Post statistics processing end.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4], Wall time: 15972413
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4], GPU time: 11561434
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4], Comm time: 11583784
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[4], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.176] [workload] [info] sys[5] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5]. Post statistics processing start.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5]. Post statistics processing end.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5], Wall time: 15972413
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5], GPU time: 11561434
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5], Comm time: 11583784
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[5], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.176] [workload] [info] sys[6] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6]. Post statistics processing start.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6]. Post statistics processing end.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6], Wall time: 15972413
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6], GPU time: 11561434
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6], Comm time: 11583784
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[6], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.176] [workload] [info] sys[7] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7]. Post statistics processing start.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7]. Post statistics processing end.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7], Wall time: 15972413
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7], GPU time: 11561434
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7], Comm time: 11583784
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.176] [statistics] [info] sys[7], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.176] [workload] [info] sys[8] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.176] [statistics] [info] sys[8]. Post statistics processing start.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8]. Post statistics processing end.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8], Wall time: 15972413
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8], GPU time: 11561434
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8], Comm time: 11583784
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[8], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.177] [workload] [info] sys[9] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9]. Post statistics processing start.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9]. Post statistics processing end.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9], Wall time: 15972413
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9], GPU time: 11561434
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9], Comm time: 11583784
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[9], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.177] [workload] [info] sys[10] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10]. Post statistics processing start.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10]. Post statistics processing end.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10], Wall time: 15972413
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10], GPU time: 11561434
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10], Comm time: 11583784
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[10], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.177] [workload] [info] sys[11] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11]. Post statistics processing start.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11]. Post statistics processing end.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11], Wall time: 15972413
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11], GPU time: 11561434
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11], Comm time: 11583784
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[11], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.177] [workload] [info] sys[12] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12]. Post statistics processing start.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12]. Post statistics processing end.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12], Wall time: 15972413
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12], GPU time: 11561434
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12], Comm time: 11583784
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[12], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.177] [workload] [info] sys[13] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13]. Post statistics processing start.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13]. Post statistics processing end.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13], Wall time: 15972413
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13], GPU time: 11561434
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13], Comm time: 11583784
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[13], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.177] [workload] [info] sys[14] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14]. Post statistics processing start.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14]. Post statistics processing end.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14], Wall time: 15972413
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14], GPU time: 11561434
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14], Comm time: 11583784
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.177] [statistics] [info] sys[14], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.177] [workload] [info] sys[15] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.177] [statistics] [info] sys[15]. Post statistics processing start.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15]. Post statistics processing end.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15], Wall time: 15972413
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15], GPU time: 11561434
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15], Comm time: 11583784
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[15], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.178] [workload] [info] sys[16] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16]. Post statistics processing start.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16]. Post statistics processing end.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16], Wall time: 15972413
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16], GPU time: 11561434
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16], Comm time: 11583784
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[16], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.178] [workload] [info] sys[17] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17]. Post statistics processing start.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17]. Post statistics processing end.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17], Wall time: 15972413
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17], GPU time: 11561434
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17], Comm time: 11583784
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[17], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.178] [workload] [info] sys[18] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18]. Post statistics processing start.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18]. Post statistics processing end.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18], Wall time: 15972413
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18], GPU time: 11561434
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18], Comm time: 11583784
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[18], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.178] [workload] [info] sys[19] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19]. Post statistics processing start.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19]. Post statistics processing end.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19], Wall time: 15972413
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19], GPU time: 11561434
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19], Comm time: 11583784
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[19], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.178] [workload] [info] sys[20] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20]. Post statistics processing start.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20]. Post statistics processing end.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20], Wall time: 15972413
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20], GPU time: 11561434
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20], Comm time: 11583784
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[20], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.178] [workload] [info] sys[21] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21]. Post statistics processing start.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21]. Post statistics processing end.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21], Wall time: 15972413
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21], GPU time: 11561434
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21], Comm time: 11583784
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.178] [statistics] [info] sys[21], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.178] [workload] [info] sys[22] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.178] [statistics] [info] sys[22]. Post statistics processing start.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22]. Post statistics processing end.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22], Wall time: 15972413
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22], GPU time: 11561434
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22], Comm time: 11583784
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[22], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.179] [workload] [info] sys[23] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23]. Post statistics processing start.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23]. Post statistics processing end.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23], Wall time: 15972413
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23], GPU time: 11561434
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23], Comm time: 11583784
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[23], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.179] [workload] [info] sys[24] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24]. Post statistics processing start.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24]. Post statistics processing end.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24], Wall time: 15972413
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24], GPU time: 11561434
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24], Comm time: 11583784
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[24], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.179] [workload] [info] sys[25] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25]. Post statistics processing start.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25]. Post statistics processing end.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25], Wall time: 15972413
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25], GPU time: 11561434
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25], Comm time: 11583784
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[25], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.179] [workload] [info] sys[26] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26]. Post statistics processing start.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26]. Post statistics processing end.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26], Wall time: 15972413
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26], GPU time: 11561434
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26], Comm time: 11583784
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[26], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.179] [workload] [info] sys[27] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27]. Post statistics processing start.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27]. Post statistics processing end.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27], Wall time: 15972413
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27], GPU time: 11561434
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27], Comm time: 11583784
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[27], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.179] [workload] [info] sys[28] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28]. Post statistics processing start.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28]. Post statistics processing end.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28], Wall time: 15972413
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28], GPU time: 11561434
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28], Comm time: 11583784
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.179] [statistics] [info] sys[28], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.179] [workload] [info] sys[29] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.179] [statistics] [info] sys[29]. Post statistics processing start.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29]. Post statistics processing end.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29], Wall time: 15972413
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29], GPU time: 11561434
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29], Comm time: 11583784
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[29], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.180] [workload] [info] sys[30] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30]. Post statistics processing start.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30]. Post statistics processing end.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30], Wall time: 15972413
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30], GPU time: 11561434
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30], Comm time: 11583784
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[30], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.180] [workload] [info] sys[31] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31]. Post statistics processing start.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31]. Post statistics processing end.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31], Wall time: 15972413
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31], GPU time: 11561434
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31], Comm time: 11583784
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[31], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.180] [workload] [info] sys[32] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32]. Post statistics processing start.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32]. Post statistics processing end.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32], Wall time: 15972413
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32], GPU time: 11561434
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32], Comm time: 11583784
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[32], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.180] [workload] [info] sys[33] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33]. Post statistics processing start.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33]. Post statistics processing end.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33], Wall time: 15972413
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33], GPU time: 11561434
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33], Comm time: 11583784
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[33], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.180] [workload] [info] sys[34] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34]. Post statistics processing start.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34]. Post statistics processing end.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34], Wall time: 15972413
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34], GPU time: 11561434
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34], Comm time: 11583784
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[34], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.180] [workload] [info] sys[35] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35]. Post statistics processing start.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35]. Post statistics processing end.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35], Wall time: 15972413
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35], GPU time: 11561434
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35], Comm time: 11583784
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.180] [statistics] [info] sys[35], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.180] [workload] [info] sys[36] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.180] [statistics] [info] sys[36]. Post statistics processing start.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36]. Post statistics processing end.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36], Wall time: 15972413
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36], GPU time: 11561434
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36], Comm time: 11583784
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[36], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.181] [workload] [info] sys[37] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37]. Post statistics processing start.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37]. Post statistics processing end.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37], Wall time: 15972413
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37], GPU time: 11561434
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37], Comm time: 11583784
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[37], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.181] [workload] [info] sys[38] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38]. Post statistics processing start.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38]. Post statistics processing end.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38], Wall time: 15972413
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38], GPU time: 11561434
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38], Comm time: 11583784
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[38], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.181] [workload] [info] sys[39] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39]. Post statistics processing start.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39]. Post statistics processing end.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39], Wall time: 15972413
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39], GPU time: 11561434
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39], Comm time: 11583784
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[39], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.181] [workload] [info] sys[40] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40]. Post statistics processing start.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40]. Post statistics processing end.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40], Wall time: 15972413
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40], GPU time: 11561434
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40], Comm time: 11583784
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[40], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.181] [workload] [info] sys[41] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41]. Post statistics processing start.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41]. Post statistics processing end.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41], Wall time: 15972413
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41], GPU time: 11561434
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41], Comm time: 11583784
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[41], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.181] [workload] [info] sys[42] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42]. Post statistics processing start.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42]. Post statistics processing end.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42], Wall time: 15972413
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42], GPU time: 11561434
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42], Comm time: 11583784
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.181] [statistics] [info] sys[42], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.181] [workload] [info] sys[43] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.181] [statistics] [info] sys[43]. Post statistics processing start.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43]. Post statistics processing end.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43], Wall time: 15972413
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43], GPU time: 11561434
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43], Comm time: 11583784
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[43], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.182] [workload] [info] sys[44] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44]. Post statistics processing start.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44]. Post statistics processing end.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44], Wall time: 15972413
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44], GPU time: 11561434
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44], Comm time: 11583784
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[44], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.182] [workload] [info] sys[45] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45]. Post statistics processing start.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45]. Post statistics processing end.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45], Wall time: 15972413
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45], GPU time: 11561434
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45], Comm time: 11583784
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[45], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.182] [workload] [info] sys[46] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46]. Post statistics processing start.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46]. Post statistics processing end.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46], Wall time: 15972413
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46], GPU time: 11561434
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46], Comm time: 11583784
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[46], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.182] [workload] [info] sys[47] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47]. Post statistics processing start.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47]. Post statistics processing end.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47], Wall time: 15972413
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47], GPU time: 11561434
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47], Comm time: 11583784
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[47], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.182] [workload] [info] sys[48] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48]. Post statistics processing start.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48]. Post statistics processing end.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48], Wall time: 15972413
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48], GPU time: 11561434
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48], Comm time: 11583784
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[48], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.182] [workload] [info] sys[49] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49]. Post statistics processing start.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49]. Post statistics processing end.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49], Wall time: 15972413
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49], GPU time: 11561434
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49], Comm time: 11583784
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.182] [statistics] [info] sys[49], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.182] [workload] [info] sys[50] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.182] [statistics] [info] sys[50]. Post statistics processing start.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50]. Post statistics processing end.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50], Wall time: 15972413
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50], GPU time: 11561434
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50], Comm time: 11583784
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[50], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.183] [workload] [info] sys[51] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51]. Post statistics processing start.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51]. Post statistics processing end.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51], Wall time: 15972413
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51], GPU time: 11561434
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51], Comm time: 11583784
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[51], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.183] [workload] [info] sys[52] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52]. Post statistics processing start.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52]. Post statistics processing end.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52], Wall time: 15972413
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52], GPU time: 11561434
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52], Comm time: 11583784
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[52], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.183] [workload] [info] sys[53] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53]. Post statistics processing start.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53]. Post statistics processing end.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53], Wall time: 15972413
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53], GPU time: 11561434
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53], Comm time: 11583784
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[53], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.183] [workload] [info] sys[54] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54]. Post statistics processing start.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54]. Post statistics processing end.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54], Wall time: 15972413
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54], GPU time: 11561434
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54], Comm time: 11583784
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[54], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.183] [workload] [info] sys[55] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55]. Post statistics processing start.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55]. Post statistics processing end.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55], Wall time: 15972413
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55], GPU time: 11561434
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55], Comm time: 11583784
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[55], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.183] [workload] [info] sys[56] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56]. Post statistics processing start.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56]. Post statistics processing end.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56], Wall time: 15972413
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56], GPU time: 11561434
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56], Comm time: 11583784
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.183] [statistics] [info] sys[56], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.183] [workload] [info] sys[57] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.183] [statistics] [info] sys[57]. Post statistics processing start.
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57]. Post statistics processing end.
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57], Wall time: 15972413
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57], GPU time: 11561434
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57], Comm time: 11583784
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[57], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.184] [workload] [info] sys[58] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58]. Post statistics processing start.
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58]. Post statistics processing end.
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58], Wall time: 15972413
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58], GPU time: 11561434
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58], Comm time: 11583784
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[58], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.184] [workload] [info] sys[59] finished, 15972413 cycles, exposed communication 4410979 cycles.
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59]. Post statistics processing start.
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59]. Post statistics processing end.
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59], Wall time: 15972413
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59], GPU time: 11561434
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59], Comm time: 11583784
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59], Total compute-communication overlap: 7172805
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59], Compute bound percentage: 92.415%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59], Average compute utilization: 92.476%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59], Average memory utilization: 12.116%
+[2026-03-22 15:43:52.184] [statistics] [info] sys[59], Average operation intensity: 11220.066
+[2026-03-22 15:43:52.205] [system] [warning] Exiting

@@ -1,0 +1,25 @@
+[2026-03-22 15:41:55.574] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2026-03-22 15:41:55.574] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2026-03-22 15:41:55.574] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2026-03-22 15:41:55.574] [system::topology::RingTopology] [info] ring of node 0, id: 0 dimension: local total nodes in ring: 2 index in ring: 0 offset: 1 total nodes in ring: 2
+[2026-03-22 15:41:55.614] [workload] [info] sys[0] finished, 700126390 cycles, exposed communication 0 cycles.
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0]. Post statistics processing start.
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0]. Post statistics processing end.
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0], Wall time: 700126390
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0], GPU time: 700126390
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0], Total compute-communication overlap: 0
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0], Compute bound percentage: 97.672%
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0], Average compute utilization: 97.705%
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0], Average memory utilization: 4.271%
+[2026-03-22 15:41:55.614] [statistics] [info] sys[0], Average operation intensity: 53864.858
+[2026-03-22 15:41:55.614] [workload] [info] sys[1] finished, 700126390 cycles, exposed communication 0 cycles.
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1]. Post statistics processing start.
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1]. Post statistics processing end.
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1], Wall time: 700126390
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1], GPU time: 700126390
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1], Total compute-communication overlap: 0
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1], Compute bound percentage: 97.672%
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1], Average compute utilization: 97.705%
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1], Average memory utilization: 4.271%
+[2026-03-22 15:41:55.614] [statistics] [info] sys[1], Average operation intensity: 53864.858
+[2026-03-22 15:41:55.614] [system] [warning] Exiting

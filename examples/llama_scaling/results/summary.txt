@@ -1,0 +1,15 @@
+# label tp dp wall_time_cycles
+tp=1 dp=1 wall_time=700126390
+tp=2 dp=1 wall_time=390569074
+tp=4 dp=1 wall_time=236402746
+tp=8 dp=1 wall_time=159961116
+tp=16 dp=1 wall_time=128350168
+tp=32 dp=1 wall_time=120314972
+tp=64 dp=1 wall_time=122840694
+tp=1 dp=1 wall_time=700126390
+tp=1 dp=2 wall_time=350681418
+tp=1 dp=4 wall_time=176122114
+tp=1 dp=8 wall_time=88852876
+tp=1 dp=16 wall_time=45238372
+tp=1 dp=32 wall_time=23470432
+tp=1 dp=64 wall_time=15972413
