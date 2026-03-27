@@ -63,6 +63,7 @@ enum class CollectiveImplType {
     DoubleBinaryTree,
     HalvingDoubling,
     OneHalvingDoubling,
+    RootFetchRing,
     CustomCollectiveImpl,
 };
 

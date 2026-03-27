@@ -26,6 +26,7 @@ GeneralComplexTopology::GeneralComplexTopology(
         if (collective_impl[dim]->type == CollectiveImplType::Ring ||
             collective_impl[dim]->type == CollectiveImplType::Direct ||
             collective_impl[dim]->type == CollectiveImplType::HalvingDoubling ||
+            collective_impl[dim]->type == CollectiveImplType::RootFetchRing ||
             // While executing a collective according a Chakra ET representation
             // does not need information on the logical topology, The system
             // layer's logic of defining and invoking "collective phase" objects
