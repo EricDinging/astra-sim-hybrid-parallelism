@@ -1,7 +1,7 @@
 # cluster configuration
 topology: [ Switch]
-npus_count: [ 4] # 4 npu per node x 4 nodes = 16 npus total
-bandwidth: [ 300]  # GB/s
+npus_count: [ 4 ] # 4 npu per node x 4 nodes = 16 npus total
+bandwidth: [ 300 ]  # GB/s
 latency: [ 500.0 ]  # ns
 
 # actual selected configuration

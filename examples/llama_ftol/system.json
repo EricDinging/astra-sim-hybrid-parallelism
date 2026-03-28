@@ -10,7 +10,7 @@
         "ring"
     ],
     "reduce-scatter-implementation": [
-        "ring"
+        "rootFetchRing"
     ],
     "all-to-all-implementation": [
         "ring"
