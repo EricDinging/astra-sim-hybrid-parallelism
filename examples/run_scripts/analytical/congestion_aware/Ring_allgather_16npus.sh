@@ -37,7 +37,7 @@ echo "${ASTRA_SIM:?}" \
     --system-configuration="${SYSTEM:?}" \
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
     --network-configuration="${NETWORK:?}" \
-    --circuit-schedules="${EXAMPLE_DIR:?}/circuit_schedules.txt" \
+    --bw-schedule="${EXAMPLE_DIR:?}/circuit_schedules.txt" \
 
 # run ASTRA-sim
 "${ASTRA_SIM:?}" \
@@ -45,7 +45,7 @@ echo "${ASTRA_SIM:?}" \
     --system-configuration="${SYSTEM:?}" \
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
     --network-configuration="${NETWORK:?}" \
-    --circuit-schedules="${EXAMPLE_DIR:?}/circuit_schedules.txt" \
+    --bw-schedule="${EXAMPLE_DIR:?}/circuit_schedules.txt" \
 
 # finalize
 echo ""

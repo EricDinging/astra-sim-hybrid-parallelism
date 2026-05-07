@@ -42,7 +42,7 @@ echo ""
     --remote-memory-configuration="${REMOTE_MEMORY:?}" \
     --network-configuration="${NETWORK:?}" \
     --comm-group-configuration="${COMM_GROUP:?}" \
-    --circuit-schedules="${CIRCUIT_SCHEDULES:?}"
+    --bw-schedule="${CIRCUIT_SCHEDULES:?}"
 
 # finalize
 echo ""

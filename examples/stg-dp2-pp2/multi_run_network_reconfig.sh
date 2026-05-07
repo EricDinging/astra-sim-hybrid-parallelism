@@ -47,7 +47,7 @@ for NETWORK in "${NETWORK_CONFIGS}"/*; do
         --remote-memory-configuration="${REMOTE_MEMORY:?}" \
         --network-configuration="${NETWORK:?}" \
         --comm-group-configuration="${COMM_GROUP:?}" \
-        --circuit-schedules="${CIRCUIT_SCHEDULES:?}" > "${OUTPUT_FILE}" 2>&1
+        --bw-schedule="${CIRCUIT_SCHEDULES:?}" > "${OUTPUT_FILE}" 2>&1
 done
 
 # finalize
