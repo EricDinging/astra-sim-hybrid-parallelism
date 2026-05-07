@@ -48,6 +48,7 @@ TopologyManager::TopologyManager(
 
     topology_iteration = 0;
     inflight_coll = 0;
+    reconfig_time = Latency(0);
 
     if (!npus_per_dim.empty()) {
         set_topology_dims(npus_per_dim, is_torus, false);
