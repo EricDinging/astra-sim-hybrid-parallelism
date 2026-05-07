@@ -41,8 +41,12 @@ void CmdLineParser::define_options() noexcept {
         cxxopts::value<double>()->default_value("1"))(
         "rendezvous-protocol", "Whether to enable rendezvous protocol",
         cxxopts::value<bool>()->default_value("false"))(        
-        "circuit-schedules", "Circuit schedules file",
+        "bw-schedule", "Per-topology bandwidth matrices file",
         cxxopts::value<std::string>())(
+        "latency-schedule",
+        "Per-topology latency matrices file (optional; falls back to scalar "
+        "latency from network.yml)",
+        cxxopts::value<std::string>()->default_value(""))(
         "npus-per-dim",
         "NPUs per dimension as comma-separated ints (e.g. 4,4,4); enables DOR routing",
         cxxopts::value<std::string>()->default_value(""));

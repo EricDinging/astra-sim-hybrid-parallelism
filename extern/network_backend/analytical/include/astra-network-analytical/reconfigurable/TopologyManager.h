@@ -27,9 +27,10 @@ class TopologyManager {
      * Constructor.
      */
     TopologyManager(int npus_count, int devices_count, EventQueue* event_queue,
-                     std::map<int, std::vector<std::vector<Bandwidth>>> circuit_schedules,
-                     std::vector<int> npus_per_dim = {},
-                     bool is_torus = false) noexcept;
+                    std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules,
+                    std::map<int, std::vector<std::vector<Latency>>> latency_schedules,
+                    std::vector<int> npus_per_dim = {},
+                    bool is_torus = false) noexcept;
 
     std::shared_ptr<Device> get_device(const DeviceId deviceId) noexcept;
 
@@ -159,7 +160,8 @@ class TopologyManager {
 
     std::vector<std::vector<Route>> precomputed_routes;
 
-    std::map<int, std::vector<std::vector<Bandwidth>>> circuit_schedules;
+    std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules;
+    std::map<int, std::vector<std::vector<Latency>>>   latency_schedules;
 
     // --- DOR routing configuration ---
     /// Number of logical dimensions (0 if not set; DOR is disabled)

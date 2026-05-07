@@ -7,48 +7,48 @@
 using namespace NetworkAnalytical;
 using namespace NetworkAnalyticalReconfigurable;
 
-TopologyManager::TopologyManager(int npus_count,
-                                 int devices_count,
-                                 EventQueue* event_queue,
-                                 std::map<int, std::vector<std::vector<Bandwidth>>> circuit_schedules,
-                                 std::vector<int> npus_per_dim,
-                                 bool is_torus) noexcept {
-    // Initialize the number of NPUs
+TopologyManager::TopologyManager(
+    int npus_count,
+    int devices_count,
+    EventQueue* event_queue,
+    std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules,
+    std::map<int, std::vector<std::vector<Latency>>> latency_schedules,
+    std::vector<int> npus_per_dim,
+    bool is_torus) noexcept {
     this->npus_count = npus_count;
     this->devices_count = devices_count;
     this->event_queue = event_queue;
-    this->circuit_schedules = std::move(circuit_schedules);
-    debug_print("Circuit schedules size: " + std::to_string(this->circuit_schedules.size()));
+    this->bw_schedules = std::move(bw_schedules);
+    this->latency_schedules = std::move(latency_schedules);
+    debug_print("BW schedules size: " +
+                std::to_string(this->bw_schedules.size()));
+    debug_print("LT schedules size: " +
+                std::to_string(this->latency_schedules.size()));
 
-    // Validate the counts
     assert(npus_count > 0);
     assert(devices_count > 0);
     assert(devices_count >= npus_count);
 
     reconfiguring = false;
 
-    // Initialize the topology
     topology = std::make_shared<Topology>(npus_count, devices_count);
 
     Link::increment_callback = [this]() noexcept {
-        // Increment the topology iteration
         this->increment_callback();
     };
 
     Device::increment_callback = [this]() noexcept {
-        // Increment the topology iteration
         this->increment_callback();
     };
 
-    // Initialize bandwidth and latency matrices
-    bandwidths.resize(devices_count, std::vector<Bandwidth>(devices_count, Bandwidth(0)));
-    latencies.resize(devices_count, std::vector<Latency>(devices_count, Latency(0)));
+    bandwidths.resize(devices_count,
+                      std::vector<Bandwidth>(devices_count, Bandwidth(0)));
+    latencies.resize(devices_count,
+                     std::vector<Latency>(devices_count, Latency(0)));
 
     topology_iteration = 0;
-
     inflight_coll = 0;
 
-    // Configure DOR routing if topology dimensions are provided
     if (!npus_per_dim.empty()) {
         set_topology_dims(npus_per_dim, is_torus, false);
     }
@@ -190,13 +190,14 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
 }
 
 bool TopologyManager::reconfigure(int topo_id) noexcept {
-    auto it = circuit_schedules.find(topo_id);
-    if (it != circuit_schedules.end()) {
-        return reconfigure(it->second, latencies, reconfig_time, topo_id);
-    } else {
-        debug_print("Topology ID " + std::to_string(topo_id) + " not found in circuit schedules.");
+    auto bw_it = bw_schedules.find(topo_id);
+    auto lt_it = latency_schedules.find(topo_id);
+    if (bw_it == bw_schedules.end() || lt_it == latency_schedules.end()) {
+        debug_print("Topology ID " + std::to_string(topo_id) +
+                    " not found in BW/LT schedules.");
         exit(1);
     }
+    return reconfigure(bw_it->second, lt_it->second, reconfig_time, topo_id);
 }
 
 void TopologyManager::set_reconfig_latency(Latency latency) noexcept {
