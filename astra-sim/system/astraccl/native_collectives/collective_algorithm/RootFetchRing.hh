@@ -69,6 +69,13 @@ class RootFetchRing : public Algorithm {
     std::vector<TransferSpec> build_transfers(
         const std::vector<int>& ring_order,
         const std::vector<FailureSpec>& failures) const;
+    void append_ring_phase_transfers(
+        std::vector<TransferSpec>& transfers,
+        const std::vector<int>& ring_order,
+        const std::vector<FailureSpec>& failures,
+        bool all_gather_phase,
+        int round_offset,
+        int& transfer_id) const;
     std::vector<int> build_fetch_query_path(
         int root_rank,
         int source_rank,

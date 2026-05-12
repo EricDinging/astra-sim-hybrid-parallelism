@@ -8,9 +8,11 @@ LICENSE file in the root directory of this source tree.
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <map>
 #include <numeric>
 #include <random>
+#include <string>
 #include <unordered_map>
 
 #include "astra-sim/system/RecvPacketEventHandlerData.hh"
@@ -47,6 +49,39 @@ std::vector<int> AstraSim::g_root_fetch_last_failed_senders;
 std::vector<int> AstraSim::g_root_fetch_last_failed_receivers;
 std::vector<int> AstraSim::g_root_fetch_last_failure_rounds;
 
+namespace {
+
+void apply_root_fetch_env_overrides() {
+    if (const char* value = std::getenv("ASTRA_ROOT_FETCH_MF")) {
+        AstraSim::g_root_fetch_mf = std::stoi(value);
+    }
+    if (const char* value = std::getenv("ASTRA_ROOT_FETCH_TOTAL_FAILURES")) {
+        AstraSim::g_root_fetch_total_failures = std::stoi(value);
+    }
+    if (const char* value = std::getenv("ASTRA_ROOT_FETCH_FAILURE_SEED")) {
+        AstraSim::g_root_fetch_failure_seed =
+            static_cast<std::uint32_t>(std::stoul(value));
+    }
+    if (const char* value = std::getenv("ASTRA_ROOT_FETCH_QUARTER")) {
+        const std::string quarter(value);
+        if (quarter == "Q1") {
+            AstraSim::g_root_fetch_quarter =
+                RootFetchRing::QuarterPlacement::Q1;
+        } else if (quarter == "Q2") {
+            AstraSim::g_root_fetch_quarter =
+                RootFetchRing::QuarterPlacement::Q2;
+        } else if (quarter == "Q3") {
+            AstraSim::g_root_fetch_quarter =
+                RootFetchRing::QuarterPlacement::Q3;
+        } else {
+            Sys::sys_panic(
+                "ASTRA_ROOT_FETCH_QUARTER must be one of Q1, Q2, Q3");
+        }
+    }
+}
+
+}  // namespace
+
 RootFetchRing::RootFetchRing(ComType type,
                              int id,
                              RingTopology* ring_topology,
@@ -57,14 +92,17 @@ RootFetchRing::RootFetchRing(ComType type,
       ring_topology(ring_topology),
       direction(direction),
       nodes_in_ring(ring_topology->get_nodes_in_ring()),
-      msg_size(data_size / ring_topology->get_nodes_in_ring()),
       next_stage_index(0),
       pending_stage_recvs(0),
       protocol_finished(false) {
     (void)injection_policy;
 
-    if (type != ComType::Reduce_Scatter) {
-        Sys::sys_panic("RootFetchRing currently only supports Reduce_Scatter");
+    apply_root_fetch_env_overrides();
+
+    if (type != ComType::Reduce_Scatter && type != ComType::All_Gather &&
+        type != ComType::All_Reduce) {
+        Sys::sys_panic(
+            "RootFetchRing supports Reduce_Scatter, All_Gather, and All_Reduce");
     }
     if (g_root_fetch_mf != 1 && g_root_fetch_mf != 2 && g_root_fetch_mf != 4) {
         Sys::sys_panic(
@@ -75,7 +113,22 @@ RootFetchRing::RootFetchRing(ComType type,
     this->id = id;
     this->logical_topo = ring_topology;
     this->data_size = data_size;
-    this->final_data_size = data_size / nodes_in_ring;
+    switch (type) {
+    case ComType::All_Gather:
+        this->msg_size = data_size;
+        this->final_data_size = data_size * nodes_in_ring;
+        break;
+    case ComType::All_Reduce:
+        this->msg_size = data_size / nodes_in_ring;
+        this->final_data_size = data_size;
+        break;
+    case ComType::Reduce_Scatter:
+        this->msg_size = data_size / nodes_in_ring;
+        this->final_data_size = data_size / nodes_in_ring;
+        break;
+    default:
+        Sys::sys_panic("RootFetchRing received unsupported collective type");
+    }
     this->name = Name::RootFetchRing;
 
     build_protocol();
@@ -148,7 +201,7 @@ std::vector<int> RootFetchRing::build_canonical_ring_order() const {
 std::vector<RootFetchRing::FailureSpec> RootFetchRing::build_failure_plan(
     const std::vector<int>& ring_order) const {
     const int default_failures = nodes_in_ring / 4;
-    const int total_failures = g_root_fetch_total_failures > 0
+    const int total_failures = g_root_fetch_total_failures >= 0
                                    ? std::min(g_root_fetch_total_failures,
                                               nodes_in_ring - 1)
                                    : default_failures;
@@ -175,45 +228,72 @@ std::vector<RootFetchRing::TransferSpec> RootFetchRing::build_transfers(
     const std::vector<int>& ring_order,
     const std::vector<FailureSpec>& failures) const {
     std::vector<TransferSpec> transfers;
-    const int baseline_messages = nodes_in_ring * (nodes_in_ring - 1);
+    const int phase_count = comType == ComType::All_Reduce ? 2 : 1;
+    const int baseline_messages = phase_count * nodes_in_ring * (nodes_in_ring - 1);
     const int repair_slack = baseline_messages * std::max(1, g_root_fetch_mf);
     transfers.reserve(static_cast<std::size_t>(baseline_messages + repair_slack));
 
+    int transfer_id = 0;
+    if (comType == ComType::All_Gather) {
+        append_ring_phase_transfers(
+            transfers, ring_order, failures, true, 0, transfer_id);
+    } else if (comType == ComType::All_Reduce) {
+        append_ring_phase_transfers(
+            transfers, ring_order, failures, false, 0, transfer_id);
+        append_ring_phase_transfers(
+            transfers, ring_order, failures, true, nodes_in_ring - 1,
+            transfer_id);
+    } else {
+        append_ring_phase_transfers(
+            transfers, ring_order, failures, false, 0, transfer_id);
+    }
+
+    return transfers;
+}
+
+void RootFetchRing::append_ring_phase_transfers(
+    std::vector<TransferSpec>& transfers,
+    const std::vector<int>& ring_order,
+    const std::vector<FailureSpec>& failures,
+    bool all_gather_phase,
+    int round_offset,
+    int& transfer_id) const {
     std::unordered_map<int, FailureSpec> failures_by_link;
     for (const FailureSpec& failure : failures) {
         failures_by_link[failure.link_index] = failure;
     }
 
-    int transfer_id = 0;
     for (int root_index = 0; root_index < nodes_in_ring; ++root_index) {
         const int root_rank = ring_order.at(root_index);
         for (int round = 1; round <= nodes_in_ring - 1; ++round) {
-            const int sender_index = (root_index + round) % nodes_in_ring;
+            const int sender_index =
+                all_gather_phase ? (root_index + round - 1) % nodes_in_ring
+                                 : (root_index + round) % nodes_in_ring;
             const int receiver_index = (sender_index + 1) % nodes_in_ring;
             const int sender_rank = ring_order.at(sender_index);
             const int receiver_rank = ring_order.at(receiver_index);
+            const int protocol_round = round_offset + round;
 
             auto failure_it = failures_by_link.find(sender_index);
             if (failure_it == failures_by_link.end() ||
-                failure_it->second.round > round) {
-                transfers.push_back(TransferSpec{sender_rank, receiver_rank, round,
-                                                 0, transfer_id++, false,
-                                                 root_rank});
+                failure_it->second.round > protocol_round) {
+                transfers.push_back(TransferSpec{
+                    sender_rank, receiver_rank, protocol_round, 0,
+                    transfer_id++, false, root_rank});
                 continue;
             }
 
             std::vector<int> query_path = build_fetch_query_path(
-                root_rank, sender_rank, round, failures, ring_order);
+                receiver_rank, sender_rank, protocol_round, failures,
+                ring_order);
             std::vector<int> data_path(query_path.rbegin(), query_path.rend());
             for (std::size_t hop = 0; hop + 1 < data_path.size(); ++hop) {
                 transfers.push_back(TransferSpec{
-                    data_path.at(hop), data_path.at(hop + 1), round,
+                    data_path.at(hop), data_path.at(hop + 1), protocol_round,
                     static_cast<int>(hop), transfer_id++, true, root_rank});
             }
         }
     }
-
-    return transfers;
 }
 
 std::vector<int> RootFetchRing::build_fetch_query_path(
@@ -253,9 +333,11 @@ std::vector<int> RootFetchRing::build_fetch_query_path(
         std::max(nodes_in_ring * nodes_in_ring * std::max(1, g_root_fetch_mf), 32);
     while (static_cast<int>(path.size()) < g_root_fetch_mf) {
         if (attempts_remaining-- == 0) {
+            if (!is_failed_link_active(root_rank, source_rank, round, failures)) {
+                return {root_rank, source_rank};
+            }
             Sys::sys_panic(
-                "RootFetchRing could not construct a fetch path with the "
-                "requested hop count");
+                "RootFetchRing could not construct a live fetch path");
         }
 
         const int candidate = helper_pool.at(pool_index % helper_pool.size());
@@ -270,6 +352,10 @@ std::vector<int> RootFetchRing::build_fetch_query_path(
             continue;
         }
         if (is_failed_link_active(path.back(), candidate, round, failures)) {
+            continue;
+        }
+        if (static_cast<int>(path.size()) == g_root_fetch_mf - 1 &&
+            is_failed_link_active(candidate, source_rank, round, failures)) {
             continue;
         }
         path.push_back(candidate);
