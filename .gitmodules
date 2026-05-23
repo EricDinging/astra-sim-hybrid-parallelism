@@ -22,3 +22,6 @@
 [submodule "extern/network_backend/csg-htsim"]
 	path = extern/network_backend/csg-htsim
 	url = https://github.com/Broadcom/csg-htsim.git
+[submodule "extern/symbolic_tensor_graph"]
+	path = extern/symbolic_tensor_graph
+	url = https://github.com/astra-sim/symbolic_tensor_graph.git

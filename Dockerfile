@@ -5,16 +5,27 @@ FROM ubuntu:22.04
 ### ================== System Setups ======================
 ## Install System Dependencies
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt -y update && apt -y upgrade
-RUN apt -y install \
-    coreutils wget vim git \
-    gcc g++ clang-format \
-    make cmake \
-    libboost-dev libboost-program-options-dev \
-    openmpi-bin openmpi-doc libopenmpi-dev \
-    python3 python3-pip python3-venv \
-    graphviz
-
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    coreutils \
+    wget \
+    vim \
+    git \
+    gcc \
+    g++ \
+    clang-format \
+    make \
+    cmake \
+    libboost-dev \
+    libboost-program-options-dev \
+    openmpi-bin \
+    openmpi-doc \
+    libopenmpi-dev \
+    python3 \
+    python3-pip \
+    python3-venv \
+    graphviz \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 ## Create Python venv: Required for Python 3.10
 RUN python3 -m venv /opt/venv/astra-sim
 ENV PATH="/opt/venv/astra-sim/bin:$PATH"
