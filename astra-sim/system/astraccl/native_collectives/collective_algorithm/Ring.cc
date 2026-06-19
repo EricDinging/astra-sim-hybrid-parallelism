@@ -96,14 +96,7 @@ int Ring::get_non_zero_latency_packets() {
 void Ring::run(EventType event, CallData* data) {
     if (event == EventType::General) {
         free_packets += 1;
-        // printf("Ring contains: ");
-        // for (auto npu : ((RingTopology*)logical_topo)->NPUs) {
-        //     printf(" %d", npu);
-        // }
-        // printf("\n");
-
         ready();
-        
         iteratable();
     } else if (event == EventType::PacketReceived) {
         total_packets_received++;
@@ -168,8 +161,7 @@ void Ring::reduce() {
 }
 
 bool Ring::iteratable() {
-    if (stream_count == 0 &&
-        free_packets == (parallel_reduce * 1)) {  // && not_delivered==0
+    if (stream_count == 0 && free_packets >= (parallel_reduce * 1)) {
         exit();
         return false;
     }

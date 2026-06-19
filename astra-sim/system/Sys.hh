@@ -9,8 +9,8 @@ LICENSE file in the root directory of this source tree.
 #include <chrono>
 
 #include "astra-sim/common/AstraNetworkAPI.hh"
-#include "astra-sim/network_frontend/analytical/include/reconfigurable/ReconfigurableNetworkApi.hh"
 #include "astra-sim/common/AstraRemoteMemoryAPI.hh"
+#include "astra-sim/network_frontend/analytical/include/reconfigurable/ReconfigurableNetworkApi.hh"
 #include "astra-sim/system/Callable.hh"
 #include "astra-sim/system/CollectivePhase.hh"
 #include "astra-sim/system/CommunicatorGroup.hh"
@@ -63,6 +63,13 @@ class Sys : public Callable {
 
     // Constructor / Destructor
     // -------------------------------------------------
+    // DEPRECATED: do NOT use in new code. This constructor builds a Sys with
+    // a single immutable Workload bound at construction time (the legacy
+    // one-shot multi-tenant flow). It is kept only because the
+    // congestion_aware, congestion_unaware, htsim, and ns3 frontends have not
+    // been migrated to the dynamic-scheduling runtime. The supported frontend
+    // for new work is the reconfigurable analytical backend, which uses the
+    // workload-less constructor below.
     Sys(int id,
         std::string workload_configuration,
         std::string comm_group_configuration,
@@ -74,6 +81,21 @@ class Sys : public Callable {
         double injection_scale,
         double comm_scale,
         bool rendezvous_enabled);
+
+    // Workload-less constructor for the dynamic-scheduling runtime
+    // (reconfigurable analytical backend only). SchedRuntime attaches a
+    // Workload per job via attach_workload() at placement time and detaches
+    // it on completion.
+    Sys(int id,
+        std::string system_configuration,
+        AstraRemoteMemoryAPI* remote_mem,
+        AstraNetworkAPI* comm_NI,
+        std::vector<int> physical_dims,
+        std::vector<int> queues_per_dim,
+        double injection_scale,
+        double comm_scale,
+        bool rendezvous_enabled);
+
     ~Sys();
     //---------------------------------------------------------------------------
 
@@ -257,6 +279,16 @@ class Sys : public Callable {
 
     // workload
     Workload* workload;
+    Workload* active_workload = nullptr;  // non-owning, nullable
+    void attach_workload(Workload* w) {
+        active_workload = w;
+    }
+    void detach_workload() {
+        active_workload = nullptr;
+        num_streams = 0;
+        total_running_streams = 0;
+        first_phase_streams = 0;
+    }
 
     // roofline model
     bool roofline_enabled;

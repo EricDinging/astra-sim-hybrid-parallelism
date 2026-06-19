@@ -51,7 +51,6 @@ void HardwareResource::occupy(
             if (node->type() == ChakraNodeType::COMM_RECV_NODE) {
                 return;
             }
-            assert(num_in_flight_gpu_comm_ops == 0);
             ++num_in_flight_gpu_comm_ops;
             ++num_gpu_comms;
             // gpu_comms_node = node;
@@ -76,7 +75,6 @@ void HardwareResource::release(
                 return;
             }
             --num_in_flight_gpu_comm_ops;
-            assert(num_in_flight_gpu_comm_ops == 0);
             this->gpu_comms_node.erase(node->id());
         }
     }
@@ -98,17 +96,15 @@ bool HardwareResource::is_available(
                 return false;
             }
         } else {
-            if (num_in_flight_gpu_comm_ops == 0) {
+            // RECV nodes always allowed (they don't occupy the comm slot).
+            // Other comm nodes (collectives and sends) are bounded to avoid
+            // overwhelming the network event queue and to bound how far a
+            // fast rank can get ahead of its peers.
+            if (node->type() == ChakraNodeType::COMM_RECV_NODE) {
                 return true;
-            } else {
-                if (node->type() == ChakraNodeType::COMM_RECV_NODE) {
-                    return true;
-                }
-                if (num_in_flight_gpu_comm_ops == 0) {
-                    return true;
-                }
-                return false;
             }
+            return comm_cap_bypass ||
+                   num_in_flight_gpu_comm_ops < kMaxInflightGpuCommOps;
         }
     }
 }

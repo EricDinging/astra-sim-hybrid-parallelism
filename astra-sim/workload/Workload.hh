@@ -10,14 +10,19 @@ LICENSE file in the root directory of this source tree.
 #include <string>
 #include <unordered_map>
 
-#include "astra-sim/workload/Scheduler.hh"
 #include "astra-sim/system/Callable.hh"
 #include "astra-sim/system/CommunicatorGroup.hh"
 #include "astra-sim/workload/HardwareResource.hh"
-#include "astra-sim/workload/Statistics.hh"
 #include "astra-sim/workload/LocalMemUsageTracker.hh"
+#include "astra-sim/workload/Scheduler.hh"
+#include "astra-sim/workload/Statistics.hh"
 #include "extern/graph_frontend/chakra/src/feeder_v3/et_feeder.h"
 
+namespace AstraSim {
+namespace Scheduling {
+class JobInstance;
+}
+}  // namespace AstraSim
 
 namespace AstraSim {
 
@@ -27,9 +32,22 @@ class Scheduler;
 
 class Workload : public Callable {
   public:
+    // DEPRECATED: do NOT use in new code. Constructs a Workload bound to a
+    // single per-NPU trace file (the legacy one-shot path). Kept only because
+    // the legacy Sys constructor (used by congestion_aware, congestion_unaware,
+    // htsim, and ns3 frontends) still calls it. The supported frontend is the
+    // reconfigurable analytical backend; new code should use the
+    // (Sys*, Scheduling::JobInstance*, int) constructor below.
     Workload(Sys* sys,
-       std::string et_filename,
-       std::string comm_group_filename);
+             std::string et_filename,
+             std::string comm_group_filename);
+
+    // Dynamic-scheduling constructor: opens
+    // <parent_job->trace_dir>/chakra_trace.<job_local_rank>.et and translates
+    // any job-local ranks (in comm_group.json or in send/recv nodes) through
+    // parent_job->rank_map to global NPU ids at issue time.
+    Workload(Sys* sys, Scheduling::JobInstance* parent_job, int job_local_rank);
+
     ~Workload();
 
     // communicator groups
@@ -68,6 +86,11 @@ class Workload : public Callable {
     bool is_finished;
     Scheduler* scheduler;
 
+    int job_local_rank = -1;
+    Scheduling::JobInstance* parent_job = nullptr;
+
+    static constexpr int kMaxStreamsPerCollective = 64;
+
   private:
     // From the ET node, find out the corresponding communicator group, and
     // return the pointer. If no communicator group is specified for this ET
@@ -80,6 +103,12 @@ class Workload : public Callable {
     CommunicatorGroup* extract_comm_group(
         std::shared_ptr<Chakra::ETFeederNode> node);
     int previous_group_id = 0;
+
+    // (cg_id, node_id) -> ordinal map, pre-computed from the trace so
+    // ordinals are invariant across ranks of a CG even if ranks issue
+    // collectives in different orders.
+    std::unordered_map<int, std::unordered_map<uint64_t, int>>
+        cg_node_to_ordinal_;
 };
 
 }  // namespace AstraSim

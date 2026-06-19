@@ -18,13 +18,17 @@ class Sys;
 class CollectivePlan;
 class CommunicatorGroup {
   public:
-    CommunicatorGroup(int id, std::vector<int> involved_NPUs, Sys* generator);
+    CommunicatorGroup(int id,
+                      std::vector<int> involved_NPUs,
+                      Sys* generator,
+                      bool preserve_order = false);
     CollectivePlan* get_collective_plan(ComType comm_type);
     void set_id(int id);
     ~CommunicatorGroup();
 
     std::vector<int> involved_NPUs;
     int num_streams;
+    int num_streams_base;
     std::string to_string() const {
         std::string result = "CG(id=" + std::to_string(id) + ", NPUs=[";
         for (size_t i = 0; i < involved_NPUs.size(); i++) {

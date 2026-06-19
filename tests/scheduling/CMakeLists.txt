@@ -1,0 +1,174 @@
+add_executable(test_first_fit test_first_fit.cc)
+target_link_libraries(test_first_fit PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_first_fit PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_first_fit)
+
+add_executable(test_space_filling_curve test_space_filling_curve.cc)
+target_link_libraries(test_space_filling_curve PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_space_filling_curve PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_space_filling_curve)
+
+add_executable(test_l1_clustering test_l1_clustering.cc)
+target_link_libraries(test_l1_clustering PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_l1_clustering PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_l1_clustering)
+
+add_executable(test_topomatch test_topomatch.cc)
+target_link_libraries(test_topomatch PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_topomatch PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_topomatch)
+
+add_executable(test_admission_fifo test_admission_fifo.cc)
+target_link_libraries(test_admission_fifo PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_fifo PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_fifo)
+
+add_executable(test_duration_estimator test_duration_estimator.cc)
+target_link_libraries(test_duration_estimator PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_duration_estimator PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_duration_estimator)
+
+add_executable(test_admission_sjdf test_admission_sjdf.cc)
+target_link_libraries(test_admission_sjdf PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_sjdf PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_sjdf)
+
+add_executable(test_communicator_group_order test_communicator_group_order.cc)
+target_link_libraries(test_communicator_group_order PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_communicator_group_order PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_communicator_group_order)
+
+add_executable(test_fragmentation_scorer test_fragmentation_scorer.cc)
+target_link_libraries(test_fragmentation_scorer PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_fragmentation_scorer PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_fragmentation_scorer)
+
+add_executable(test_fold_enumerator test_fold_enumerator.cc)
+target_link_libraries(test_fold_enumerator PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_fold_enumerator PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_fold_enumerator)
+
+add_executable(test_block_model test_block_model.cc)
+target_link_libraries(test_block_model PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_block_model PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_block_model)
+
+add_executable(test_reconfig_plan test_reconfig_plan.cc)
+target_link_libraries(test_reconfig_plan PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_reconfig_plan PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_reconfig_plan)
+
+add_executable(test_footprint_router test_footprint_router.cc)
+target_link_libraries(test_footprint_router PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_footprint_router PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_footprint_router)
+
+add_executable(test_block_selector test_block_selector.cc)
+target_link_libraries(test_block_selector PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_block_selector PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_block_selector)
+
+add_executable(test_rfold test_rfold.cc)
+target_link_libraries(test_rfold PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_rfold PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_rfold)
+
+add_executable(test_topology_manager_wiring test_topology_manager_wiring.cc)
+target_link_libraries(test_topology_manager_wiring PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_topology_manager_wiring PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_topology_manager_wiring)
+
+add_executable(test_block_model_scatter test_block_model_scatter.cc)
+target_link_libraries(test_block_model_scatter PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_block_model_scatter PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_block_model_scatter)
+
+add_executable(test_block_tiler test_block_tiler.cc)
+target_link_libraries(test_block_tiler PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_block_tiler PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_block_tiler)
+
+add_executable(test_scatter_assigner test_scatter_assigner.cc)
+target_link_libraries(test_scatter_assigner PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_scatter_assigner PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_scatter_assigner)
+
+add_executable(test_block_selector_phase2 test_block_selector_phase2.cc)
+target_link_libraries(test_block_selector_phase2 PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_block_selector_phase2 PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_block_selector_phase2)
+
+add_executable(test_admission_sjsf test_admission_sjsf.cc)
+target_link_libraries(test_admission_sjsf PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_sjsf PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_sjsf)
+
+add_executable(test_admission_swf test_admission_swf.cc)
+target_link_libraries(test_admission_swf PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_swf PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_swf)
+
+add_executable(test_backfill test_backfill.cc)
+target_link_libraries(test_backfill PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_backfill PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_backfill)
+
+add_executable(test_admission_easy test_admission_easy.cc)
+target_link_libraries(test_admission_easy PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_easy PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_easy)
+
+add_executable(test_select_max_by_key test_select_max_by_key.cc)
+target_link_libraries(test_select_max_by_key PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_select_max_by_key PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_select_max_by_key)
+
+add_executable(test_admission_ljsf test_admission_ljsf.cc)
+target_link_libraries(test_admission_ljsf PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_ljsf PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_ljsf)
+
+add_executable(test_admission_ljsfpack test_admission_ljsfpack.cc)
+target_link_libraries(test_admission_ljsfpack PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_ljsfpack PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_ljsfpack)
+
+add_executable(test_admission_ljdf test_admission_ljdf.cc)
+target_link_libraries(test_admission_ljdf PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_ljdf PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_ljdf)
+
+add_executable(test_admission_lwf test_admission_lwf.cc)
+target_link_libraries(test_admission_lwf PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_admission_lwf PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_admission_lwf)
+
+add_executable(test_failure_selection test_failure_selection.cc)
+target_link_libraries(test_failure_selection PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_failure_selection PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_failure_selection)
+
+add_executable(test_failed_nodes_log test_failed_nodes_log.cc)
+target_link_libraries(test_failed_nodes_log PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_failed_nodes_log PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_failed_nodes_log)
+
+add_executable(test_free_npus test_free_npus.cc)
+target_link_libraries(test_free_npus PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_free_npus PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_free_npus)
+
+add_executable(test_fault_aware_dor test_fault_aware_dor.cc)
+target_link_libraries(test_fault_aware_dor PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_fault_aware_dor PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_fault_aware_dor)
+
+add_executable(test_placement_ranker test_placement_ranker.cc)
+target_link_libraries(test_placement_ranker PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_placement_ranker PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_placement_ranker)
+
+add_executable(test_rfold_whole_torus test_rfold_whole_torus.cc)
+target_link_libraries(test_rfold_whole_torus PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_rfold_whole_torus PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_rfold_whole_torus)

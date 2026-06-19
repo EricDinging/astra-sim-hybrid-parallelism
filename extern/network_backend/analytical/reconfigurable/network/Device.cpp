@@ -113,7 +113,10 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     //     }
     //     std::cout << std::endl;
     // }
-    chunk->update_route(routes[chunk->next_device()->get_id()], chunk->get_topology_iteration());
+    if (chunk->get_topology_iteration() < topology_iteration) {
+        chunk->update_route(routes[chunk->next_device()->get_id()],
+                            topology_iteration);
+    }
 
     // get next dest
     const auto next_dest = chunk->next_device();

@@ -1,0 +1,115 @@
+/******************************************************************************
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
+*******************************************************************************/
+
+#include "astra-sim/scheduling/TopoMatchSolver.hh"
+
+#include <cstdlib>
+#include <fstream>
+#include <set>
+
+extern "C" {
+#include <topomatch.h>
+// TopoMatch maps onto a torus3D via Scotch, which draws from a process-global
+// RNG that advances on every mapping. Reset it before each solve so a placement
+// is a pure, reproducible function of (free_ids, affinity), independent of how
+// many jobs were placed before it. Declared here in case topomatch.h was built
+// without the HAVE_LIBSCOTCH path that would pull in <scotch.h>.
+void SCOTCH_randomReset(void);
+}
+
+namespace AstraSim {
+namespace Scheduling {
+
+TopoMatchSolver::TopoMatchSolver(int W, int L, int H) : W_(W), L_(L), H_(H) {
+    arch_path_ = "/tmp/astrasim_topomatch_torus3D_" + std::to_string(W_) + "x" +
+                 std::to_string(L_) + "x" + std::to_string(H_) + ".tgt";
+    std::ofstream out(arch_path_);
+    out << "torus3D " << W_ << " " << L_ << " " << H_;
+    out.flush();
+    arch_written_ = static_cast<bool>(out);
+    out.close();
+
+    tm_set_max_nb_threads(1);
+    tm_set_exhaustive_search_flag(0);
+    tm_set_verbose_level(0);
+}
+
+TopoMatchSolver::~TopoMatchSolver() {
+    tm_finalize();
+}
+
+std::optional<std::vector<int>> TopoMatchSolver::solve(
+    const std::vector<int>& free_ids,
+    const std::vector<std::vector<double>>& affinity) {
+    const int K = static_cast<int>(affinity.size());
+    if (K == 0 || !arch_written_) {
+        return std::nullopt;
+    }
+    if (static_cast<int>(free_ids.size()) < K) {
+        return std::nullopt;
+    }
+
+    // Reproducible mapping: reset Scotch's global RNG to its initial state so
+    // repeated solves with identical inputs yield identical placements.
+    SCOTCH_randomReset();
+
+    tm_topology_t* topology = tm_load_topology(
+        const_cast<char*>(arch_path_.c_str()), TM_FILE_TYPE_TGT);
+    if (!topology) {
+        return std::nullopt;
+    }
+
+    std::vector<int> ids = free_ids;  // copied internally by TopoMatch
+    if (!tm_topology_set_binding_constraints(
+            ids.data(), static_cast<int>(ids.size()), topology)) {
+        tm_free_topology(topology);
+        return std::nullopt;
+    }
+
+    // malloc the matrix; ownership transfers to tm_free_affinity_mat (free()).
+    double** mat = static_cast<double**>(malloc(sizeof(double*) * K));
+    for (int i = 0; i < K; ++i) {
+        mat[i] = static_cast<double*>(malloc(sizeof(double) * K));
+        for (int j = 0; j < K; ++j) {
+            mat[i][j] = affinity[i][j];
+        }
+    }
+    // tm_build_affinity_mat takes ownership of `mat` (and its rows) without
+    // copying; tm_free_affinity_mat releases them below. The static analyzer
+    // can't see through the libtopomatch boundary, so it false-positives a leak
+    // here; suppress that one check (the memory is freed).
+    // NOLINTNEXTLINE(clang-analyzer-unix.Malloc)
+    tm_affinity_mat_t* aff = tm_build_affinity_mat(mat, K);
+    tm_solution_t* sol = tm_compute_mapping(topology, aff, nullptr, nullptr);
+
+    std::optional<std::vector<int>> result;
+    if (sol && sol->sigma && static_cast<int>(sol->sigma_length) == K) {
+        std::set<int> allowed(free_ids.begin(), free_ids.end());
+        std::set<int> seen;
+        std::vector<int> sigma(K);
+        bool ok = true;
+        for (int i = 0; i < K; ++i) {
+            const int node = sol->sigma[i];
+            if (allowed.count(node) == 0 || !seen.insert(node).second) {
+                ok = false;
+                break;
+            }
+            sigma[i] = node;
+        }
+        if (ok) {
+            result = std::move(sigma);
+        }
+    }
+
+    tm_free_topology(topology);
+    if (sol) {
+        tm_free_solution(sol);
+    }
+    tm_free_affinity_mat(aff);  // frees mat[i], mat, sum_row, struct
+    return result;
+}
+
+}  // namespace Scheduling
+}  // namespace AstraSim

@@ -42,6 +42,7 @@ endif()
 file(GLOB srcs
     "${CMAKE_CURRENT_SOURCE_DIR}/astra-sim/system/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/astra-sim/workload/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/astra-sim/scheduling/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/astra-sim/system/astraccl/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/astra-sim/system/astraccl/native_collectives/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/astra-sim/system/astraccl/native_collectives/logical_topology/*.cc"
@@ -88,6 +89,57 @@ target_include_directories(AstraSim PUBLIC ${Protobuf_INCLUDE_DIR})
 if(DEFINED ENV{PROTOBUF_FROM_SOURCE} AND "$ENV{PROTOBUF_FROM_SOURCE}" STREQUAL "True")
     target_include_directories(AstraSim PUBLIC ${Protobuf_INCLUDE_DIRS})
 endif()
+
+# ---- TopoMatch (unconditionally required) ---------------------------------
+include(ExternalProject)
+
+# 1. Submodule initialized?
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extern/topomatch/configure")
+    message(FATAL_ERROR
+        "TopoMatch submodule is missing. Initialize it with:\n"
+        "  git submodule update --init --recursive")
+endif()
+
+# 2. hwloc + Scotch development libraries present?
+find_path(HWLOC_INCLUDE_DIR hwloc.h)
+find_library(HWLOC_LIB hwloc)
+find_path(SCOTCH_INCLUDE_DIR scotch.h PATH_SUFFIXES scotch)
+find_library(SCOTCH_LIB scotch)
+find_library(SCOTCHERR_LIB scotcherr)
+if(NOT HWLOC_INCLUDE_DIR OR NOT HWLOC_LIB OR NOT SCOTCH_INCLUDE_DIR
+        OR NOT SCOTCH_LIB OR NOT SCOTCHERR_LIB)
+    message(FATAL_ERROR
+        "TopoMatch requires the hwloc and Scotch development libraries. Install them:\n"
+        "  sudo apt-get install libhwloc-dev libscotch-dev pkg-config")
+endif()
+get_filename_component(SCOTCH_LIBDIR "${SCOTCH_LIB}" DIRECTORY)
+
+# 3. Build libtopomatch ONLY (never the `mapping` binary) into a staging prefix.
+set(TOPOMATCH_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/topomatch-install")
+set(TOPOMATCH_LIB "${TOPOMATCH_PREFIX}/lib/libtopomatch.a")
+set(TOPOMATCH_INCLUDE "${TOPOMATCH_PREFIX}/include")
+file(MAKE_DIRECTORY "${TOPOMATCH_INCLUDE}")
+ExternalProject_Add(topomatch_ep
+    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern/topomatch"
+    CONFIGURE_COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/extern/topomatch/configure"
+        "--prefix=${TOPOMATCH_PREFIX}"
+        "CFLAGS=-I${SCOTCH_INCLUDE_DIR} -O3"
+        "CPPFLAGS=-I${SCOTCH_INCLUDE_DIR}"
+        "LDFLAGS=-L${SCOTCH_LIBDIR}"
+    BUILD_COMMAND $(MAKE) -C src/libtopomatch
+    INSTALL_COMMAND $(MAKE) -C src/libtopomatch install
+    BUILD_IN_SOURCE 1
+    BUILD_BYPRODUCTS "${TOPOMATCH_LIB}")
+
+# 4. Imported target + propagate include/link to AstraSim consumers.
+add_library(topomatch::topomatch STATIC IMPORTED GLOBAL)
+set_target_properties(topomatch::topomatch PROPERTIES
+    IMPORTED_LOCATION "${TOPOMATCH_LIB}"
+    INTERFACE_INCLUDE_DIRECTORIES "${TOPOMATCH_INCLUDE};${SCOTCH_INCLUDE_DIR}")
+add_dependencies(topomatch::topomatch topomatch_ep)
+add_dependencies(AstraSim topomatch_ep)
+target_link_libraries(AstraSim PUBLIC
+    topomatch::topomatch ${SCOTCH_LIB} ${SCOTCHERR_LIB} ${HWLOC_LIB} z pthread)
 
 # Properties
 set_target_properties(AstraSim PROPERTIES COMPILE_WARNING_AS_ERROR OFF)

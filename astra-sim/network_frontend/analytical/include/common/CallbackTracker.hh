@@ -71,6 +71,12 @@ class CallbackTracker {
                    ChunkSize chunk_size,
                    int chunk_id) noexcept;
 
+    // Read-only view of unresolved entries, for deadlock post-mortem dumps.
+    [[nodiscard]] const std::map<Key, CallbackTrackerEntry>& entries()
+        const noexcept {
+        return tracker;
+    }
+
   private:
     /// map from (tag, src, dest, chunk_size, chunk_id) tuple to
     /// CallbackTrackerEntry

@@ -14,11 +14,17 @@ using namespace AstraSim;
 
 CommunicatorGroup::CommunicatorGroup(int id,
                                      std::vector<int> involved_NPUs,
-                                     Sys* generator) {
+                                     Sys* generator,
+                                     bool preserve_order) {
     set_id(id);
     this->involved_NPUs = involved_NPUs;
     this->generator = generator;
-    std::sort(involved_NPUs.begin(), involved_NPUs.end());
+    // Default: sort ids for a deterministic ring (unchanged behavior). When
+    // preserve_order is set (folded jobs), keep the caller's rank order so the
+    // fold's adjacency-preserving cycle is what the ring actually traverses.
+    if (!preserve_order) {
+        std::sort(this->involved_NPUs.begin(), this->involved_NPUs.end());
+    }
 }
 
 CommunicatorGroup::~CommunicatorGroup() {
@@ -32,6 +38,7 @@ void CommunicatorGroup::set_id(int id) {
     // assert(id > 0);
     this->id = id;
     this->num_streams = id * 1000000;
+    this->num_streams_base = this->num_streams;
 }
 
 CollectivePlan* CommunicatorGroup::get_collective_plan(ComType comm_type) {

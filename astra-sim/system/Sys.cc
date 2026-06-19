@@ -263,6 +263,131 @@ Sys::Sys(int id,
     this->initialized = true;
 }
 
+Sys::Sys(int id,
+         string system_configuration,
+         AstraRemoteMemoryAPI* remote_mem,
+         AstraNetworkAPI* comm_NI,
+         vector<int> physical_dims,
+         vector<int> queues_per_dim,
+         double injection_scale,
+         double comm_scale,
+         bool rendezvous_enabled) {
+    if ((id + 1) > this->all_sys.size()) {
+        this->all_sys.resize(id + 1);
+    }
+    this->all_sys[id] = this;
+
+    this->id = id;
+    this->initialized = false;
+
+    this->workload = nullptr;
+
+    this->roofline_enabled = false;
+    this->peak_perf = 0;
+    this->roofline = nullptr;
+
+    this->remote_mem = remote_mem;
+    this->remote_mem->set_sys(id, this);
+    this->local_mem_bw = 0;
+
+    this->memBus = nullptr;
+    this->inp_L = 0;
+    this->inp_o = 0;
+    this->inp_g = 0;
+    this->inp_G = 0;
+    this->model_shared_bus = 0;
+    this->injection_scale = injection_scale;
+    this->communication_delay = 0;
+    this->local_reduction_delay = 0;
+
+    this->comm_NI = comm_NI;
+    this->comm_scale = comm_scale;
+    this->rendezvous_enabled = rendezvous_enabled;
+
+    this->scheduler_unit = nullptr;
+    this->vLevels = nullptr;
+    this->offline_greedy = nullptr;
+    this->intra_dimension_scheduling = IntraDimensionScheduling::FIFO;
+    this->inter_dimension_scheduling = InterDimensionScheduling::Ascending;
+    this->round_robin_inter_dimension_scheduler = 0;
+    this->active_chunks_per_dimension = 1;
+    this->priority_counter = 0;
+    this->pending_events = 0;
+    this->preferred_dataset_splits = 0;
+
+    this->last_scheduled_collective = 0;
+
+    this->first_phase_streams = 0;
+    this->total_running_streams = 0;
+
+    this->communication_delay = 10;
+    this->local_reduction_delay = 1;
+
+    if (initialize_sys(system_configuration) == false) {
+        sys_panic("Unable to initialize the system layer because the file can "
+                  "not be openned");
+    }
+
+    // scheduler
+    this->physical_dims = physical_dims;
+    this->queues_per_dim = queues_per_dim;
+    int element = 0;
+    this->total_nodes = 1;
+    this->dim_to_break = -1;
+    for (uint64_t current_dim = 0; current_dim < queues_per_dim.size();
+         current_dim++) {
+        if (physical_dims[current_dim] >= 1) {
+            this->total_nodes *= physical_dims[current_dim];
+        }
+        for (int j = 0; j < queues_per_dim[current_dim]; j++) {
+            list<BaseStream*> temp;
+            active_Streams[element] = temp;
+            list<int> pri;
+            stream_priorities[element] = pri;
+            element++;
+        }
+    }
+
+    this->concurrent_streams =
+        (int)ceil(((double)active_chunks_per_dimension) / queues_per_dim[0]);
+    this->active_first_phase = 100000000;
+    this->max_running = 100000000;
+
+    scheduler_unit = new SchedulerUnit(this, queues_per_dim, max_running,
+                                       active_first_phase, concurrent_streams);
+
+    vLevels = new QueueLevels(queues_per_dim, 0, comm_NI->get_backend_type());
+
+    // collective communication
+    this->num_streams = 0;
+
+    logical_topologies["AllReduce"] = new GeneralComplexTopology(
+        id, physical_dims, all_reduce_implementation_per_dimension);
+    logical_topologies["ReduceScatter"] = new GeneralComplexTopology(
+        id, physical_dims, reduce_scatter_implementation_per_dimension);
+    logical_topologies["AllGather"] = new GeneralComplexTopology(
+        id, physical_dims, all_gather_implementation_per_dimension);
+    logical_topologies["AllToAll"] = new GeneralComplexTopology(
+        id, physical_dims, all_to_all_implementation_per_dimension);
+
+    memBus = new MemBus("NPU", "MA", this, inp_L, inp_o, inp_g, inp_G,
+                        model_shared_bus, communication_delay, true);
+
+    // workload is intentionally not created here; runtime attaches
+    // Workloads per-job via attach_workload().
+
+    if (inter_dimension_scheduling == InterDimensionScheduling::OfflineGreedy ||
+        inter_dimension_scheduling ==
+            InterDimensionScheduling::OfflineGreedyFlex) {
+        offline_greedy = new OfflineGreedy(this);
+    }
+
+    this->break_dimension_done = false;
+    this->dimension_to_break = 0;
+
+    this->initialized = true;
+}
+
 Sys::~Sys() {
     if (roofline_enabled) {
         delete this->roofline;

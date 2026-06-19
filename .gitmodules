@@ -16,3 +16,6 @@
 [submodule "extern/network_backend/csg-htsim"]
 	path = extern/network_backend/csg-htsim
 	url = https://github.com/Broadcom/csg-htsim.git
+[submodule "extern/topomatch"]
+	path = extern/topomatch
+	url = https://github.com/shuoshuc/TopoMatch.git

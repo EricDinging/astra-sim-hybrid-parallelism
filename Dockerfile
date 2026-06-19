@@ -13,7 +13,8 @@ RUN apt -y install \
     libboost-dev libboost-program-options-dev \
     openmpi-bin openmpi-doc libopenmpi-dev \
     python3 python3-pip python3-venv \
-    graphviz libyaml-cpp-dev
+    graphviz libyaml-cpp-dev \
+    libhwloc-dev libscotch-dev pkg-config
 
 ## Create Python venv: Required for Python 3.10
 RUN python3 -m venv /opt/venv/astra-sim

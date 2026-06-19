@@ -6,6 +6,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/workload/Workload.hh"
 
 #include "astra-sim/common/Logging.hh"
+#include "astra-sim/scheduling/JobInstance.hh"
 #include "astra-sim/system/IntData.hh"
 #include "astra-sim/system/MemEventHandlerData.hh"
 #include "astra-sim/system/RecvPacketEventHandlerData.hh"
@@ -14,6 +15,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/workload/Scheduler.hh"
 #include <json/json.hpp>
 
+#include <algorithm>
 #include <iostream>
 #include <stdlib.h>
 #include <unistd.h>
@@ -68,6 +70,111 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
                   comm_group_str);
 }
 
+Workload::Workload(Sys* sys,
+                   Scheduling::JobInstance* parent_job,
+                   int job_local_rank) {
+    this->sys = sys;
+    this->parent_job = parent_job;
+    this->job_local_rank = job_local_rank;
+
+    std::string workload_filename = parent_job->trace_dir + "/chakra_trace." +
+                                    std::to_string(job_local_rank) + ".et";
+    if (access(workload_filename.c_str(), R_OK) < 0) {
+        std::string error_msg =
+            "workload file: " + workload_filename + " not readable";
+        LoggerFactory::get_logger("workload")->critical(error_msg);
+        std::exit(EXIT_FAILURE);
+    }
+    auto temp_et_feeder = new ETFeeder(workload_filename);
+    this->comm_group_list = temp_et_feeder->traverse_comm_group();
+    this->current_comm_group_idx = 0;
+    delete temp_et_feeder;
+
+    // Pre-compute (cg_id, node_id) -> ordinal map.  We need the ordinal to
+    // be invariant across all ranks of a CG so the deterministic stream-ID
+    // computation in issue_coll_comm() produces the same stream_id on every
+    // rank for the same logical collective.  Building the map from the
+    // sorted set of node_ids per CG gives that invariance regardless of
+    // the actual issue order at runtime.
+    {
+        auto* scan_feeder = new ETFeeder(workload_filename);
+        std::unordered_map<int, std::vector<uint64_t>> cg_to_node_ids;
+        while (scan_feeder->hasNodesToIssue()) {
+            auto node = scan_feeder->getNextIssuableNode();
+            if (node->type() == ChakraNodeType::COMM_COLL_NODE) {
+                std::string pg = node->pg_name<std::string>("");
+                if (!pg.empty()) {
+                    try {
+                        int cg_id = std::stoi(pg);
+                        cg_to_node_ids[cg_id].push_back(node->id());
+                    } catch (const std::exception&) {
+                    }
+                }
+            }
+            scan_feeder->freeChildrenNodes(node->id());
+        }
+        delete scan_feeder;
+        for (auto& kv : cg_to_node_ids) {
+            auto& nids = kv.second;
+            std::sort(nids.begin(), nids.end());
+            auto& ord_map = cg_node_to_ordinal_[kv.first];
+            for (size_t i = 0; i < nids.size(); ++i) {
+                ord_map[nids[i]] = static_cast<int>(i);
+            }
+        }
+    }
+
+    this->et_feeder = new ETFeeder(workload_filename);
+    this->comm_groups.clear();
+    this->hw_resource = new HardwareResource(1, sys->id);
+    this->local_mem_usage_tracker =
+        std::make_unique<LocalMemUsageTracker>(sys->id);
+
+    // Per-job comm_group.json (optional).
+    std::string cg_path = parent_job->trace_dir + "/comm_group.json";
+    if (access(cg_path.c_str(), R_OK) < 0) {
+        LoggerFactory::get_logger("workload")
+            ->info("no comm_group.json for job {}; relying on inline pg "
+                   "metadata or no collectives",
+                   parent_job->job_id);
+    } else {
+        std::ifstream inFile(cg_path);
+        json j;
+        inFile >> j;
+        for (json::iterator it = j.begin(); it != j.end(); ++it) {
+            int cg_id = std::stoi(it.key());
+            std::vector<int> translated;
+            for (const auto& local_rank_json : it.value()) {
+                int local_rank = local_rank_json.get<int>();
+                if (local_rank < 0 || local_rank >= parent_job->num_ranks) {
+                    LoggerFactory::get_logger("workload")
+                        ->critical("job {}: comm_group.json rank {} out of "
+                                   "range",
+                                   parent_job->job_id, local_rank);
+                    std::exit(1);
+                }
+                translated.push_back(parent_job->rank_map[local_rank]);
+            }
+            auto* cg = new CommunicatorGroup(cg_id, translated, sys,
+                                             parent_job->ordered_rings);
+            // Stream IDs derive from CommunicatorGroup::num_streams (set to
+            // id * 1000000 by default). Since all jobs share the same local
+            // cg_ids, concurrent jobs would collide in the global
+            // BaseStream::synchronizer. Override with a (job_id, cg_id)-unique
+            // base so every comm group across every job gets its own range.
+            static constexpr int kMaxCGPerJob = 500;
+            static constexpr int kStreamsPerCG = 40000;
+            int base =
+                (parent_job->job_id * kMaxCGPerJob + cg_id) * kStreamsPerCG;
+            cg->num_streams = base;
+            cg->num_streams_base = base;
+            comm_groups[cg_id] = cg;
+        }
+    }
+    this->stats = new Statistics(this);
+    this->is_finished = false;
+}
+
 Workload::~Workload() {
     for (auto comm_group : comm_groups) {
         delete comm_group.second;
@@ -106,8 +213,12 @@ void Workload::initialize_comm_groups(string comm_group_filename) {
             involved_NPUs.push_back(id);
         }
 
-        comm_groups[comm_group_id] =
-            new CommunicatorGroup(comm_group_id, involved_NPUs, sys);
+        // ordered_rings (D4) is a scheduled-job concept; this path is also
+        // reachable from the legacy constructor where parent_job is null, so
+        // fall back to false (sorted ring = pre-change behavior).
+        comm_groups[comm_group_id] = new CommunicatorGroup(
+            comm_group_id, involved_NPUs, sys,
+            (parent_job != nullptr ? parent_job->ordered_rings : false));
     }
 }
 
@@ -136,8 +247,11 @@ void Workload::issue_pytorch_pg_metadata(
 
             int32_t pgNameInt = std::stoi(pgName);
             // To ensure pgName > 0
-            CommunicatorGroup* cg =
-                new CommunicatorGroup(pgNameInt + 1, involved_NPUs, sys);
+            // parent_job may be null on the legacy (non-scheduled) path; fall
+            // back to false so the ring sorts as before (D4 opt-in).
+            CommunicatorGroup* cg = new CommunicatorGroup(
+                pgNameInt + 1, involved_NPUs, sys,
+                (parent_job != nullptr ? parent_job->ordered_rings : false));
             this->comm_groups[pgNameInt] = cg;
         }
     } catch (const std::exception& e) {
@@ -394,14 +508,29 @@ bool Workload::issue_coll_comm(
 
     CommunicatorGroup* comm_group = extract_comm_group(node);
 
-    // std::cout << "Involved npus: ";
-    // for (auto d : comm_group->involved_NPUs) {
-    //     std::cout << d << " ";
-    // }
-    // std::cout << std::endl;
-
-    // TODO in addition to comm group detection, also check topo id change
-    // Lazy reconfiguration
+    // Deterministic stream IDs: under non-contiguous placement, ranks
+    // progress at different speeds and may have multiple collectives
+    // in-flight on the same CG simultaneously.  The stream_id must be
+    // invariant across ranks for the SAME logical collective so that
+    // BaseStream's global synchronizer and the network frontend's tag
+    // matching can pair sends and receives.  We use the pre-computed
+    // (cg_id, node_id) -> ordinal map (built from the sorted set of
+    // node_ids per CG at construction time) — this is invariant across
+    // ranks regardless of issue order.
+    if (comm_group != nullptr) {
+        int cg_id = comm_group->get_id();
+        uint64_t nid = node->id();
+        int ordinal = 0;
+        auto cg_it = cg_node_to_ordinal_.find(cg_id);
+        if (cg_it != cg_node_to_ordinal_.end()) {
+            auto n_it = cg_it->second.find(nid);
+            if (n_it != cg_it->second.end()) {
+                ordinal = n_it->second;
+            }
+        }
+        comm_group->num_streams =
+            comm_group->num_streams_base + ordinal * kMaxStreamsPerCollective;
+    }
 
     auto logger = LoggerFactory::get_logger("workload");
     logger->debug("RANK: {} Issuing collective {}", this->sys->id,
@@ -415,10 +544,7 @@ bool Workload::issue_coll_comm(
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
     const auto comm_size = node->comm_size<uint64_t>();
-    // Record communication size for bandwidth calculation
     stats->get_operator_statistics(node->id()).comm_size = comm_size;
-    // TODO: comm_tag? which is used to distinguish two different collective in
-    // same pg
     const auto comm_priority = node->comm_priority<uint32_t>();  // default 0u
 
     if (comm_type == ChakraCollectiveCommType::ALL_REDUCE) {
@@ -446,22 +572,15 @@ bool Workload::issue_coll_comm(
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
     } else if (comm_type == ChakraCollectiveCommType::BROADCAST) {
-        // TODO: implement broadcast, for now just replay
         uint64_t runtime = 1ul;
         if (node->runtime() != 0ul) {
-            // chakra runtimes are in microseconds and we should convert it into
-            // nanoseconds
             runtime = node->runtime() * 1000;
         }
         DataSet* fp = new DataSet(1);
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
-        sys->register_event(fp, EventType::General, nullptr,
-                            // chakra runtimes are in microseconds and we
-                            // should convert it into nanoseconds
-                            runtime);
-        fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        sys->register_event(fp, EventType::General, nullptr, runtime);
     } else {
         throw std::runtime_error("Unsupported collective comm type");
     }
@@ -475,6 +594,10 @@ bool Workload::issue_send_comm(
         throw std::runtime_error("Send node should be issued by the sender");
     }
     const auto dst = node->comm_dst<uint32_t>();
+    int dst_npu = static_cast<int>(dst);
+    if (parent_job != nullptr) {
+        dst_npu = parent_job->rank_map[dst_npu];
+    }
     const auto size = node->comm_size<uint64_t>();
     // Record communication size for bandwidth calculation
     stats->get_operator_statistics(node->id()).comm_size = size;
@@ -499,8 +622,8 @@ bool Workload::issue_send_comm(
     sehd->wlhd = new WorkloadLayerHandlerData;
     sehd->wlhd->node_id = node->id();
     sehd->event = EventType::PacketSent;
-    sys->front_end_sim_send(0, Sys::dummy_data, size, UINT8, dst, tag, &snd_req,
-                            Sys::FrontEndSendRecvType::NATIVE,
+    sys->front_end_sim_send(0, Sys::dummy_data, size, UINT8, dst_npu, tag,
+                            &snd_req, Sys::FrontEndSendRecvType::NATIVE,
                             &Sys::handleEvent, sehd);
     return true;
 }
@@ -508,6 +631,10 @@ bool Workload::issue_send_comm(
 bool Workload::issue_recv_comm(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const auto src = node->comm_src<uint32_t>();
+    int src_npu = static_cast<int>(src);
+    if (parent_job != nullptr) {
+        src_npu = parent_job->rank_map[src_npu];
+    }
     const auto dst = node->comm_dst<uint32_t>(this->sys->id);
     if (dst != this->sys->id) {
         throw std::runtime_error("Recv node should be issued by the receiver");
@@ -538,8 +665,8 @@ bool Workload::issue_recv_comm(
     rcehd->wlhd->node_id = node->id();
     rcehd->workload = this;
     rcehd->event = EventType::PacketReceived;
-    sys->front_end_sim_recv(0, Sys::dummy_data, size, UINT8, src, tag, &rcv_req,
-                            Sys::FrontEndSendRecvType::NATIVE,
+    sys->front_end_sim_recv(0, Sys::dummy_data, size, UINT8, src_npu, tag,
+                            &rcv_req, Sys::FrontEndSendRecvType::NATIVE,
                             &Sys::handleEvent, rcehd);
     return true;
 }
@@ -693,6 +820,9 @@ void Workload::call(EventType event, CallData* data) {
         report();
         sys->comm_NI->sim_notify_finished();
         is_finished = true;
+        if (parent_job != nullptr) {
+            parent_job->on_rank_finished(job_local_rank, Sys::boostedTick());
+        }
     }
 }
 

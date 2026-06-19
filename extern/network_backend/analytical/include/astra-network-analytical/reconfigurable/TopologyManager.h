@@ -8,10 +8,12 @@ LICENSE file in the root directory of this source tree.
 #include "common/EventQueue.h"
 #include "reconfigurable/Chunk.h"
 #include "reconfigurable/Device.h"
+#include "reconfigurable/Link.h"
 #include "reconfigurable/Topology.h"
 #include "reconfigurable/Type.h"
-#include "reconfigurable/Link.h"
 #include <memory>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 using namespace NetworkAnalytical;
@@ -26,7 +28,9 @@ class TopologyManager {
     /**
      * Constructor.
      */
-    TopologyManager(int npus_count, int devices_count, EventQueue* event_queue,
+    TopologyManager(int npus_count,
+                    int devices_count,
+                    EventQueue* event_queue,
                     std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules,
                     std::map<int, std::vector<std::vector<Latency>>> latency_schedules,
                     std::vector<int> npus_per_dim = {},
@@ -38,9 +42,28 @@ class TopologyManager {
      * Reconfigure the topology with new bandwidths and latencies.
      */
     bool reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
-                     std::vector<std::vector<Latency>> latencies, Latency reconfig_time, int topo_id=0) noexcept;
+                     std::vector<std::vector<Latency>> latencies,
+                     Latency reconfig_time,
+                     int topo_id = 0) noexcept;
 
     bool reconfigure(int topo_id) noexcept;
+
+    // Scoped per-job rewire used by rfold: set bw/lt cells for the given OCS
+    // edges, install the given id-sequence routes (each: [src, ..., dst]) into
+    // the route table, and push the affected devices via Device::reconfigure.
+    // No global drain, no precomputeRoutes rebuild, no DOR.
+    void apply_job_wiring(const std::vector<std::pair<int, int>>& ocs_edges,
+                          const std::vector<std::vector<int>>& routes,
+                          Bandwidth link_bw,
+                          Latency link_lt) noexcept;
+
+    // Test/inspection accessors.
+    [[nodiscard]] const Route& get_precomputed_route(DeviceId src, DeviceId dst) const noexcept;
+    [[nodiscard]] Bandwidth get_cell_bandwidth(DeviceId u, DeviceId v) const noexcept;
+
+    // Mark NPUs as failed. precomputeRoutes_DOR() routes around them. Call
+    // before reconfigure()/precomputeRoutes_DOR(); empty by default.
+    void set_failed_npus(const std::unordered_set<int>& failed) noexcept;
 
     void set_reconfig_latency(Latency latency) noexcept;
 
@@ -61,8 +84,7 @@ class TopologyManager {
      *                       each dimension; when false (default) routing always
      *                       proceeds in the id-increasing (+1) direction.
      */
-    void set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus,
-                           bool bidi) noexcept;
+    void set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus, bool bidi) noexcept;
 
     /**
      * Populate precomputed_routes using Dimension-Order Routing (DOR).
@@ -87,7 +109,7 @@ class TopologyManager {
         cur_topo_id = topo_id;
         return;
     };
-    
+
     int inflight_coll;
 
     /**
@@ -151,7 +173,7 @@ class TopologyManager {
 
     /// holds the entire topology
     std::shared_ptr<Topology> topology;
-    
+
     /// bandwidth matrix
     std::vector<std::vector<Bandwidth>> bandwidths;
 
@@ -161,7 +183,7 @@ class TopologyManager {
     std::vector<std::vector<Route>> precomputed_routes;
 
     std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules;
-    std::map<int, std::vector<std::vector<Latency>>>   latency_schedules;
+    std::map<int, std::vector<std::vector<Latency>>> latency_schedules;
 
     // --- DOR routing configuration ---
     /// Number of logical dimensions (0 if not set; DOR is disabled)
@@ -181,6 +203,9 @@ class TopologyManager {
     /// When true (bidirectional), torus DOR picks the shorter arc on each dimension.
     /// When false (default), DOR always routes in the id-increasing (+1) direction.
     bool bidi = false;
+
+    /// NPUs marked failed: never a route endpoint or transit hop.
+    std::unordered_set<int> failed_npus;
 };
 
 }  // namespace NetworkAnalyticalReconfigurable

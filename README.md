@@ -29,18 +29,40 @@ docker build -t astra-sim:latest -f Dockerfile .
 docker run -it --name astra-sim-latest  --shm-size=8g astra-sim:latest bash
 ```
 
-## Reconfiguration 
+## Building with TopoMatch
+
+The `topomatch` scheduling policy links the TopoMatch C library, which requires
+hwloc and Scotch. These are **mandatory** — the build fails at configure time
+if they are missing.
 
 ```bash
-# examples/test-2-comm-group
-./run_network_reconfigurable.sh
+sudo apt-get install -y libhwloc-dev libscotch-dev pkg-config
+git submodule update --init --recursive
 ```
 
+TopoMatch itself is vendored as the `extern/topomatch` submodule and built
+automatically (library only; the `mapping` CLI is not built).
 
-## Contact Us
-For any questions about using ASTRA-sim, you can email the ASTRA-sim User Mailing List: astrasim-users@googlegroups.com
+## Multi-tenant job scheduling
 
-To join the mailing list, please fill out the following form: https://forms.gle/18KVS99SG3k9CGXm6
+This fork extends ASTRA-sim with a dynamic, multi-tenant job-scheduling runtime
+(`astra-sim/scheduling/`). Rather than a single workload, it models many
+independent jobs ("tenants") that **arrive over time** and contend for a shared
+networked cluster:
 
+- **Arrivals** come from an `arrivals.csv` file (`arrival_time_ns, num_ranks,
+  shape` per job); each job supplies its own Chakra Execution Traces under
+  `jobs/<job_id>/`.
+- An **admission policy** decides the order in which pending jobs are admitted
+  from the queue.
+- A **placement policy** maps an admitted job's ranks onto free NPUs of the
+  cluster. Admitted jobs run concurrently, sharing the cluster's network
+  resources.
+- Per-job results are written to `jobs.csv`, `summary.txt`, and `node_jobs.csv`
+  so policies can be compared on makespan, mean/p50/p95 JCT, and queue wait.
 
-We appreciate your interest and support in ASTRA-sim!
+### Running an experiment
+
+Self-contained sweep setups live under `examples/traces-for-8x8x8/` (arrival
+traces, cluster configs, and `scripts/run_policy.sh` drivers); swap the
+placement/admission arguments to compare schedulers on the same arrival trace.

@@ -39,3 +39,11 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../ AstraSim)
 set(NETWORK_BACKEND_BUILD_AS_LIBRARY ON)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../extern/network_backend/analytical/ Analytical)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../astra-sim/network_frontend/analytical/ AstraSim_Analytical)
+
+# Unit tests (opt-in via -DBUILD_UNIT_TESTS=ON; off by default so normal builds stay fast).
+option(BUILD_UNIT_TESTS "Build astra-sim unit tests" OFF)
+if(BUILD_UNIT_TESTS)
+    enable_testing()
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../extern/network_backend/analytical/extern/googletest googletest)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../tests tests)
+endif()

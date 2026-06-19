@@ -37,6 +37,17 @@ class HardwareResource {
             logger->critical("GPU comm node id: {}", node_id);
         }
     }
+    static constexpr uint32_t kMaxInflightGpuCommOps = 2;
+
+    // Liveness valve: when the global event queue drains while jobs are
+    // incomplete, ranks may hold divergent kMaxInflightGpuCommOps-subsets of
+    // >2 concurrently dep-free collectives on the same comm group, forming a
+    // circular wait (no fixed cap is deadlock-free once more independent
+    // collectives contend than slots exist). SchedRuntime then sets this flag,
+    // re-issues dep-free nodes ignoring the cap, and clears it. Runs that
+    // never reach that quiescent state are unaffected.
+    bool comm_cap_bypass = false;
+
     void occupy(const std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     void release(const std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
     bool is_available(

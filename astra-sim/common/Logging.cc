@@ -85,7 +85,10 @@ void LoggerFactory::init_default_components(const std::string& log_path) {
     auto sink_rotate_out =
         std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
             log_path + "/log.log", 1024 * 1024 * 10, 10);
-    sink_rotate_out->set_level(spdlog::level::debug);
+    // info (not debug): debug-level messages are voluminous per-event chatter
+    // that quickly churns the rotating log; keep log.log at info parity with
+    // the console. Lower this back to debug when debugging the simulator.
+    sink_rotate_out->set_level(spdlog::level::info);
     default_sinks.insert(sink_rotate_out);
 
     auto sink_rotate_err =

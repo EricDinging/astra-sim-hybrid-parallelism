@@ -40,7 +40,7 @@ void CmdLineParser::define_options() noexcept {
         "injection-scale", "Injection scale",
         cxxopts::value<double>()->default_value("1"))(
         "rendezvous-protocol", "Whether to enable rendezvous protocol",
-        cxxopts::value<bool>()->default_value("false"))(        
+        cxxopts::value<bool>()->default_value("false"))(
         "bw-schedule", "Per-topology bandwidth matrices file",
         cxxopts::value<std::string>())(
         "latency-schedule",
@@ -48,8 +48,71 @@ void CmdLineParser::define_options() noexcept {
         "latency from network.yml)",
         cxxopts::value<std::string>()->default_value(""))(
         "npus-per-dim",
-        "NPUs per dimension as comma-separated ints (e.g. 4,4,4); enables DOR routing",
-        cxxopts::value<std::string>()->default_value(""));
+        "NPUs per dimension as comma-separated ints (e.g. 4,4,4); enables DOR "
+        "routing",
+        cxxopts::value<std::string>()->default_value(""))(
+        "job-arrival-file", "Path to job arrivals CSV.",
+        cxxopts::value<std::string>()->default_value(""))(
+        "jobs-dir", "Directory containing per-job traces.",
+        cxxopts::value<std::string>()->default_value(""))(
+        "placement-policy",
+        "firstfit | random | sfc | l1clustering | topomatch | rfold",
+        cxxopts::value<std::string>()->default_value("firstfit"))(
+        "admission-policy",
+        "fifo | sjdf | sjsf | swf | easy | ljdf | ljsf | ljsfpack | lwf",
+        cxxopts::value<std::string>()->default_value("fifo"))(
+        "duration-estimator", "roofline-comm",
+        cxxopts::value<std::string>()->default_value("roofline-comm"))(
+        "defrag-metric",
+        "fewest-blocks | compactness | fewest-blocks-ocs (rfold; default "
+        "fewest-blocks-ocs)",
+        cxxopts::value<std::string>()->default_value("fewest-blocks-ocs"))(
+        "block-size",
+        "AxBxC block tiling (rfold: scorer granularity and OCS hardware block; "
+        "must divide each --npus-per-dim)",
+        cxxopts::value<std::string>()->default_value("4x4x4"))(
+        "rfold-selector",
+        "contiguous | min-reconfig | max-defrag (rfold only; default "
+        "min-reconfig)",
+        cxxopts::value<std::string>()->default_value("min-reconfig"))(
+        "rfold-ranking",
+        "comm-first[-ocs-first[-no-residual]|-no-residual|-legacy] | "
+        "packing-first | cost-model | switch (default comm-first)",
+        cxxopts::value<std::string>()->default_value("comm-first"))(
+        "rfold-search-budget",
+        "Bounded-search expansion cap for rfold scatter selectors",
+        cxxopts::value<int>()->default_value("50000"))(
+        "rfold-multifold",
+        "Enable multi-fold (serpentine) variant enumeration (rfold)",
+        cxxopts::value<bool>()->default_value("true"))(
+        "cost-model-kappa", "cost-model seam-penalty calibration",
+        cxxopts::value<double>()->default_value("1.0"))(
+        "cost-model-c-ext", "cost-model externality coefficient",
+        cxxopts::value<double>()->default_value("1.0"))(
+        "cost-model-t-reconfig",
+        "per-OCS-link reconfiguration charge in seconds",
+        cxxopts::value<double>()->default_value("0.010"))(
+        "cost-model-gamma", "cost-model lookahead charge coefficient",
+        cxxopts::value<double>()->default_value("1.0"))(
+        "cost-model-lookahead-k", "top-K finalists probed (0 = proxy only)",
+        cxxopts::value<int>()->default_value("0"))(
+        "cost-model-lookahead-q", "queued shapes probed per finalist",
+        cxxopts::value<int>()->default_value("8"))(
+        "cost-model-beta-const",
+        "cost-model: frozen externality beta in seconds (>0 enables the "
+        "static arm; 0 = dynamic c_ext*Q*mean(t_svc))",
+        cxxopts::value<double>()->default_value("0"))(
+        "cost-model-scatter-guard", "keep scatter strictly last (cost-model)",
+        cxxopts::value<bool>()->default_value("true"))(
+        "switch-theta", "DynamicSwitch backlog threshold",
+        cxxopts::value<int>()->default_value("1"))(
+        "failure-prob",
+        "Fraction of NPUs to mark failed at startup (0..1); 0 disables. "
+        "Routing "
+        "detours around failed NPUs via deterministic local sidestep; rates "
+        "above ~1% on large tori can exhaust local detours and abort the run. "
+        "Recommended <= ~0.01.",
+        cxxopts::value<double>()->default_value("0"));
 }
 
 void CmdLineParser::parse(int argc, char* argv[]) noexcept {
