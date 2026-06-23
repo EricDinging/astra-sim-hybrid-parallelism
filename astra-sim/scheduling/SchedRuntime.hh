@@ -79,6 +79,17 @@ class SchedRuntime {
         ctx_estimator_ = std::move(est);
     }
 
+    // When true, build every placed job's collective ring in the placement
+    // policy's emitted NPU (rank_map) order instead of sorted-id order. rfold
+    // already forces ordered rings per-job via PlacementResult; this lifts the
+    // same behavior to any policy (e.g. sfc/topomatch/l1clustering), so their
+    // spatial locality reaches the ring. The --preserve-placement-order CLI
+    // flag defaults to true, so placement-order rings are the default; pass
+    // =false to restore the legacy sorted-id ring.
+    void set_preserve_placement_order(bool b) {
+        preserve_placement_order_ = b;
+    }
+
   private:
     SchedContext make_sched_context(const JobInstance* placing) const;
     void schedule_all_arrival_sentinels();
@@ -118,6 +129,10 @@ class SchedRuntime {
     std::unordered_set<int> failed_npus_;
     std::function<void()> drain_diagnostic_;  // deadlock post-mortem hook
     std::unique_ptr<DurationEstimator> ctx_estimator_;
+    // main.cc sets this from the --preserve-placement-order CLI flag (which
+    // defaults to true). This false is only the fallback for code paths that
+    // never call the setter (e.g. unit tests that drive try_place directly).
+    bool preserve_placement_order_ = false;
 };
 
 }  // namespace Scheduling

@@ -504,6 +504,14 @@ int main(int argc, char* argv[]) {
                                  Latency(scalar_latency));
     runtime.set_reconfig_hook(&reconfig_hook);
     runtime.set_failed_npus(failed_npus_set);
+    const bool preserve_placement_order =
+        cmd_line_parser.get<bool>("preserve-placement-order");
+    runtime.set_preserve_placement_order(preserve_placement_order);
+    if (preserve_placement_order) {
+        logger->info(
+            "preserve-placement-order ON: collective rings follow the "
+            "placement policy's emitted NPU order, not sorted-id order");
+    }
     // Context-aware rankings need per-job duration estimates regardless of
     // the admission policy; reuse the same roofline estimator parameters
     // (validated above when ranking_needs_estimator).

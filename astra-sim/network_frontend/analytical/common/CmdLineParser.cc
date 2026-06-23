@@ -112,7 +112,15 @@ void CmdLineParser::define_options() noexcept {
         "detours around failed NPUs via deterministic local sidestep; rates "
         "above ~1% on large tori can exhaust local detours and abort the run. "
         "Recommended <= ~0.01.",
-        cxxopts::value<double>()->default_value("0"));
+        cxxopts::value<double>()->default_value("0"))(
+        "preserve-placement-order",
+        "Build each job's collective ring in the placement policy's emitted "
+        "NPU order instead of sorted-id order (rfold always does this for its "
+        "own jobs). Lets locality-aware scatter policies (sfc/topomatch/"
+        "l1clustering) shape the ring. Defaults to true; pass "
+        "--preserve-placement-order=false to restore the legacy sorted-id "
+        "ring.",
+        cxxopts::value<bool>()->default_value("true"));
 }
 
 void CmdLineParser::parse(int argc, char* argv[]) noexcept {

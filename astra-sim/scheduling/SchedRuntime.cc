@@ -195,7 +195,7 @@ void SchedRuntime::remove_from_pending(JobInstance* job) {
 void SchedRuntime::commit_placement(JobInstance* job,
                                     const PlacementResult& r) {
     remove_from_pending(job);
-    job->ordered_rings = r.ordered_rings;
+    job->ordered_rings = r.ordered_rings || preserve_placement_order_;
     if (reconfig_hook_ != nullptr && !r.reconfig_plan.empty()) {
         reconfig_hook_->apply(r.reconfig_plan);
     }
