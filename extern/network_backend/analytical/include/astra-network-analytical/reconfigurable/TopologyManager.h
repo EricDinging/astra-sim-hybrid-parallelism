@@ -9,8 +9,10 @@ LICENSE file in the root directory of this source tree.
 #include "reconfigurable/Chunk.h"
 #include "reconfigurable/Device.h"
 #include "reconfigurable/Link.h"
+#include "reconfigurable/Router.h"
 #include "reconfigurable/Topology.h"
 #include "reconfigurable/Type.h"
+#include <cstddef>
 #include <memory>
 #include <unordered_set>
 #include <utility>
@@ -67,6 +69,10 @@ class TopologyManager {
 
     void set_reconfig_latency(Latency latency) noexcept;
 
+    /// Set the DOR route-cache memory ceiling (bytes). Forwarded to the Router.
+    /// Default Router::kDefaultBudgetBytes (100 GiB). No-op in BFS mode.
+    void set_route_cache_budget_bytes(std::size_t bytes) noexcept;
+
     void precomputeRoutes() noexcept;
 
     void precomputeSingleRoute(DeviceId src, DeviceId dst) noexcept;
@@ -86,20 +92,9 @@ class TopologyManager {
      */
     void set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus, bool bidi) noexcept;
 
-    /**
-     * Populate precomputed_routes using Dimension-Order Routing (DOR).
-     *
-     * Routes always traverse dimensions in order: X first, then Y, then Z
-     * (i.e., dim 0, dim 1, ..., dim N-1).
-     *
-     * For torus topologies:
-     *   - If dor_shorter_path is false (default), routing always traverses in
-     *     the id-increasing (+1) direction regardless of path length.
-     *   - If dor_shorter_path is true, the shorter arc on each dimension is chosen.
-     *
-     * set_topology_dims() must be called at least once before this method.
-     */
-    void precomputeRoutes_DOR() noexcept;
+    // DOR routing is computed on demand by `router_` (see Router): the eager
+    // all-pairs precomputeRoutes_DOR() table was replaced by Router::compute_dor
+    // + a bounded LRU cache. set_topology_dims() builds the router.
 
     void drain_network() noexcept;
 
@@ -173,6 +168,11 @@ class TopologyManager {
 
     /// holds the entire topology
     std::shared_ptr<Topology> topology;
+
+    // DOR-mode on-demand router (built by set_topology_dims). Declared after
+    // `topology` so it is destroyed first. Null in BFS mode.
+    std::unique_ptr<Router> router_;
+    std::size_t route_cache_budget_bytes_ = Router::kDefaultBudgetBytes;
 
     /// bandwidth matrix
     std::vector<std::vector<Bandwidth>> bandwidths;

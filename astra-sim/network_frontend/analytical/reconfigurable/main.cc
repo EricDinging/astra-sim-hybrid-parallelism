@@ -254,6 +254,8 @@ int main(int argc, char* argv[]) {
     const auto duration_estimator =
         cmd_line_parser.get<std::string>("duration-estimator");
     const auto failure_prob = cmd_line_parser.get<double>("failure-prob");
+    const auto route_cache_budget_gb =
+        cmd_line_parser.get<double>("route-cache-budget-gb");
 
     AstraSim::LoggerFactory::init(logging_configuration, logging_folder);
 
@@ -370,6 +372,10 @@ int main(int argc, char* argv[]) {
     auto tm = std::make_shared<TopologyManager>(
         npus_count, npus_count, event_queue.get(), std::move(bw_schedules),
         std::move(latency_schedules), npus_per_dim, !npus_per_dim.empty());
+
+    // DOR route-cache ceiling (on-demand routing; no-op in BFS mode).
+    tm->set_route_cache_budget_bytes(static_cast<std::size_t>(
+        route_cache_budget_gb * 1024.0 * 1024.0 * 1024.0));
 
     tm->set_failed_npus(failed_npus_set);
     tm->reconfigure(0);

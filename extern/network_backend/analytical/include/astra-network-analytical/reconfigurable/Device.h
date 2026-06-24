@@ -7,15 +7,17 @@ LICENSE file in the root directory of this source tree.
 
 #include "common/Type.h"
 #include "reconfigurable/Type.h"
+#include <functional>
+#include <link.h>
 #include <map>
 #include <memory>
 #include <queue>
-#include <functional>
-#include <link.h>
 
 using namespace NetworkAnalytical;
 
 namespace NetworkAnalyticalReconfigurable {
+
+class Router;  // Forward declaration (DOR-mode on-demand routing)
 
 // class TopologyManager; // Forward declaration
 
@@ -32,7 +34,7 @@ class Device : public std::enable_shared_from_this<Device> {
      */
     explicit Device(DeviceId id) noexcept;
 
-    static std::function<void()> increment_callback; // Callback to be invoked when a link becomes free
+    static std::function<void()> increment_callback;  // Callback to be invoked when a link becomes free
 
     static bool drain_all_flow;
     /**
@@ -42,7 +44,7 @@ class Device : public std::enable_shared_from_this<Device> {
      */
     [[nodiscard]] DeviceId get_id() const noexcept;
 
-        /**
+    /**
      * Callback to be called when a link becomes free.
      *  - If the link has pending chunks, process the first one.
      *  - If the link has no pending chunks, set the link as free.
@@ -75,6 +77,12 @@ class Device : public std::enable_shared_from_this<Device> {
                      std::vector<Latency> latencies,
                      Latency reconfigTime) noexcept;
 
+    /// In DOR mode the device fetches routes on demand from this Router instead
+    /// of holding a per-row copy. nullptr (BFS mode) falls back to `routes`.
+    void set_router(Router* router) noexcept {
+        router_ = router;
+    }
+
     /**
      * Disconnect a device from another device.
      *
@@ -101,7 +109,10 @@ class Device : public std::enable_shared_from_this<Device> {
 
     std::map<DeviceId, std::shared_ptr<Link>> links;
     std::map<DeviceId, std::list<std::unique_ptr<Chunk>>> pending_chunks;
-    std::map<DeviceId, Route> routes;
+    std::map<DeviceId, Route> routes;  // BFS mode only; empty under DOR
+
+    // DOR-mode on-demand router (non-owning). nullptr => BFS mode (use `routes`).
+    Router* router_ = nullptr;
 
     /**
      * Check if this device is connected to another device.

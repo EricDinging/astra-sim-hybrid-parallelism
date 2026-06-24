@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 #include "common/HelperFunction.h"
 #include "reconfigurable/Chunk.h"
 #include "reconfigurable/Link.h"
+#include "reconfigurable/Router.h"
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -114,8 +115,10 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     //     std::cout << std::endl;
     // }
     if (chunk->get_topology_iteration() < topology_iteration) {
-        chunk->update_route(routes[chunk->next_device()->get_id()],
-                            topology_iteration);
+        const DeviceId next_id = chunk->next_device()->get_id();
+        // DOR mode: fetch the route on demand; BFS mode: use the per-row copy.
+        const Route& r = (router_ != nullptr) ? router_->lookup(device_id, next_id) : routes[next_id];
+        chunk->update_route(r, topology_iteration);
     }
 
     // get next dest
@@ -177,8 +180,11 @@ void Device::reconfigure(std::vector<Bandwidth> bandwidth,
         assert(latency[id] >= 0);
         assert(connected(id));
 
-        // update the route
-        this->routes[id] = routes[id];
+        // update the route (BFS mode only; DOR mode passes an empty routes
+        // vector and fetches on demand via router_).
+        if (!routes.empty()) {
+            this->routes[id] = routes[id];
+        }
         // reconfigure the link
         debug_print("Device " + std::to_string(device_id) + ": Reconfiguring link to " + std::to_string(id) +
                     ", pending chunk size: " + std::to_string(pending_chunks[id].size()) +

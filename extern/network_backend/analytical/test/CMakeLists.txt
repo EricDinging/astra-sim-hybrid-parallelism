@@ -40,4 +40,13 @@ elseif (BUILDTARGET STREQUAL "congestion_aware")
     # link with gtest
     target_link_libraries(TestAnalyticalCongestionAware PRIVATE gtest_main)
     gtest_discover_tests(TestAnalyticalCongestionAware)
+
+elseif (BUILDTARGET STREQUAL "reconfigurable")
+    # compile test target
+    add_executable(TestAnalyticalReconfigurable ${CMAKE_CURRENT_SOURCE_DIR}/test_reconfigurable_routing.cpp)
+    target_link_libraries(TestAnalyticalReconfigurable PRIVATE Analytical_Reconfigurable)
+
+    # link with gtest
+    target_link_libraries(TestAnalyticalReconfigurable PRIVATE gtest_main)
+    gtest_discover_tests(TestAnalyticalReconfigurable)
 endif ()

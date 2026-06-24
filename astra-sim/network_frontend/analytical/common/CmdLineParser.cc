@@ -120,7 +120,12 @@ void CmdLineParser::define_options() noexcept {
         "l1clustering) shape the ring. Defaults to true; pass "
         "--preserve-placement-order=false to restore the legacy sorted-id "
         "ring.",
-        cxxopts::value<bool>()->default_value("true"));
+        cxxopts::value<bool>()->default_value("true"))(
+        "route-cache-budget-gb",
+        "DOR route-cache memory ceiling in GiB (reconfigurable backend with "
+        "--npus-per-dim only). DOR routes are computed on demand and cached up "
+        "to this bound; OCS overrides are always kept. Default 100.",
+        cxxopts::value<double>()->default_value("100"));
 }
 
 void CmdLineParser::parse(int argc, char* argv[]) noexcept {

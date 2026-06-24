@@ -2,6 +2,7 @@
 #include "common/HelperFunction.h"
 #include <algorithm>
 #include <cassert>
+#include <cstdlib>
 #include <iostream>
 #include <set>
 
@@ -119,7 +120,10 @@ void TopologyManager::increment_callback() noexcept {
         }
         debug_print(msg);
 
-        device->reconfigure(bandwidths[i], precomputed_routes[i], latencies[i], reconfig_time);
+        // DOR mode fetches routes on demand (router_); pass an empty route row
+        // so the device reconfigures links only. BFS mode pushes the full row.
+        device->reconfigure(bandwidths[i], use_dor ? std::vector<Route>{} : precomputed_routes[i], latencies[i],
+                            reconfig_time);
     }
 }
 
@@ -174,7 +178,11 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     this->reconfig_time = reconfig_time;
 
     if (use_dor && dims_count > 0) {
-        precomputeRoutes_DOR();
+        // DOR is computed on demand; a full reconfigure == rebuild-to-pure-DOR,
+        // i.e. drop overrides + cached routes.
+        if (router_ != nullptr) {
+            router_->clear();
+        }
     } else {
         precomputeRoutes();
     }
@@ -282,148 +290,29 @@ void TopologyManager::set_topology_dims(const std::vector<int>& npus_per_dim, bo
     this->is_torus = is_torus;
     this->bidi = bidi;
     this->use_dor = true;  // enable DOR routing
+
+    // Build the on-demand DOR router (replaces the eager all-pairs table) and
+    // point every device at it. It reads failed_npus by pointer, so later
+    // set_failed_npus() calls are picked up.
+    router_ = std::make_unique<Router>(topology, this->npus_per_dim, this->is_torus, this->bidi, devices_count,
+                                       &failed_npus, route_cache_budget_bytes_);
+    for (int i = 0; i < devices_count; ++i) {
+        topology->get_device(i)->set_router(router_.get());
+    }
 }
 
 void TopologyManager::set_failed_npus(const std::unordered_set<int>& failed) noexcept {
     failed_npus = failed;
+    // DOR routes around failed NPUs; drop any cached pre-failure routes.
+    if (router_ != nullptr) {
+        router_->clear_cache();
+    }
 }
 
-void TopologyManager::precomputeRoutes_DOR() noexcept {
-    assert(dims_count > 0 && "call set_topology_dims() before precomputeRoutes_DOR()");
-
-    auto id_to_coord = [&](int id) -> std::vector<int> {
-        std::vector<int> coord(dims_count);
-        int remaining = id;
-        for (int d = 0; d < dims_count; ++d) {
-            coord[d] = remaining % npus_per_dim[d];
-            remaining /= npus_per_dim[d];
-        }
-        return coord;
-    };
-
-    auto coord_to_id = [&](const std::vector<int>& coord) -> int {
-        int id = 0;
-        int stride = 1;
-        for (int d = 0; d < dims_count; ++d) {
-            id += coord[d] * stride;
-            stride *= npus_per_dim[d];
-        }
-        return id;
-    };
-
-    auto is_failed = [&](int id) -> bool { return failed_npus.find(id) != failed_npus.end(); };
-
-    // Directed +1/-1 step for dimension d toward dst, matching the baseline DOR
-    // arc selection (unidirectional +1 on a torus unless bidi; sign on a mesh).
-    // With no failed nodes this reproduces the original route exactly.
-    auto dir_step = [&](int d, int cur_d, int dst_d) -> int {
-        const int Nd = npus_per_dim[d];
-        if (is_torus) {
-            const int forward = ((dst_d - cur_d) + Nd) % Nd;
-            const int backward = Nd - forward;
-            if (bidi) {
-                return (forward <= backward) ? +1 : -1;
-            }
-            return +1;
-        }
-        return (dst_d > cur_d) ? +1 : -1;
-    };
-
-    // Fixed, deterministic detour preference: +x, +y, +z, then -x, -y, -z.
-    static const int PREF_DIM[6] = {0, 1, 2, 0, 1, 2};
-    static const int PREF_SGN[6] = {+1, +1, +1, -1, -1, -1};
-
-    precomputed_routes = std::vector<std::vector<Route>>(devices_count, std::vector<Route>(devices_count));
-
-    // visited[node] == epoch  <=>  node already on the current (s,t) path.
-    // A per-pair epoch avoids re-allocating/clearing a visited set for each of
-    // the O(N^2) pairs (hot path: also re-run on every reconfigure).
-    std::vector<long long> visited(devices_count, -1);
-    long long epoch = 0;
-
-    for (int s = 0; s < devices_count; ++s) {
-        for (int t = 0; t < devices_count; ++t) {
-            if (s == t) {
-                precomputed_routes[s][t] = {topology->get_device(s)};
-                continue;
-            }
-
-            Route path;
-            std::vector<int> cur = id_to_coord(s);
-            const std::vector<int> dst = id_to_coord(t);
-            int cur_id = coord_to_id(cur);
-            path.push_back(topology->get_device(cur_id));
-
-            // Failed endpoints never send/recv (never placed, never in a comm
-            // group), so their table entries are never queried. Store a trivial
-            // stub and skip the walk (also avoids a spurious hard-fail from a
-            // failed source/sink).
-            if (is_failed(s) || is_failed(t)) {
-                path.push_back(topology->get_device(t));
-                precomputed_routes[s][t] = std::move(path);
-                continue;
-            }
-
-            ++epoch;
-            visited[cur_id] = epoch;
-
-            while (cur != dst) {
-                // Happy path == baseline DOR: lowest misaligned dim, one step.
-                int d = 0;
-                while (d < dims_count && cur[d] == dst[d]) {
-                    ++d;
-                }
-                const int Nd = npus_per_dim[d];
-                const int step = dir_step(d, cur[d], dst[d]);
-                std::vector<int> nxt = cur;
-                nxt[d] = (nxt[d] + step + Nd) % Nd;
-                const int nxt_id = coord_to_id(nxt);
-                if (!is_failed(nxt_id) && visited[nxt_id] != epoch) {
-                    cur = std::move(nxt);
-                    cur_id = nxt_id;
-                    visited[cur_id] = epoch;
-                    path.push_back(topology->get_device(cur_id));
-                    continue;
-                }
-
-                // Detour: first alive, unvisited neighbor in the fixed order.
-                bool moved = false;
-                for (int k = 0; k < 6; ++k) {
-                    const int q = PREF_DIM[k];
-                    if (q >= dims_count) {
-                        continue;
-                    }
-                    const int Nq = npus_per_dim[q];
-                    const int raw = cur[q] + PREF_SGN[k];
-                    if (!is_torus && (raw < 0 || raw >= Nq)) {
-                        continue;  // mesh has no wrap-around link
-                    }
-                    std::vector<int> cand = cur;
-                    cand[q] = (raw + Nq) % Nq;
-                    const int cand_id = coord_to_id(cand);
-                    if (!is_failed(cand_id) && visited[cand_id] != epoch) {
-                        cur = std::move(cand);
-                        cur_id = cand_id;
-                        visited[cur_id] = epoch;
-                        path.push_back(topology->get_device(cur_id));
-                        moved = true;
-                        break;
-                    }
-                }
-
-                if (!moved) {
-                    // Non-backtracking local sidestep can dead-end on a routable
-                    // pair; this is the documented ~1% failure-rate ceiling (no
-                    // BFS fallback by design).
-                    std::cerr << "[Error] (TopologyManager) fault-aware DOR: no "
-                                 "detour from src="
-                              << s << " to dst=" << t << " (boxed in at node " << cur_id << ")" << std::endl;
-                    std::exit(1);
-                }
-            }
-
-            precomputed_routes[s][t] = std::move(path);
-        }
+void TopologyManager::set_route_cache_budget_bytes(std::size_t bytes) noexcept {
+    route_cache_budget_bytes_ = bytes;
+    if (router_ != nullptr) {
+        router_->set_budget_bytes(bytes);
     }
 }
 
@@ -439,7 +328,9 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     if (chunk->get_topology_iteration() == -1) {
         DeviceId dest = chunk->next_device()->get_id();
-        chunk->update_route(precomputed_routes[src][dest], topology_iteration);
+        // DOR mode: fetch on demand; BFS mode: index the eager table.
+        const Route& r = (router_ != nullptr) ? router_->lookup(src, dest) : precomputed_routes[src][dest];
+        chunk->update_route(r, topology_iteration);
     }
 
     // printf("TM: Sending chunk from %d to %d, in topo iter %d, route: ", chunk->current_device()->get_id(),
@@ -470,7 +361,8 @@ void TopologyManager::apply_job_wiring(const std::vector<std::pair<int, int>>& o
                                        const std::vector<std::vector<int>>& routes,
                                        Bandwidth link_bw,
                                        Latency link_lt) noexcept {
-    if (precomputed_routes.empty()) {
+    // BFS mode keeps the eager table; DOR mode stores overrides in the router.
+    if (!use_dor && precomputed_routes.empty()) {
         precomputed_routes = std::vector<std::vector<Route>>(devices_count, std::vector<Route>(devices_count));
     }
 
@@ -495,17 +387,32 @@ void TopologyManager::apply_job_wiring(const std::vector<std::pair<int, int>>& o
         for (int id : path) {
             route.push_back(topology->get_device(id));
         }
-        precomputed_routes[s][t] = std::move(route);
+        if (use_dor) {
+            router_->set_override(s, t, std::move(route));
+        } else {
+            precomputed_routes[s][t] = std::move(route);
+        }
         touched.insert(s);
     }
 
-    // Push only the touched devices' full rows -- no global drain.
+    // Reconfigure only the touched devices -- no global drain. DOR mode fetches
+    // routes on demand, so push an empty route row (links only).
     for (int d : touched) {
-        topology->get_device(d)->reconfigure(bandwidths[d], precomputed_routes[d], latencies[d], Latency(0));
+        topology->get_device(d)->reconfigure(bandwidths[d], use_dor ? std::vector<Route>{} : precomputed_routes[d],
+                                             latencies[d], Latency(0));
+    }
+
+    if (std::getenv("RFOLD_WIRING_LOG") != nullptr) {
+        std::cerr << "[wiring] ocs_edges=" << ocs_edges.size() << " routes=" << routes.size()
+                  << " overrides=" << (router_ != nullptr ? router_->override_count() : precomputed_routes.size())
+                  << " touched=" << touched.size() << std::endl;
     }
 }
 
 const Route& TopologyManager::get_precomputed_route(DeviceId src, DeviceId dst) const noexcept {
+    if (router_ != nullptr) {
+        return router_->lookup(src, dst);
+    }
     return precomputed_routes[src][dst];
 }
 
