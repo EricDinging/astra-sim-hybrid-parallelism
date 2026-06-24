@@ -49,6 +49,10 @@ TopologyManager::TopologyManager(int npus_count,
         // via apply_job_wiring(), which override this table for their ring
         // edges; everything else (firstfit, scatter baselines) routes here.
         set_topology_dims(npus_per_dim, is_torus, false);
+    } else {
+        // BFS mode (no geometry): fall back to all-pairs connectivity. Only
+        // used for small non-torus / test topologies.
+        topology->connect_all_pairs();
     }
 }
 
@@ -59,20 +63,33 @@ std::shared_ptr<Device> TopologyManager::get_device(const DeviceId deviceId) noe
 }
 
 void TopologyManager::drain_network() noexcept {
-    // Drain the network by iterating through all devices and their links
+    // Drain only the links that actually exist (sparse connectivity). Pass 1
+    // counts the directed, non-self links so increment_callback knows when the
+    // drain is complete; pass 2 reports every idle link (busy links report
+    // themselves later, when they become free).
     Link::num_drained_links = 0;
+    drain_target_ = 0;
+    for (int i = 0; i < devices_count; ++i) {
+        for (const auto& [id, link] : topology->get_device(i)->get_links()) {
+            if (id != i) {
+                ++drain_target_;
+            }
+        }
+    }
+
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
         device->draining = true;
-        for (int j = 0; j < devices_count; ++j) {
-            if (i != j) {
-                auto link = device->get_link(j);
-                if (!link->is_busy()) {
-                    increment_callback();
-                }
-                // TODO what if the link is busy, or the link does not exist
+        for (const auto& [id, link] : device->get_links()) {
+            if (id != i && !link->is_busy()) {
+                increment_callback();
             }
         }
+    }
+
+    // Nothing to drain (degenerate topology): finalize immediately.
+    if (drain_target_ == 0) {
+        increment_callback();
     }
 }
 
@@ -89,8 +106,7 @@ void TopologyManager::increment_callback() noexcept {
     // Increment the topology iteration
     Link::num_drained_links++;
 
-    if (Link::num_drained_links < devices_count * (devices_count - 1)) {
-        // TODO: what if not all devices are connected to each other?
+    if (Link::num_drained_links < drain_target_) {
         return;
     }
 
@@ -299,6 +315,11 @@ void TopologyManager::set_topology_dims(const std::vector<int>& npus_per_dim, bo
     for (int i = 0; i < devices_count; ++i) {
         topology->get_device(i)->set_router(router_.get());
     }
+
+    // Sparse torus connectivity: 6 neighbor links/node instead of all-pairs.
+    // Links start at zero bandwidth; reconfigure() sets the real values from
+    // the schedule matrices (only neighbor + OCS cells are nonzero).
+    topology->connect_torus_neighbors(this->npus_per_dim, this->is_torus);
 }
 
 void TopologyManager::set_failed_npus(const std::unordered_set<int>& failed) noexcept {
@@ -373,6 +394,9 @@ void TopologyManager::apply_job_wiring(const std::vector<std::pair<int, int>>& o
         assert(u >= 0 && u < devices_count && v >= 0 && v < devices_count);
         bandwidths[u][v] = bandwidths[v][u] = link_bw;
         latencies[u][v] = latencies[v][u] = link_lt;
+        // Under sparse connectivity the OCS pair may have no link yet; create
+        // it so the override route can traverse it (no-op if already linked).
+        topology->connect_ocs_edge(u, v, link_bw, link_lt);
         touched.insert(u);
         touched.insert(v);
     }

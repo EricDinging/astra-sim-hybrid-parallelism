@@ -94,6 +94,20 @@ class Device : public std::enable_shared_from_this<Device> {
 
     std::shared_ptr<Link> get_link(DeviceId id) const noexcept;
 
+    /// Read-only view of this device's links (sparse: ~6 torus neighbors + OCS
+    /// edges + self-loop). Used by the drain pass.
+    const std::map<DeviceId, std::shared_ptr<Link>>& get_links() const noexcept {
+        return links;
+    }
+
+    /**
+     * Check if this device is connected to another device.
+     *
+     * @param dest id of the device to check the connectivity
+     * @return true if connected to the given device, false otherwise
+     */
+    [[nodiscard]] bool connected(DeviceId dest) const noexcept;
+
     bool draining;
 
     bool reconfiguring;
@@ -113,14 +127,6 @@ class Device : public std::enable_shared_from_this<Device> {
 
     // DOR-mode on-demand router (non-owning). nullptr => BFS mode (use `routes`).
     Router* router_ = nullptr;
-
-    /**
-     * Check if this device is connected to another device.
-     *
-     * @param dest id of the device to check te connectivity
-     * @return true if connected to the given device, false otherwise
-     */
-    [[nodiscard]] bool connected(DeviceId dest) const noexcept;
 };
 
 }  // namespace NetworkAnalyticalReconfigurable

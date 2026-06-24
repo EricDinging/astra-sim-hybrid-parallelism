@@ -164,8 +164,10 @@ void Device::reconfigure(std::vector<Bandwidth> bandwidth,
                          std::vector<Route> routes,
                          std::vector<Latency> latency,
                          Latency reconfig_time) noexcept {
-    assert(bandwidth.size() == links.size());
-    assert(latency.size() == links.size());
+    // bandwidth/latency are full-width device-indexed rows; links are now
+    // sparse (~6 torus neighbors + OCS edges + self-loop), so we index the rows
+    // by link id rather than requiring size == links.size().
+    assert(bandwidth.size() == latency.size());
 
     topology_iteration++;
 

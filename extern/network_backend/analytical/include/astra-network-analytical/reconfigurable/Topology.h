@@ -57,6 +57,32 @@ class Topology {
      */
     [[nodiscard]] int get_devices_count() const noexcept;
 
+    /**
+     * Establish all-pairs connectivity (BFS routing mode). O(N^2) links --
+     * only used for small non-torus / test topologies.
+     */
+    void connect_all_pairs() noexcept;
+
+    /**
+     * Establish sparse torus connectivity: connect each device to its 6
+     * dimension-order neighbors (DOR mode). Links carry zero bandwidth here;
+     * TopologyManager::reconfigure() sets the real per-link bandwidth/latency
+     * from the schedule matrices. Duplicate edges (small wrap-around dims) are
+     * connected once.
+     *
+     * @param npus_per_dim per-dimension size, id = sum_d coord[d] * prod_{<d}
+     * @param is_torus true for wrap-around links; false skips boundary edges
+     */
+    void connect_torus_neighbors(const std::vector<int>& npus_per_dim, bool is_torus) noexcept;
+
+    /**
+     * Ensure a bidirectional link exists for an OCS edge (apply_job_wiring).
+     * No-op if src and dest are already connected (a torus neighbor or an OCS
+     * edge from an earlier job); the per-link bandwidth is then refreshed by
+     * Device::reconfigure from the schedule matrices.
+     */
+    void connect_ocs_edge(DeviceId src, DeviceId dest, Bandwidth bandwidth, Latency latency) noexcept;
+
   protected:
     /// number of total devices in the topology
     /// device includes non-NPU devices such as switches
@@ -70,7 +96,6 @@ class Topology {
     int dims_count;
 
     std::vector<std::shared_ptr<Device>> devices;
-
 
     /**
      * Instantiate Device objects in the topology.

@@ -536,8 +536,9 @@ int main(int argc, char* argv[]) {
         for (int i = 0; i < n; ++i) {
             auto dev = tm->get_device(i);
             for (int j = 0; j < n; ++j) {
-                if (i == j) {
-                    continue;
+                if (i == j || !dev->connected(j)) {
+                    continue;  // sparse connectivity: only real links have
+                               // queues
                 }
                 const int cnt = dev->pending_chunks_count(j);
                 if (cnt > 0) {

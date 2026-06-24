@@ -174,6 +174,11 @@ class TopologyManager {
     std::unique_ptr<Router> router_;
     std::size_t route_cache_budget_bytes_ = Router::kDefaultBudgetBytes;
 
+    // Number of directed, non-self links to drain before a reconfigure
+    // completes (recomputed each drain_network()). Sparse-connectivity
+    // replacement for the old all-pairs devices_count*(devices_count-1).
+    int drain_target_ = 0;
+
     /// bandwidth matrix
     std::vector<std::vector<Bandwidth>> bandwidths;
 
