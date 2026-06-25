@@ -39,9 +39,10 @@ an ordered `A×B×C` where each dimension is independently **1 or an even intege
 each shape folder are the per-rank `chakra_trace.<rank>.et` files (one per rank,
 `A·B·C` of them) plus a `chakra_trace.json`.
 
-The build is **deterministic** (re-running yields byte-identical traces) and
-**idempotent / resumable** (shapes already built are skipped). It runs STG in
-one batched container; parallelism is bounded by `JOBS` (default `nproc-2`).
+The build is **deterministic** (re-running yields the same traces for a fixed
+STG version / image) and **idempotent / resumable** (shapes already built are
+skipped). It runs STG in one batched container, fanning shapes out across cores;
+parallelism is bounded by `JOBS` (default `nproc-2`).
 
 Useful flags (call the helper directly):
 

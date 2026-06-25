@@ -95,7 +95,17 @@ def select_shapes(
     if smoke:
         return [(2, 2, 2)]
     if only:
-        return [shapes.parse_shape(s.strip()) for s in only.split(",")]
+        selected = []
+        for tok in only.split(","):
+            shape = shapes.parse_shape(tok.strip())
+            if not shapes.is_legal(model, *shape):
+                raise ValueError(
+                    f"--only shape {shapes.fmt_shape(shape)} is not legal for "
+                    f"model {model!r} (each dim must be in {shapes.DIM_DOMAIN} "
+                    f"and the product <= {shapes.MAX_SIZE})"
+                )
+            selected.append(shape)
+        return selected
     return shapes.all_legal_shapes(model)
 
 

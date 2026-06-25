@@ -49,11 +49,26 @@ def test_select_shapes_full_is_729():
     assert len(gen_traces.select_shapes("bw", None, False)) == 729
 
 
-def test_bw_params_have_no_dp_tp_pp():
+def test_bw_params_exact():
+    # BW_PARAMS is a spec-frozen constant: assert it byte-for-byte so a stray
+    # edit (or a hallucinated rewrite) cannot pass. Must NOT contain dp/tp/pp.
+    assert gen_traces.BW_PARAMS == (
+        "--model_type dense "
+        "--dmodel 8192 --dff 16384 --batch 16 --seq 2048 --dvocal 8192 "
+        "--head 32 --kvhead 8 --num_stacks 16 --weight_sharded 0 "
+        "--chakra_schema_version v0.0.4"
+    )
     for flag in ("--dp", "--tp", "--pp"):
         assert flag not in gen_traces.BW_PARAMS
-    assert "--head 32" in gen_traces.BW_PARAMS
-    assert "--chakra_schema_version v0.0.4" in gen_traces.BW_PARAMS
+
+
+def test_select_shapes_only_rejects_illegal():
+    for bad in ("3x5x7", "32x1x1", "1x1x18"):
+        try:
+            gen_traces.select_shapes("bw", bad, False)
+        except ValueError:
+            continue
+        raise AssertionError(f"expected ValueError for illegal --only {bad}")
 
 
 if __name__ == "__main__":
