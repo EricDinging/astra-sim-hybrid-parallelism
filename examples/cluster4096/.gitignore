@@ -1,0 +1,8 @@
+# Generated trace library (per-rank Chakra ET files + STG metadata). Never
+# committed -- regenerate with ./reproduce.sh traces.
+/tracelib/
+*.et
+
+# Python bytecode cache.
+__pycache__/
+*.pyc
