@@ -3,6 +3,13 @@
 /tracelib/
 *.et
 
-# Python bytecode cache.
+# Measured per-shape service-time table (output of measure_svc.py) and any
+# generated arrival-process run dirs. Reproduce, don't commit.
+/service_times.csv
+*service_times*.csv
+/runs/
+
+# Python bytecode + tool caches.
 __pycache__/
 *.pyc
+.ruff_cache/

@@ -47,6 +47,11 @@ run_one() {
     mkdir -p "$od"
     python3 main.py --output_dir "$od" --output_name chakra_trace \
         --dp "$a" --tp "$b" --pp "$c" ${BW_PARAMS} > "$od/gen.log" 2>&1
+    # stage names the communicator-group file after --output_name
+    # ("chakra_trace.json"); the simulator loads it per job as "comm_group.json".
+    # Rename so the trace dir is directly consumable. Fail loudly (set -e) if
+    # stage did not emit it.
+    mv -f "$od/chakra_trace.json" "$od/comm_group.json"
 }
 export -f run_one
 xargs -P "${JOBS}" -L1 -a /work/worklist.txt bash -c 'run_one "$@"' _
@@ -69,13 +74,29 @@ def et0_path(out_dir: str, model: str, shape: tuple[int, int, int]) -> str:
     return os.path.join(out_dir, model, shapes.fmt_shape(shape), "chakra_trace.0.et")
 
 
+def comm_group_path(out_dir: str, model: str, shape: tuple[int, int, int]) -> str:
+    """Return the expected path for a shape's communicator-group file.
+
+    The simulator loads this per job as ``comm_group.json`` (the container
+    script renames stage's ``chakra_trace.json`` to this name)."""
+    return os.path.join(out_dir, model, shapes.fmt_shape(shape), "comm_group.json")
+
+
+def is_built(out_dir: str, model: str, shape: tuple[int, int, int]) -> bool:
+    """A shape is built only if BOTH its first Chakra trace file and its
+    ``comm_group.json`` exist -- the simulator needs both to run the job."""
+    return os.path.exists(et0_path(out_dir, model, shape)) and os.path.exists(
+        comm_group_path(out_dir, model, shape)
+    )
+
+
 def shapes_to_build(
     out_dir: str,
     model: str,
     candidates: list[tuple[int, int, int]],
 ) -> list[tuple[int, int, int]]:
-    """Drop shapes whose ``chakra_trace.0.et`` already exists."""
-    return [s for s in candidates if not os.path.exists(et0_path(out_dir, model, s))]
+    """Drop shapes already fully built (``chakra_trace.0.et`` + ``comm_group.json``)."""
+    return [s for s in candidates if not is_built(out_dir, model, s)]
 
 
 def build_worklist_text(shape_list: list[tuple[int, int, int]]) -> str:
@@ -164,8 +185,9 @@ def verify(
     model: str,
     shapes_list: list[tuple[int, int, int]],
 ) -> list[tuple[int, int, int]]:
-    """Return shapes that are still missing ``chakra_trace.0.et`` after a build."""
-    return [s for s in shapes_list if not os.path.exists(et0_path(out_dir, model, s))]
+    """Return shapes still incomplete after a build (missing the first Chakra
+    trace file or ``comm_group.json``)."""
+    return [s for s in shapes_list if not is_built(out_dir, model, s)]
 
 
 # ---------------------------------------------------------------------------
