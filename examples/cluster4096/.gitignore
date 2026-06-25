@@ -1,4 +1,4 @@
-# Generated trace library (per-rank Chakra ET files + STG metadata). Never
+# Generated trace library (per-rank Chakra ET files + stage metadata). Never
 # committed -- regenerate with ./reproduce.sh traces.
 /tracelib/
 *.et

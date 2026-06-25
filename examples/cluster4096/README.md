@@ -10,7 +10,7 @@ reproduces that artifact deterministically.
 - `reproduce.sh` — top-level driver. Run a phase, e.g. `./reproduce.sh traces`.
 - `scripts/` — helper libraries called by `reproduce.sh`:
   - `shapes.py` — the authority on legal job shapes (pure, importable).
-  - `gen_traces.py` — builds the Chakra trace library via STG.
+  - `gen_traces.py` — builds the Chakra trace library via stage.
 - `tracelib/` — generated Chakra traces (gitignored; never committed).
 
 Later phases (configs, calibration, sweep run, analysis) will be added as
@@ -18,17 +18,21 @@ additional helpers and `reproduce.sh` phases.
 
 ## Prerequisites
 
-**Docker is required.** The STG toolchain that emits Chakra traces runs only
-inside the `astra:latest` image. Build it once from the **repo root** (the
-Dockerfile clones astra-sim/STG internally, so it needs network access but no
-build args or special context):
+**Docker is required.** The `stage` toolchain that emits Chakra traces runs
+only inside the `astra:latest` image. Build it once from the **repo root**. The
+build clones `astra-sim/stage` internally (network access needed, no build args)
+and requires Docker BuildKit/buildx — bundled with Docker >= 23.0; on older
+installs add the plugin (`sudo apt-get install docker-buildx-plugin`) or use the
+`DOCKER_BUILDKIT=1` fallback:
 
 ```bash
-sudo docker build -t astra:latest .
+docker buildx build -t astra:latest .
+# or, without the buildx plugin:
+DOCKER_BUILDKIT=1 docker build -t astra:latest .
 ```
 
 Override the docker command (e.g. rootless) and image via environment:
-`DOCKER="docker"` and `STG_IMAGE=my-astra:tag`.
+`DOCKER="docker"` and `STAGE_IMAGE=my-astra:tag`.
 
 ## Trace generation
 
@@ -40,9 +44,9 @@ each shape folder are the per-rank `chakra_trace.<rank>.et` files (one per rank,
 `A·B·C` of them) plus a `chakra_trace.json`.
 
 The build is **deterministic** (re-running yields the same traces for a fixed
-STG version / image) and **idempotent / resumable** (shapes already built are
-skipped). It runs STG in one batched container, fanning shapes out across cores;
-parallelism is bounded by `JOBS` (default `nproc-2`).
+`stage` version / image) and **idempotent / resumable** (shapes already built
+are skipped). It runs `stage` in one batched container, fanning shapes out
+across cores; parallelism is bounded by `JOBS` (default `nproc-2`).
 
 Useful flags (call the helper directly):
 

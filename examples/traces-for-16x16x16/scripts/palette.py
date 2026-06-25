@@ -3,7 +3,7 @@
 
 A size is *eligible* iff it has >=1 ordered factorization dp x tp x pp with
 every dim EVEN and <= 16. The single exception shape "1x1x1" carries the
-1-node jobs (spec 3.1). Candidate orderings additionally honor the STG-side
+1-node jobs (spec 3.1). Candidate orderings additionally honor the stage-side
 constraints (spec 4.1): tp divides ATTN_HEADS (16 — which also divides the
 bw model's 32) and pp <= NUM_STACKS (16). The lib build attempts every
 candidate and records pass/fail in calibration/palette.json (spec 4.2): this

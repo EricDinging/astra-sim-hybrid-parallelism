@@ -5,17 +5,17 @@
 #
 # Usage: ./reproduce.sh <phase>
 # Phases:
-#   traces    Build the full Chakra trace library (all legal bw shapes) via STG.
+#   traces    Build the full Chakra trace library (all legal bw shapes) via stage.
 #   # configs | calibrate | gen | run | analyze  -- added by later helpers
 #
 # Env:
-#   STG_IMAGE  Docker image bundling STG (default: astra:latest)
+#   STAGE_IMAGE  Docker image bundling stage (default: astra:latest)
 #   DOCKER     Docker command            (default: sudo docker)
 #   JOBS       In-container parallelism  (default: nproc-2, chosen by the helper)
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STG_IMAGE="${STG_IMAGE:-astra:latest}"
+STAGE_IMAGE="${STAGE_IMAGE:-astra:latest}"
 DOCKER="${DOCKER:-sudo docker}"
 JOBS="${JOBS:-}"
 
@@ -28,7 +28,7 @@ case "$phase" in
   traces)
     python3 "$HERE/scripts/gen_traces.py" \
       --out "$HERE/tracelib" \
-      --image "$STG_IMAGE" \
+      --image "$STAGE_IMAGE" \
       --docker "$DOCKER" \
       ${JOBS:+--jobs "$JOBS"}
     ;;

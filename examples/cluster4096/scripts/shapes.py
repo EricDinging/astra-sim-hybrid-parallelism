@@ -2,20 +2,20 @@
 
 WHY THE LEGAL SET IS PURELY GEOMETRIC
 -------------------------------------
-A job shape is an ordered triple A x B x C, mapped to STG parallelism dims as
+A job shape is an ordered triple A x B x C, mapped to stage parallelism dims as
 A=dp, B=tp, C=pp. Each dimension is independently 1 or an even integer <= 16,
 and the size A*B*C must be <= 4096 (the 16x16x16 torus capacity; automatically
 satisfied since each dim <= 16).
 
-Empirically verified on 2026-06-25 by running STG (main.py inside the
-astra:latest image) over the bw model (head=32, kvhead=8): STG accepts EVERY
+Empirically verified on 2026-06-25 by running stage (main.py inside the
+astra:latest image) over the bw model (head=32, kvhead=8): stage accepts EVERY
 such shape with NO divisibility constraint on tp. tp in {6, 10, 12, 14} (which
 do NOT divide head=32) and tp=16 with kvhead=8 all produce valid Chakra traces;
 dp is unconstrained and pp only needs pp <= num_stacks (=16), auto-satisfied.
 
 This CONTRADICTS the `tp | ATTN_HEADS` assumption baked into the older
 examples/traces-for-16x16x16/scripts/palette.py. That rule is a *fidelity*
-choice (a clean integer head-per-rank split), NOT an STG requirement. Do NOT
+choice (a clean integer head-per-rank split), NOT a stage requirement. Do NOT
 re-introduce head-divisibility pruning here: the legal set is defined by
 geometry alone, and this module is its single authority.
 """

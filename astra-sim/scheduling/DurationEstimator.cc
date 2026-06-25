@@ -24,8 +24,8 @@ using Chakra::FeederV3::ChakraNode;
 namespace {
 
 // Integer attribute value by name. AttributeProto is a oneof, so the unused
-// integer field reads back as 0; take whichever is set. STG encodes num_ops and
-// comm_size as int64, tensor_size as uint64.
+// integer field reads back as 0; take whichever is set. stage encodes num_ops
+// and comm_size as int64, tensor_size as uint64.
 uint64_t attr_u64(const ChakraNode& node, const char* name) {
     for (int i = 0; i < node.attr_size(); ++i) {
         const auto& a = node.attr(i);

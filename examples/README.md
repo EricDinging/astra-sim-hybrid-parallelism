@@ -8,7 +8,7 @@ More examples can also be found in the [ASTRA-sim tutorials](https://astra-sim.g
     - Reduce-Scatter
     - All-to-All
 
-*Note: For generating synthetic ETs for realistic workloads (including both compute and communication), you can use [STG](https://github.com/astra-sim/symbolic_tensor_graph). For information on collecting ETs from real-systems, check out the [Chakra wiki](https://github.com/mlcommons/chakra/wiki).*
+*Note: For generating synthetic ETs for realistic workloads (including both compute and communication), you can use [stage](https://github.com/astra-sim/stage). For information on collecting ETs from real-systems, check out the [Chakra wiki](https://github.com/mlcommons/chakra/wiki).*
 
 ### System
 - `native_collectives`: ASTRA-sim system layer config files that's using ASTRA-sim's native collective algorithm implementations.

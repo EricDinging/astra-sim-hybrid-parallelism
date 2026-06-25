@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """OK/FAIL lib-build log -> calibration/palette.json (spec section 4.2).
 
-palette.json records, per model, which candidate orderings STG actually
+palette.json records, per model, which candidate orderings stage actually
 generated (pass) and which failed (with reason). Hard gate: every grid size
 (plus the 1-node exception) must keep >=1 passing shape in BOTH models —
 otherwise exit 1 listing the dead sizes, so the palette never shrinks

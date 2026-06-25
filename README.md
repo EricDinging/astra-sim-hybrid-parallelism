@@ -21,12 +21,24 @@ The previous version, ASTRA-sim 1.0, is available in the `ASTRA-sim-1.0` [branch
 We encourage community contributions to ASTRA-sim via PRs.
 
 ## Astra-sim++ Setup
+
+The image bundles the analytical backend and the `stage` Chakra
+trace generator. The source is always cloned from GitHub at build time, so no
+local submodule checkout is required for the image.
+
+Building requires Docker BuildKit/buildx. It ships with Docker Engine >= 23.0;
+on older installs, add the buildx plugin from Docker's apt repo, or fall back to
+BuildKit-enabled `docker build`:
+
 ```
-git submodule update --init --recursive
+# (only if `docker buildx` is missing)
+sudo apt-get install docker-buildx-plugin
 
-docker build -t astra-sim:latest -f Dockerfile .
+docker buildx build -t astra:latest .
+# or, without the buildx plugin:
+DOCKER_BUILDKIT=1 docker build -t astra:latest .
 
-docker run -it --name astra-sim-latest  --shm-size=8g astra-sim:latest bash
+docker run -it --name astra-latest --shm-size=8g astra:latest bash
 ```
 
 ## Building with TopoMatch

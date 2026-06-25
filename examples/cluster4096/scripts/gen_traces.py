@@ -1,7 +1,7 @@
-"""STG-in-docker trace driver for cluster4096.
+"""stage-in-docker trace driver for cluster4096.
 
-Runs STG (Symbolic Tensor Graph) inside the ``astra:latest`` Docker
-image to produce Chakra execution traces for every requested job shape.
+Runs stage inside the ``astra:latest`` Docker image to produce Chakra
+execution traces for every requested job shape.
 
 Usage examples::
 
@@ -24,7 +24,7 @@ import subprocess
 import shapes
 
 # ---------------------------------------------------------------------------
-# STG hyperparameters: everything except --dp / --tp / --pp (injected per shape)
+# stage hyperparameters: everything except --dp / --tp / --pp (injected per shape)
 # ---------------------------------------------------------------------------
 BW_PARAMS: str = (
     "--model_type dense "
@@ -35,12 +35,12 @@ BW_PARAMS: str = (
 
 # ---------------------------------------------------------------------------
 # Shell script that runs inside the container.
-# Reads /work/worklist.txt ("a b c" per line) and runs STG for each shape.
+# Reads /work/worklist.txt ("a b c" per line) and runs stage for each shape.
 # BW_PARAMS and JOBS are passed via `docker run -e`.
 # ---------------------------------------------------------------------------
 CONTAINER_SH: str = r"""
 set -eu
-cd /app/STG
+cd /app/stage
 run_one() {
     a="$1"; b="$2"; c="$3"
     od="/work/${MODEL}/${a}x${b}x${c}"
@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
 
     ap = argparse.ArgumentParser(
-        description="Build Chakra traces for cluster4096 job shapes via STG-in-docker."
+        description="Build Chakra traces for cluster4096 job shapes via stage-in-docker."
     )
     ap.add_argument(
         "--out", default=default_out(), help="output root (default: tracelib/)"
@@ -192,8 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument(
         "--image",
-        default=os.environ.get("STG_IMAGE", "astra:latest"),
-        help="Docker image containing STG (default: astra:latest or $STG_IMAGE)",
+        default=os.environ.get("STAGE_IMAGE", "astra:latest"),
+        help="Docker image containing stage (default: astra:latest or $STAGE_IMAGE)",
     )
     ap.add_argument(
         "--docker",

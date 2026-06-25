@@ -4,7 +4,7 @@
 # Spec: docs/superpowers/specs/2026-06-05-16x16x16-pareto-sweep-design.md
 # Phases (positional arg, default "all"):
 #   configs    generate network.yml + 4096x4096 BW/LT schedule matrices
-#   lib        kvhead probe + STG trace library via Docker; palette.json
+#   lib        kvhead probe + stage trace library via Docker; palette.json
 #   calibrate  isolated service time per lib entry -> service_times.csv
 #              (farm worker pool; local when SMOKE=1 / no hosts)
 #   gen        exact per-cell mean-ia from rho targets; generate cells; gates
@@ -22,7 +22,7 @@
 #   REMOTE_HOSTS  user@host list (default: repo-root sshlist); "" = local
 #   MAXPAR_HOST   sim slots per pool host        (default 2, spec section 8)
 #   SMOKE=1       miniaturized local pipeline (smoke_lat_small, 12 jobs)
-#   STG_IMAGE     Docker image bundling STG      (default astra:latest)
+#   STAGE_IMAGE     Docker image bundling stage      (default astra:latest)
 #   DOCKER        docker command                 (default "sudo docker")
 #   REMOTE_DIR    remote working dir             (default /workspace/run/sweep16)
 #   MAXPAR_CAL    parallel local calibration sims (default nproc-2; SMOKE/local)
@@ -66,13 +66,13 @@ SIZES_LARGE=$(python3 scripts/palette.py sizes large | paste -sd,)
 # uncurated grid) while every other policy ordering is preserved.
 SIZES_HL_BW="512,576,640,1024,1536"
 SIZES_HL_LAT="576,640,672,1024,1536"
-STG_IMAGE="${STG_IMAGE:-astra:latest}"
+STAGE_IMAGE="${STAGE_IMAGE:-astra:latest}"
 DOCKER="${DOCKER:-sudo docker}"
 REMOTE_DIR="${REMOTE_DIR:-/workspace/run/sweep16}"
 MAXPAR_HOST="${MAXPAR_HOST:-2}"
 SSHOPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=15"
 
-# ---- STG models (spec 4.3). lat kvhead is finalized by the kvhead probe.
+# ---- stage models (spec 4.3). lat kvhead is finalized by the kvhead probe.
 BW_PARAMS="--dmodel 8192 --dff 16384 --batch 16 --seq 2048 --dvocal 8192 --head 32 --kvhead 8"
 lat_params() {  # <kvhead>
   echo "--dmodel 1024 --dff 2048 --batch 1 --seq 256 --dvocal 2048 --head 16 --kvhead $1"
@@ -130,13 +130,13 @@ do_configs() {
 }
 
 # ================================================================== lib ===
-probe_kvhead() {  # decide lat kvhead: smallest of 4,8,16 STG accepts for tp=16
+probe_kvhead() {  # decide lat kvhead: smallest of 4,8,16 stage accepts for tp=16
   if [ -f "$CAL/lat_kvhead.txt" ]; then cat "$CAL/lat_kvhead.txt"; return; fi
   local kv d
   for kv in 4 8 16; do
     d=$(mktemp -d)
-    if $DOCKER run --rm --ipc=host -v "$d:/work" "$STG_IMAGE" bash -c \
-      "cd /app/STG && python3 main.py --output_dir /work --output_name chakra_trace \
+    if $DOCKER run --rm --ipc=host -v "$d:/work" "$STAGE_IMAGE" bash -c \
+      "cd /app/stage && python3 main.py --output_dir /work --output_name chakra_trace \
        --model_type dense --dp 2 --tp 16 --pp 2 $(lat_params "$kv") \
        --num_stacks $NUM_STACKS --weight_sharded 0 \
        --chakra_schema_version v0.0.4" >/dev/null 2>&1 \
@@ -153,8 +153,8 @@ build_library() {
   if [ -f "$LIB/lat/1x1x1/chakra_trace.0.et" ] && [ -z "${REGEN_LIB:-}" ]; then
     echo "[lib] mixlib present — skipping (REGEN_LIB=1 to force)"; return
   fi
-  $DOCKER image inspect "$STG_IMAGE" >/dev/null 2>&1 || {
-    echo "ERROR: docker image '$STG_IMAGE' not found" >&2; exit 1; }
+  $DOCKER image inspect "$STAGE_IMAGE" >/dev/null 2>&1 || {
+    echo "ERROR: docker image '$STAGE_IMAGE' not found" >&2; exit 1; }
   local kv pal
   if [ -n "${SMOKE:-}" ]; then
     kv=4  # smoke palette has no tp=16 shape; probe unnecessary
@@ -170,14 +170,14 @@ build_library() {
     { python3 scripts/palette.py shapes small; python3 scripts/palette.py shapes large;
       echo 1x1x1; } | sed 's/^/bw /'   >> "$pal"
   fi
-  echo "[lib] building STG library ($(wc -l < "$pal") entries)..."
+  echo "[lib] building stage library ($(wc -l < "$pal") entries)..."
   rm -rf "$LIB"; mkdir -p "$LIB"
   $DOCKER run --rm --ipc=host -v "$LIB:/work" -v "$pal:/pal.txt" \
     -e LATP="$(lat_params "$kv")" -e BWP="$BW_PARAMS" -e STACKS="$NUM_STACKS" \
-    "$STG_IMAGE" bash -c '
-      cd /app/STG; mkdir -p ~/.parallel && touch ~/.parallel/will-cite
+    "$STAGE_IMAGE" bash -c '
+      cd /app/stage; mkdir -p ~/.parallel && touch ~/.parallel/will-cite
       PAR=$(( $(nproc) - 2 )); [ "$PAR" -lt 1 ] && PAR=1
-      echo "[lib] STG worker pool: $PAR" >&2
+      echo "[lib] stage worker pool: $PAR" >&2
       gen1(){ local m="$1" sh="$2"
         local dp=$(echo $sh|cut -dx -f1) tp=$(echo $sh|cut -dx -f2) pp=$(echo $sh|cut -dx -f3)
         local od="/work/$m/$sh"; mkdir -p "$od"

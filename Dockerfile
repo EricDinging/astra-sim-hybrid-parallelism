@@ -1,3 +1,14 @@
+# syntax=docker/dockerfile:1
+#
+# Image for astra-sim-hybrid-parallelism: the analytical backend plus the
+# `stage` Chakra trace generator. The source is always cloned
+# from GitHub at build time.
+#
+# Build (BuildKit/buildx required; default in Docker >= 23.0, otherwise install
+# the docker-buildx-plugin package or set DOCKER_BUILDKIT=1):
+#   docker buildx build -t astra:latest .
+
+
 ## Use Ubuntu
 FROM ubuntu:22.04
 
@@ -5,15 +16,17 @@ FROM ubuntu:22.04
 ### ================== System Setups ======================
 ## Install System Dependencies
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt -y update && apt -y upgrade
-RUN apt -y install \
-    coreutils wget vim git \
-    gcc g++ clang-format \
-    make cmake \
+# Keep `apt update` in the SAME RUN as `apt install`: a separately-cached
+# `apt update` layer goes stale when the mirror rolls package versions and
+# deletes the old .debs, causing 404s on a later install. Combining them means
+# any change to the package list re-runs update against a fresh index.
+RUN apt -y update && apt -y upgrade && apt -y install \
+    coreutils wget curl git \
+    gcc g++ clang-format make cmake \
     libboost-dev libboost-program-options-dev \
     openmpi-bin openmpi-doc libopenmpi-dev \
     python3 python3-pip python3-venv \
-    graphviz libyaml-cpp-dev \
+    graphviz parallel \
     libhwloc-dev libscotch-dev pkg-config
 
 ## Create Python venv: Required for Python 3.10
@@ -71,6 +84,7 @@ ENV PROTOBUF_FROM_SOURCE="True"
 WORKDIR /app
 RUN git clone https://github.com/EricDinging/astra-sim-hybrid-parallelism.git astra-sim
 WORKDIR /app/astra-sim
+RUN git checkout multitenant
 RUN git submodule update --init --recursive
 WORKDIR /app
 RUN ln -s astra-sim/extern/graph_frontend/chakra .
@@ -92,16 +106,29 @@ RUN pip3 install --upgrade protobuf
 ### ============= Astra-sim Installation ==================
 WORKDIR /app/astra-sim
 RUN bash ./build/astra_analytical/build.sh
-RUN bash ./build/astra_ns3/build.sh
 ### ======================================================
 
 
-### ============= STG Installation ==================
-RUN git clone https://github.com/astra-sim/symbolic_tensor_graph
+### ============= stage Installation ==================
+WORKDIR /app
+RUN pip3 install tqdm
+RUN git clone https://github.com/astra-sim/stage stage
+### ======================================================
+
+
+### ============= TopoMatch Installation ==================
+WORKDIR /app
+RUN apt -y update && apt -y install hwloc libhwloc-dev libscotch-dev pkg-config
+RUN git clone --depth 1 https://github.com/shuoshuc/TopoMatch.git topomatch
+WORKDIR /app/topomatch
+RUN ./configure CFLAGS="-I/usr/include/scotch" CPPFLAGS="-I/usr/include/scotch" LDFLAGS="-L/usr/lib/x86_64-linux-gnu"
+RUN make && make install
+RUN echo "/usr/local/lib" | tee /etc/ld.so.conf.d/topomatch.conf && ldconfig
 ### ======================================================
 
 
 ### ================== Finalize ==========================
+RUN pip3 install natsort hilbertcurve
 ## Move to the application directory
 WORKDIR /app
 ### ======================================================
