@@ -34,7 +34,13 @@ class ETFeeder {
  public:
   ChakraGlobalMetadata global_metadata;
   ETFeeder(const std::string& file_path)
-      : chakra_file(file_path, std::ios::binary | std::ios::in | std::ios::app),
+      // Local deviation from upstream: dropped std::ios::app. chakra_file is a
+      // read-only std::ifstream (no code writes to it), but std::ios::app makes
+      // the underlying open() request write permission, so opening a read-only
+      // trace (e.g. root-owned, generated in Docker) fails despite an access()
+      // R_OK precheck passing. app has no read-side effect, so removing it is
+      // safe and lets read-only traces open.
+      : chakra_file(file_path, std::ios::binary | std::ios::in),
         _operator_id(_operator_id_cnt++),
         dependancy_resolver(RESOLVE_DATA_DEPS, RESOLVE_CTRL_DEPS) {
     if (!chakra_file.is_open())
