@@ -32,6 +32,8 @@ class JobInstance {
     // Identity / shape.
     int job_id;
     int num_ranks;
+    // Training iterations to replay (>= 1). Drives Workload's replay loop.
+    int num_iterations;
     std::array<int, 3> shape;
     std::string trace_dir;
     JobStatus status;

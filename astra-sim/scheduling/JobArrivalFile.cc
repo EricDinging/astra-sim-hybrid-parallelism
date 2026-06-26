@@ -90,12 +90,13 @@ std::vector<JobArrival> JobArrivalFile::parse(const std::string& path) {
 
         auto cols = split_csv(line);
         if (!header_seen) {
-            if (cols.size() != 4 || cols[0] != "job_id" ||
+            if (cols.size() != 5 || cols[0] != "job_id" ||
                 cols[1] != "arrival_time_ns" || cols[2] != "num_ranks" ||
-                cols[3] != "shape") {
+                cols[3] != "shape" || cols[4] != "num_iterations") {
                 logger->critical(
                     "arrival CSV: expected header "
-                    "'job_id,arrival_time_ns,num_ranks,shape', got '{}'",
+                    "'job_id,arrival_time_ns,num_ranks,shape,num_iterations', "
+                    "got '{}'",
                     line);
                 std::exit(1);
             }
@@ -103,8 +104,8 @@ std::vector<JobArrival> JobArrivalFile::parse(const std::string& path) {
             continue;
         }
 
-        if (cols.size() != 4) {
-            logger->critical("arrival CSV row {}: expected 4 columns, got {}",
+        if (cols.size() != 5) {
+            logger->critical("arrival CSV row {}: expected 5 columns, got {}",
                              row, cols.size());
             std::exit(1);
         }
@@ -113,6 +114,12 @@ std::vector<JobArrival> JobArrivalFile::parse(const std::string& path) {
         ja.arrival_time = static_cast<Tick>(std::stoull(cols[1]));
         ja.num_ranks = std::stoi(cols[2]);
         ja.shape = parse_shape(cols[3], row);
+        ja.num_iterations = std::stoi(cols[4]);
+        if (ja.num_iterations < 1) {
+            logger->critical("arrival CSV row {}: num_iterations must be >= 1",
+                             row);
+            std::exit(1);
+        }
 
         if (ja.num_ranks <= 0) {
             logger->critical("arrival CSV row {}: num_ranks must be > 0", row);

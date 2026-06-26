@@ -109,6 +109,29 @@ class Workload : public Callable {
     // collectives in different orders.
     std::unordered_map<int, std::unordered_map<uint64_t, int>>
         cg_node_to_ordinal_;
+
+    // --- Multi-iteration (training-loop) support ---------------------------
+    // The single-iteration Chakra trace is replayed total_iterations_ times to
+    // model a job that runs N training iterations. Each iteration is a full
+    // drain of the DAG; iteration k+1 only begins once iteration k has fully
+    // completed, which gives an exact per-iteration barrier for free. The
+    // trace path is retained so the feeder can be rebuilt (rewound) per
+    // iteration. Legacy one-shot path leaves total_iterations_ at 1.
+    std::string workload_filename_;
+    int total_iterations_ = 1;
+    int current_iteration_ = 0;
+
+    // True once the current iteration's DAG has fully drained: no dep-free or
+    // ongoing nodes in the resolver and no in-flight hardware ops.
+    bool current_iteration_drained() const;
+    // Rewind to a fresh single-iteration DAG (new feeder => fresh dependency
+    // resolver) and reset per-iteration trackers. Reuses every logical id
+    // (comm-group ids, deterministic stream-id bases, tags); resets no global
+    // counter. See the definition for the safety argument.
+    void advance_to_next_iteration();
+    // Terminal completion: report, notify the frontend, flip is_finished and
+    // signal the parent job. Called once, after the final iteration drains.
+    void finish();
 };
 
 }  // namespace AstraSim

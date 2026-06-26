@@ -16,6 +16,7 @@ namespace Scheduling {
 JobInstance::JobInstance(const JobArrival& a, std::string td, SchedRuntime* rt)
     : job_id(a.job_id),
       num_ranks(a.num_ranks),
+      num_iterations(a.num_iterations),
       shape(a.shape),
       trace_dir(std::move(td)),
       status(JobStatus::PENDING),

@@ -51,6 +51,9 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     this->current_comm_group_idx = 0;
     delete temp_et_feeder;
     this->et_feeder = new ETFeeder(workload_filename);
+    this->workload_filename_ = workload_filename;
+    // Legacy one-shot path: always a single iteration (total_iterations_ stays
+    // at its default of 1).
     this->comm_groups.clear();
     // TODO: parametrize the number of available hardware resources
     this->hw_resource = new HardwareResource(1, sys->id);
@@ -125,6 +128,11 @@ Workload::Workload(Sys* sys,
     }
 
     this->et_feeder = new ETFeeder(workload_filename);
+    this->workload_filename_ = workload_filename;
+    // Replay the single-iteration trace once per training iteration. Clamp to
+    // >= 1 so a malformed/zero count degrades to single-iteration rather than
+    // never running.
+    this->total_iterations_ = std::max(1, parent_job->num_iterations);
     this->comm_groups.clear();
     this->hw_resource = new HardwareResource(1, sys->id);
     this->local_mem_usage_tracker =
@@ -811,18 +819,89 @@ void Workload::call(EventType event, CallData* data) {
         }
     }
 
-    const auto& dep_resolver = this->et_feeder->getDependancyResolver();
-    if ((dep_resolver.get_dependancy_free_nodes().empty()) &&
-        (dep_resolver.get_ongoing_nodes().empty()) &&
-        (hw_resource->num_in_flight_cpu_ops == 0) &&
-        (hw_resource->num_in_flight_gpu_comp_ops == 0) &&
-        (hw_resource->num_in_flight_gpu_comm_ops == 0)) {
-        report();
-        sys->comm_NI->sim_notify_finished();
-        is_finished = true;
-        if (parent_job != nullptr) {
-            parent_job->on_rank_finished(job_local_rank, Sys::boostedTick());
+    // Iteration / job completion. The single-iteration trace is replayed
+    // total_iterations_ times to model a multi-iteration training job. An
+    // iteration is "done" once its DAG fully drains (current_iteration_drained
+    // below). On each drain we either advance to the next iteration or, after
+    // the last one, finish the job for good.
+    //
+    // The loop re-checks the predicate after an advance: a normal iteration
+    // issues real work whose synchronous occupy() makes the predicate false,
+    // so the loop runs once and exits, with future events driving the new
+    // iteration. The loop only spins when an iteration issued no work at all
+    // (degenerate/empty trace) -- without the re-check such an iteration would
+    // wedge the rank with no pending event to wake it.
+    while (current_iteration_drained()) {
+        if (current_iteration_ + 1 < total_iterations_) {
+            ++current_iteration_;
+            advance_to_next_iteration();
+            issue_dep_free_nodes();
+        } else {
+            finish();
+            break;
         }
+    }
+}
+
+bool Workload::current_iteration_drained() const {
+    const auto& dep_resolver = this->et_feeder->getDependancyResolver();
+    return dep_resolver.get_dependancy_free_nodes().empty() &&
+           dep_resolver.get_ongoing_nodes().empty() &&
+           hw_resource->num_in_flight_cpu_ops == 0 &&
+           hw_resource->num_in_flight_gpu_comp_ops == 0 &&
+           hw_resource->num_in_flight_gpu_comm_ops == 0;
+}
+
+void Workload::advance_to_next_iteration() {
+    // Rebuild the feeder from the same trace file: this rewinds the trace
+    // stream and hands us a fresh DependencyResolver re-seeded from the DAG
+    // roots. cg_node_to_ordinal_ is invariant across iterations and is NOT
+    // recomputed; hw_resource keeps its tics_* accumulators (whole-job
+    // totals) while its in-flight counters are already 0 at a drain boundary.
+    //
+    // We deliberately REUSE every logical id rather than minting new ones,
+    // which is safe precisely because the previous iteration is fully drained
+    // before we get here:
+    //   * comm-group ids are trace-defined; the CommunicatorGroup objects in
+    //     comm_groups persist across iterations untouched.
+    //   * collective stream-id bases are a deterministic function of a
+    //     collective's node ordinal -- issue_coll_comm() re-derives
+    //     num_streams = num_streams_base + ordinal * kMaxStreamsPerCollective
+    //     on every issue -- so the next iteration reproduces identical stream
+    //     ids. No stream with those ids is still live, and the only global
+    //     state keyed by stream id (BaseStream::synchronizer) is inert on this
+    //     frontend: its sole reader, Sys::ask_for_schedule(), has no caller.
+    //   * send/recv tags are trace-defined and paired-and-cleared within an
+    //     iteration before the next one begins.
+    // The only monotonic ids in play are transient DataSet ids (the keys of
+    // collective_comm_*_map), drawn from a global counter; letting them climb
+    // across iterations is correct and collision-free, and the maps are empty
+    // here because a drained iteration has no in-flight collectives.
+    delete this->et_feeder;
+    this->et_feeder = new ETFeeder(this->workload_filename_);
+
+    // current_comm_group_idx counts collective completions within an
+    // iteration; reset it so it indexes from the start of the new iteration.
+    this->current_comm_group_idx = 0;
+
+    // Should be unreachable (a drained iteration has 0 in-flight comm ops, so
+    // every wrapper was erased on completion). Surface a straggler instead of
+    // silently leaking it rather than asserting.
+    if (!collective_comm_wrapper_map.empty()) {
+        LoggerFactory::get_logger("workload")
+            ->warn("rank {}: {} collective wrapper(s) still live at the "
+                   "boundary into iteration {}",
+                   sys->id, collective_comm_wrapper_map.size(),
+                   current_iteration_);
+    }
+}
+
+void Workload::finish() {
+    report();
+    sys->comm_NI->sim_notify_finished();
+    is_finished = true;
+    if (parent_job != nullptr) {
+        parent_job->on_rank_finished(job_local_rank, Sys::boostedTick());
     }
 }
 

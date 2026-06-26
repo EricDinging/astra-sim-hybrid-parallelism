@@ -61,6 +61,9 @@ struct JobArrival {
     Tick arrival_time;
     int num_ranks;
     std::array<int, 3> shape;
+    // Number of training iterations to replay for this job (>= 1). Optional in
+    // the arrival CSV; defaults to 1 (single-iteration, legacy behavior).
+    int num_iterations = 1;
 };
 
 std::string to_string(JobStatus s);
