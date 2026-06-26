@@ -63,9 +63,59 @@ def test_smaller_alpha_has_heavier_tail():
     assert mean_heavy > mean_light
 
 
-def test_sample_duration_is_one():
+def test_sample_duration_in_range():
     rng = random.Random(0)
-    assert all(gen_arrivals.sample_duration(rng) == 1 for _ in range(50))
+    for _ in range(5000):
+        d = gen_arrivals.sample_duration(rng, 20, 1.3, 1.2)
+        assert 1 <= d <= 20
+
+
+def test_sample_duration_max_iters_one_is_constant():
+    rng = random.Random(0)
+    assert all(gen_arrivals.sample_duration(rng, 1, 1.3, 1.2) == 1 for _ in range(50))
+
+
+def test_sample_duration_median_is_small():
+    # Log-normal with a small median => most jobs short => median near the floor.
+    rng = random.Random(7)
+    draws = sorted(gen_arrivals.sample_duration(rng, 20, 1.3, 1.2) for _ in range(4001))
+    assert draws[2000] <= 2
+
+
+def test_sample_duration_mass_concentrates_at_floor():
+    # median 1.3 => roughly half the jobs are exactly 1 iteration.
+    rng = random.Random(11)
+    draws = [gen_arrivals.sample_duration(rng, 20, 1.3, 1.2) for _ in range(5000)]
+    frac_one = sum(1 for d in draws if d == 1) / len(draws)
+    assert 0.45 <= frac_one <= 0.65
+
+
+def test_sample_duration_larger_sigma_has_heavier_tail():
+    # Larger sigma thickens the tail => larger mean duration.
+    rng_a = random.Random(2)
+    rng_b = random.Random(2)
+    mean_heavy = sum(
+        gen_arrivals.sample_duration(rng_a, 20, 1.3, 2.0) for _ in range(5000)
+    )
+    mean_light = sum(
+        gen_arrivals.sample_duration(rng_b, 20, 1.3, 0.6) for _ in range(5000)
+    )
+    assert mean_heavy > mean_light
+
+
+def test_sample_duration_rejects_bad_args():
+    rng = random.Random(0)
+    for bad in [
+        lambda: gen_arrivals.sample_duration(rng, 0, 1.3, 1.2),
+        lambda: gen_arrivals.sample_duration(rng, 20, 0.0, 1.2),
+        lambda: gen_arrivals.sample_duration(rng, 20, 1.3, 0.0),
+        lambda: gen_arrivals.sample_duration(rng, 20, 1.3, -1.0),
+    ]:
+        try:
+            bad()
+        except ValueError:
+            continue
+        assert False, "expected ValueError"
 
 
 def test_build_job_sequence_shapes_match_size_and_legal():
@@ -75,7 +125,7 @@ def test_build_job_sequence_shapes_match_size_and_legal():
     for size, shape, iters in jobs:
         assert shapes.is_legal("bw", *shape)
         assert shape[0] * shape[1] * shape[2] == size
-        assert iters == 1
+        assert 1 <= iters <= 20
 
 
 def test_build_job_sequence_deterministic():
@@ -198,7 +248,7 @@ def test_main_uniform_writes_valid_trace():
             "num_iterations",
         ]
         assert rows[0]["arrival_time_ns"] == "0"
-        assert all(r["num_iterations"] == "1" for r in rows)
+        assert all(1 <= int(r["num_iterations"]) <= 20 for r in rows)
         ts = [int(r["arrival_time_ns"]) for r in rows]
         assert ts == sorted(ts)
         for r in rows:
@@ -225,14 +275,16 @@ def test_main_uniform_work_matches_config():
             ]
         )
         rows = _read_arrivals(os.path.join(out, "arrivals.csv"))
-        total_ranks = sum(int(r["num_ranks"]) for r in rows)
+        # W = sum_i ranks_i * 10 * iters_i (uniform svc=10).
+        expected_w = sum(
+            int(r["num_ranks"]) * 10 * int(r["num_iterations"]) for r in rows
+        )
         cfg = {}
         with open(os.path.join(out, "trace_config.txt")) as f:
             for line in f:
                 k, v = line.rstrip("\n").split("=", 1)
                 cfg[k] = v
-        # W = sum(ranks) * 10 * 1 (uniform svc, iters=1).
-        assert abs(float(cfg["realized_work_npu_ns"]) - total_ranks * 10) < 1e-6
+        assert abs(float(cfg["realized_work_npu_ns"]) - expected_w) < 1e-6
         assert "mean_ia_ns" in cfg
 
 

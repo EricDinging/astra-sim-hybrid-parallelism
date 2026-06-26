@@ -16,7 +16,7 @@ calibrate.py):
 svc_per_iter(shape) is the MEASURED, isolated, single-iteration service time
 (ns) for that shape (produced by measure_svc.py / service_times.csv); the
 generator never estimates timing analytically. N_i is the job's duration in
-iterations (currently a placeholder, always 1; see sample_duration).
+iterations, drawn from a heavy-tailed distribution (see sample_duration).
 
 Given the drawn job sequence (hence a concrete W), the target load inverts to a
 mean inter-arrival time:
@@ -31,15 +31,23 @@ RESIDENCY ASSUMPTION
 W is computed as if the simulator holds each job's ranks for all N iterations.
 We assume ASTRA-sim implements workload looping later (re-issuing the Chakra DAG
 N times before releasing ranks), so actual rho ~ target rho. The num_iterations
-column is emitted so the simulator can honor this. With the placeholder N == 1
-there is no target-vs-actual gap today.
+column is emitted so the simulator can honor this. Until looping lands the
+simulator runs each job for a single iteration, so realized busy time is
+svc (not svc*N) and target rho overshoots actual rho by ~mean(N); once looping
+is implemented the two converge.
 
 SAMPLING
 --------
 - size:  truncated Pareto over the sorted DISTINCT-SIZE INDEX (alpha default
          0.5); weights by rank, not value, so the large-job tail survives.
 - shape: uniform among legal shapes of the drawn size.
-- duration: sample_duration (placeholder 1).
+- duration: clamped log-normal over [1, max-iters] (iter-median default 1.3,
+         iter-sigma default 1.2). Matches the body of published ML-cluster
+         runtime traces: median pins ~55% of jobs at 1 iteration (~71% at <=2),
+         sigma dials the tail. The 1..max-iters cap bounds the realized tail, so
+         the trace's running-time spread is N * svc_per_iter(shape) -- in this
+         cluster svc is ~flat over the sampled (small-size) region, so N carries
+         most of it.
 
 DETERMINISM
 -----------
@@ -93,12 +101,39 @@ def sample_size_index(rng: random.Random, m: int, alpha: float) -> int:
     return min(max(k, 0), m - 1)
 
 
-def sample_duration(rng: random.Random) -> int:
-    """Job duration in iterations. PLACEHOLDER: always 1.
+def sample_duration(
+    rng: random.Random,
+    max_iters: int = 20,
+    median: float = 1.3,
+    sigma: float = 1.2,
+) -> int:
+    """Job duration in iterations: a discretized, clamped log-normal over
+    [1, max_iters] -- heavy-tailed (most jobs 1-2 iters, a thin tail).
 
-    This is the single seam where the real duration distribution will plug in;
-    every downstream computation already carries the N factor."""
-    return 1
+    Log-normal (log(N) ~ Normal(ln median, sigma)) matches the body of published
+    ML-cluster runtime traces and gives two decoupled knobs: `median` pins how
+    much mass sits at 1-2 (median 1.3 => ~55% at N=1, ~71% at N<=2), while
+    `sigma` alone dials tail heaviness (p99/p50 ~ exp(2.33*sigma) before
+    clamping). All moments are finite, so mean N (the sim-cost proxy) stays low
+    even with a real tail.
+
+    The [1, max_iters] clamp caps the realized tail: a heavier sigma piles mass
+    at max_iters rather than extending past it. The running-time tail of the
+    trace is N * svc_per_iter(shape); in this cluster svc is roughly flat over
+    the sampled (small-size) region, so N carries most of the spread.
+
+        x = round(exp(Normal(ln median, sigma))),  clamped to [1, max_iters]
+    """
+    if max_iters < 1:
+        raise ValueError("max_iters must be >= 1")
+    if max_iters == 1:
+        return 1
+    if median <= 0:
+        raise ValueError("median must be > 0")
+    if sigma <= 0:
+        raise ValueError("sigma must be > 0")
+    x = round(math.exp(rng.gauss(math.log(median), sigma)))
+    return min(max(int(x), 1), max_iters)
 
 
 def build_job_sequence(
@@ -108,17 +143,23 @@ def build_job_sequence(
     alpha: float,
     size_min: int | None = None,
     size_max: int | None = None,
+    max_iters: int = 20,
+    iter_median: float = 1.3,
+    iter_sigma: float = 1.2,
 ) -> list[tuple[int, tuple[int, int, int], int]]:
     """Draw n jobs as (size, shape, num_iterations). Size ~ truncated Pareto
     over the sorted size index; shape ~ uniform among shapes of that size;
-    duration ~ sample_duration (placeholder 1)."""
+    duration ~ clamped log-normal over [1, max_iters] (sample_duration, params
+    iter_median / iter_sigma)."""
     sizes = legal_sizes(model, size_min, size_max)
     m = len(sizes)
     jobs: list[tuple[int, tuple[int, int, int], int]] = []
     for _ in range(n):
         size = sizes[sample_size_index(rng, m, alpha)]
         shape = rng.choice(shapes.shapes_for_size(model, size))
-        jobs.append((size, shape, sample_duration(rng)))
+        jobs.append(
+            (size, shape, sample_duration(rng, max_iters, iter_median, iter_sigma))
+        )
     return jobs
 
 
@@ -241,6 +282,24 @@ def main(argv: list[str] | None = None) -> int:
         help="dev fallback: constant svc_per_iter for every shape",
     )
     ap.add_argument("--alpha", type=float, default=0.5, help="size-Pareto exponent")
+    ap.add_argument(
+        "--max-iters",
+        type=int,
+        default=20,
+        help="duration cap; iterations are drawn from [1, max-iters]",
+    )
+    ap.add_argument(
+        "--iter-median",
+        type=float,
+        default=1.3,
+        help="log-normal duration median (pins mass at 1-2 iters)",
+    )
+    ap.add_argument(
+        "--iter-sigma",
+        type=float,
+        default=1.2,
+        help="log-normal duration sigma (larger = heavier tail, costlier sims)",
+    )
     ap.add_argument("--size-min", type=int, default=None)
     ap.add_argument("--size-max", type=int, default=None)
     ap.add_argument("--seed", type=int, default=0)
@@ -254,7 +313,15 @@ def main(argv: list[str] | None = None) -> int:
 
     rng = random.Random(args.seed)
     jobs = build_job_sequence(
-        rng, args.n, args.model, args.alpha, args.size_min, args.size_max
+        rng,
+        args.n,
+        args.model,
+        args.alpha,
+        args.size_min,
+        args.size_max,
+        args.max_iters,
+        args.iter_median,
+        args.iter_sigma,
     )
     svc_table = load_service_times(args.svc) if args.svc else None
     svc_of = make_svc_fn(svc_table, args.uniform_svc_ns)

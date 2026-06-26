@@ -108,8 +108,9 @@ measured shape (`--jobs` bounds parallel sims, default `nproc-2`).
 `gen_arrivals.py` draws a job stream and lays a **Poisson** arrival process
 calibrated to a target offered load `ρ` (`--rho`). Each job's size is drawn from
 a truncated Pareto over the legal sizes; its shape is uniform among shapes of
-that size; its duration is `num_iterations` (currently a fixed placeholder of
-1). Offered load is `ρ = W / (C·T)` with `W = Σ num_ranks·svc_per_iter·N`,
+that size; its duration `num_iterations` is a clamped log-normal over
+`[1, max-iters]` (heavy-tailed: most jobs 1–2 iterations, a thin tail to the
+cap). Offered load is `ρ = W / (C·T)` with `W = Σ num_ranks·svc_per_iter·N`,
 `C = 4096`; the script inverts `ρ` to a mean inter-arrival time. (See the module
 docstring in `gen_arrivals.py` for the full load model.)
 
@@ -127,8 +128,11 @@ python3 scripts/gen_arrivals.py --rho 0.5 --n 50 --uniform-svc-ns 1000 --out /tm
 ```
 
 Exactly one of `--svc <table>` or `--uniform-svc-ns <ns>` is required. Useful
-flags: `--alpha` (Pareto exponent, default `0.5`; lower = heavier large-job
-tail), `--size-min`/`--size-max` (restrict drawn sizes), `--seed`
+flags: `--alpha` (size-Pareto exponent, default `0.5`; lower = heavier
+large-job tail), `--max-iters` (duration cap, default `20`), `--iter-median`
+(log-normal duration median, default `1.3`; pins mass at 1–2 iters),
+`--iter-sigma` (duration tail heaviness, default `1.2`; larger = heavier tail,
+costlier sims), `--size-min`/`--size-max` (restrict drawn sizes), `--seed`
 (reproducible), `--traces` (also create `jobs/<id>` symlinks into the library so
 the trace is directly runnable by the simulator).
 
