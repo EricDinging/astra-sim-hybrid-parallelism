@@ -184,6 +184,18 @@ void SchedRuntime::detach_job(JobInstance* job) {
     logger->info("job {} COMPLETED at tick {} (jct={} ns)", job->job_id,
                  static_cast<uint64_t>(*job->completed_time),
                  static_cast<uint64_t>(job->jct()));
+
+    // Release this job's per-rank Workloads now that it has finished. Each
+    // Workload owns an ETFeeder (full-size node index_map + an open trace fd),
+    // a Statistics object, and comm-group state. Without this, the unique_ptrs
+    // live inside the JobInstance until the JobRegistry is destroyed at end of
+    // run, so memory and open file descriptors grow with the number of jobs
+    // ever placed -- the source of the high-load OOM (and the EMFILE crash).
+    // Safe here: Workload::finish()/report() has already run, every Sys has
+    // had detach_workload() null its non-owning active_workload pointer, and a
+    // finished workload has no further pending events.
+    job->rank_workloads.clear();
+
     sweep();
 }
 
