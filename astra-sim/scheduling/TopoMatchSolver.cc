@@ -51,6 +51,18 @@ std::optional<std::vector<int>> TopoMatchSolver::solve(
         return std::nullopt;
     }
 
+    // libscotch-6.1's SCOTCH_archSub (_SCOTCHarchSubArchBuild) segfaults when
+    // the binding-constraint set holds a single node: it cannot build a
+    // one-node sub-architecture of the torus3D. This fires deterministically
+    // once the cluster fills to its last free node and a single-rank job is
+    // placed (the free_ids.size() >= K guard above forces K == 1 here). The
+    // mapping is trivial in that case -- the one rank must occupy the one free
+    // node -- so short-circuit before entering Scotch. Verified in isolation: N
+    // == 1 crashes inside Scotch while N >= 2 maps cleanly.
+    if (free_ids.size() == 1) {
+        return std::vector<int>{free_ids.front()};
+    }
+
     // Reproducible mapping: reset Scotch's global RNG to its initial state so
     // repeated solves with identical inputs yield identical placements.
     SCOTCH_randomReset();
