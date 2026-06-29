@@ -9,8 +9,10 @@ LICENSE file in the root directory of this source tree.
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
+#include <iostream>
 #include <map>
 #include <numeric>
+#include <queue>
 #include <random>
 #include <string>
 #include <unordered_map>
@@ -42,6 +44,7 @@ RootFetchRing::QuarterPlacement AstraSim::g_root_fetch_quarter =
     RootFetchRing::QuarterPlacement::Q1;
 int AstraSim::g_root_fetch_total_failures = -1;
 std::uint32_t AstraSim::g_root_fetch_failure_seed = 1;
+bool AstraSim::g_root_fetch_fail_before_first_round = false;
 std::vector<std::uint64_t> AstraSim::g_root_fetch_last_rank_tx;
 std::vector<std::uint64_t> AstraSim::g_root_fetch_last_rank_rx;
 std::uint64_t AstraSim::g_root_fetch_last_total_messages = 0;
@@ -61,6 +64,12 @@ void apply_root_fetch_env_overrides() {
     if (const char* value = std::getenv("ASTRA_ROOT_FETCH_FAILURE_SEED")) {
         AstraSim::g_root_fetch_failure_seed =
             static_cast<std::uint32_t>(std::stoul(value));
+    }
+    if (const char* value =
+            std::getenv("ASTRA_ROOT_FETCH_FAIL_BEFORE_FIRST_ROUND")) {
+        const std::string enabled(value);
+        AstraSim::g_root_fetch_fail_before_first_round =
+            enabled == "1" || enabled == "true" || enabled == "TRUE";
     }
     if (const char* value = std::getenv("ASTRA_ROOT_FETCH_QUARTER")) {
         const std::string quarter(value);
@@ -159,6 +168,17 @@ void RootFetchRing::build_protocol() {
     std::vector<int> ring_order = build_canonical_ring_order();
     std::vector<FailureSpec> failures = build_failure_plan(ring_order);
     std::vector<TransferSpec> transfers = build_transfers(ring_order, failures);
+
+    static bool printed_debug_config = false;
+    if (!printed_debug_config) {
+        std::cout << "[root-fetch-config] ring_size=" << nodes_in_ring
+                  << " failures=" << failures.size()
+                  << " transfers=" << transfers.size()
+                  << " fail_before_first_round="
+                  << (g_root_fetch_fail_before_first_round ? 1 : 0)
+                  << std::endl;
+        printed_debug_config = true;
+    }
 
     g_root_fetch_last_failed_senders.clear();
     g_root_fetch_last_failed_receivers.clear();
@@ -314,63 +334,47 @@ std::vector<int> RootFetchRing::build_fetch_query_path(
         return {root_rank, source_rank};
     }
 
-    std::vector<int> path;
-    path.reserve(static_cast<std::size_t>(g_root_fetch_mf) + 1);
-    path.push_back(root_rank);
+    std::queue<int> frontier;
+    std::unordered_map<int, int> parent;
+    frontier.push(root_rank);
+    parent[root_rank] = -1;
 
-    const auto root_it = std::find(ring_order.begin(), ring_order.end(), root_rank);
-    const int root_index = static_cast<int>(std::distance(ring_order.begin(), root_it));
+    while (!frontier.empty() && parent.find(source_rank) == parent.end()) {
+        const int current = frontier.front();
+        frontier.pop();
 
-    std::vector<int> helper_pool;
-    helper_pool.reserve(static_cast<std::size_t>(std::max(1, nodes_in_ring - 1)));
-    for (int offset = 1; offset < nodes_in_ring; ++offset) {
-        helper_pool.push_back(
-            ring_order.at((root_index + offset) % nodes_in_ring));
-    }
-
-    std::size_t pool_index = 0;
-    int attempts_remaining =
-        std::max(nodes_in_ring * nodes_in_ring * std::max(1, g_root_fetch_mf), 32);
-    while (static_cast<int>(path.size()) < g_root_fetch_mf) {
-        if (attempts_remaining-- == 0) {
-            if (!is_failed_link_active(root_rank, source_rank, round, failures)) {
-                return {root_rank, source_rank};
+        for (const int candidate : ring_order) {
+            if (candidate == current ||
+                parent.find(candidate) != parent.end()) {
+                continue;
             }
-            Sys::sys_panic(
-                "RootFetchRing could not construct a live fetch path");
+            if (is_failed_link_active(current, candidate, round, failures)) {
+                continue;
+            }
+            parent[candidate] = current;
+            frontier.push(candidate);
+            if (candidate == source_rank) {
+                break;
+            }
         }
-
-        const int candidate = helper_pool.at(pool_index % helper_pool.size());
-        pool_index++;
-        if (candidate == path.back()) {
-            continue;
-        }
-        if (candidate == root_rank) {
-            continue;
-        }
-        if (candidate == source_rank) {
-            continue;
-        }
-        if (is_failed_link_active(path.back(), candidate, round, failures)) {
-            continue;
-        }
-        if (static_cast<int>(path.size()) == g_root_fetch_mf - 1 &&
-            is_failed_link_active(candidate, source_rank, round, failures)) {
-            continue;
-        }
-        path.push_back(candidate);
     }
 
-    if (is_failed_link_active(path.back(), source_rank, round, failures)) {
-        Sys::sys_panic(
-            "RootFetchRing could not close the fetch path without using a "
-            "failed link");
+    if (parent.find(source_rank) == parent.end()) {
+        Sys::sys_panic("RootFetchRing could not construct a live fetch path");
     }
-    path.push_back(source_rank);
+
+    std::vector<int> path;
+    for (int rank = source_rank; rank != -1; rank = parent.at(rank)) {
+        path.push_back(rank);
+    }
+    std::reverse(path.begin(), path.end());
     return path;
 }
 
 int RootFetchRing::failure_round_for(int failure_index) const {
+    if (g_root_fetch_fail_before_first_round) {
+        return 0;
+    }
     switch (g_root_fetch_quarter) {
     case QuarterPlacement::Q1:
         return failure_index;

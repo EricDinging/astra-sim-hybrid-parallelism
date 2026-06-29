@@ -55,6 +55,10 @@ file(GLOB srcs
     "${CMAKE_CURRENT_SOURCE_DIR}/extern/graph_frontend/chakra/src/feeder_v3/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/extern/remote_memory_backend/analytical/*.cc")
 
+# RootFetchRing_mod.cc is a retained prototype for the previous Ring-derived
+# interface, not a production translation unit.
+list(FILTER srcs EXCLUDE REGEX ".*/RootFetchRing_mod\\.cc$")
+
 # Compile AstraSim Library
 add_library(AstraSim STATIC ${srcs})
 

@@ -119,6 +119,7 @@ extern int g_root_fetch_mf;
 extern RootFetchRing::QuarterPlacement g_root_fetch_quarter;
 extern int g_root_fetch_total_failures;
 extern std::uint32_t g_root_fetch_failure_seed;
+extern bool g_root_fetch_fail_before_first_round;
 
 extern std::vector<std::uint64_t> g_root_fetch_last_rank_tx;
 extern std::vector<std::uint64_t> g_root_fetch_last_rank_rx;

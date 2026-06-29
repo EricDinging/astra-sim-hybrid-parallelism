@@ -53,8 +53,12 @@ CollectivePlan* CommunicatorGroup::get_collective_plan(ComType comm_type) {
     } else {
         LogicalTopology* logical_topology = new RingTopology(
             RingTopology::Dimension::Local, generator->id, involved_NPUs);
+        std::vector<CollectiveImpl*> configured_implementations =
+            generator->get_collective_implementation(comm_type);
+        assert(!configured_implementations.empty());
         std::vector<CollectiveImpl*> collective_implementation{
-            new CollectiveImpl(CollectiveImplType::Ring)};
+            static_cast<CollectiveImpl*>(
+                configured_implementations.front()->clone())};
         std::vector<bool> dimensions_involved(1, true);
         bool should_be_removed = true;
         comm_plans[comm_type] =
