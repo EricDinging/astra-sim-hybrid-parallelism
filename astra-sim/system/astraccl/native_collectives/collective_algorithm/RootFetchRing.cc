@@ -37,6 +37,28 @@ struct StageKey {
     }
 };
 
+StageKey max_stage_key(const StageKey& lhs, const StageKey& rhs) {
+    if (lhs < rhs) {
+        return rhs;
+    }
+    return lhs;
+}
+
+StageKey transfer_start_after(const int protocol_round,
+                              const StageKey& available) {
+    StageKey start{protocol_round, 0};
+    if (protocol_round < available.round) {
+        start = available;
+    } else if (protocol_round == available.round) {
+        start.substep = available.substep;
+    }
+    return start;
+}
+
+StageKey transfer_completion(const StageKey& start) {
+    return StageKey{start.round, start.substep + 1};
+}
+
 }  // namespace
 
 int AstraSim::g_root_fetch_mf = 2;
@@ -283,9 +305,136 @@ void RootFetchRing::append_ring_phase_transfers(
         failures_by_link[failure.link_index] = failure;
     }
 
-    for (int root_index = 0; root_index < nodes_in_ring; ++root_index) {
-        const int root_rank = ring_order.at(root_index);
+    std::unordered_map<int, StageKey> rank_send_blocked_until;
+    for (const int rank : ring_order) {
+        rank_send_blocked_until[rank] = StageKey{0, 0};
+    }
+
+    if (!all_gather_phase) {
+        std::vector<std::unordered_map<int, std::vector<bool>>>
+            contributions_by_root(nodes_in_ring);
+        std::vector<std::unordered_map<int, std::vector<bool>>>
+            missing_by_root(nodes_in_ring);
+        std::vector<std::unordered_map<int, StageKey>> available_by_root(
+            nodes_in_ring);
+        for (int root_index = 0; root_index < nodes_in_ring; ++root_index) {
+            for (int rank_index = 0; rank_index < nodes_in_ring; ++rank_index) {
+                const int rank = ring_order.at(rank_index);
+                std::vector<bool> local_contribution(
+                    static_cast<std::size_t>(nodes_in_ring), false);
+                local_contribution.at(static_cast<std::size_t>(rank_index)) = true;
+                contributions_by_root.at(root_index)[rank] = local_contribution;
+                missing_by_root.at(root_index)[rank] = std::vector<bool>(
+                    static_cast<std::size_t>(nodes_in_ring), false);
+                available_by_root.at(root_index)[rank] = StageKey{round_offset, 0};
+            }
+        }
+
         for (int round = 1; round <= nodes_in_ring - 1; ++round) {
+            for (int root_index = 0; root_index < nodes_in_ring; ++root_index) {
+                const int root_rank = ring_order.at(root_index);
+                const int sender_index = (root_index + round) % nodes_in_ring;
+                const int receiver_index = (sender_index + 1) % nodes_in_ring;
+                const int sender_rank = ring_order.at(sender_index);
+                const int receiver_rank = ring_order.at(receiver_index);
+                const int protocol_round = round_offset + round;
+
+                auto& sender_contributions =
+                    contributions_by_root.at(root_index).at(sender_rank);
+                sender_contributions.at(static_cast<std::size_t>(sender_index)) =
+                    true;
+                auto& sender_missing =
+                    missing_by_root.at(root_index).at(sender_rank);
+                sender_missing.at(static_cast<std::size_t>(sender_index)) = false;
+
+                StageKey start = transfer_start_after(
+                    protocol_round,
+                    available_by_root.at(root_index).at(sender_rank));
+
+                auto failure_it = failures_by_link.find(sender_index);
+                if (failure_it == failures_by_link.end() ||
+                    failure_it->second.round > protocol_round) {
+                    transfers.push_back(TransferSpec{
+                        sender_rank, receiver_rank, start.round, start.substep,
+                        transfer_id++, false, root_rank});
+
+                    auto& receiver_contributions =
+                        contributions_by_root.at(root_index).at(receiver_rank);
+                    auto& receiver_missing =
+                        missing_by_root.at(root_index).at(receiver_rank);
+                    for (int contrib = 0; contrib < nodes_in_ring; ++contrib) {
+                        const auto idx = static_cast<std::size_t>(contrib);
+                        receiver_contributions.at(idx) =
+                            receiver_contributions.at(idx) ||
+                            sender_contributions.at(idx);
+                        receiver_missing.at(idx) =
+                            receiver_missing.at(idx) || sender_missing.at(idx);
+                    }
+                    available_by_root.at(root_index)[receiver_rank] =
+                        transfer_completion(start);
+                    continue;
+                }
+
+                auto& receiver_missing =
+                    missing_by_root.at(root_index).at(receiver_rank);
+                for (int contrib = 0; contrib < nodes_in_ring; ++contrib) {
+                    const auto idx = static_cast<std::size_t>(contrib);
+                    if (sender_contributions.at(idx) || sender_missing.at(idx)) {
+                        receiver_missing.at(idx) = true;
+                    }
+                }
+
+                StageKey fetch_start = start;
+                for (int contrib = 0; contrib < nodes_in_ring; ++contrib) {
+                    const auto idx = static_cast<std::size_t>(contrib);
+                    if (!receiver_missing.at(idx)) {
+                        continue;
+                    }
+
+                    const int source_rank = ring_order.at(contrib);
+                    std::vector<int> query_path = build_fetch_query_path(
+                        receiver_rank, source_rank, protocol_round, failures,
+                        ring_order);
+                    std::vector<int> data_path(
+                        query_path.rbegin(), query_path.rend());
+                    StageKey hop_start = fetch_start;
+                    for (std::size_t hop = 0; hop + 1 < data_path.size();
+                         ++hop) {
+                        transfers.push_back(TransferSpec{
+                            data_path.at(hop), data_path.at(hop + 1),
+                            hop_start.round, hop_start.substep, transfer_id++,
+                            true, root_rank});
+                        hop_start = transfer_completion(hop_start);
+                    }
+
+                    auto& receiver_contributions =
+                        contributions_by_root.at(root_index).at(receiver_rank);
+                    receiver_contributions.at(idx) = true;
+                    receiver_missing.at(idx) = false;
+                }
+            }
+        }
+        return;
+    }
+
+    std::vector<std::unordered_map<int, StageKey>> chunk_available_by_root(
+        nodes_in_ring);
+    for (int root_index = 0; root_index < nodes_in_ring; ++root_index) {
+        if (all_gather_phase) {
+            const int root_rank = ring_order.at(root_index);
+            chunk_available_by_root.at(root_index)[root_rank] =
+                StageKey{round_offset, 0};
+        } else {
+            const int first_sender_index = (root_index + 1) % nodes_in_ring;
+            chunk_available_by_root.at(root_index)[ring_order.at(first_sender_index)] =
+                StageKey{round_offset, 0};
+        }
+    }
+
+    for (int round = 1; round <= nodes_in_ring - 1; ++round) {
+        for (int root_index = 0; root_index < nodes_in_ring; ++root_index) {
+            const int root_rank = ring_order.at(root_index);
+            auto& chunk_available_at_rank = chunk_available_by_root.at(root_index);
             const int sender_index =
                 all_gather_phase ? (root_index + round - 1) % nodes_in_ring
                                  : (root_index + round) % nodes_in_ring;
@@ -294,12 +443,29 @@ void RootFetchRing::append_ring_phase_transfers(
             const int receiver_rank = ring_order.at(receiver_index);
             const int protocol_round = round_offset + round;
 
+            auto sender_avail_it = chunk_available_at_rank.find(sender_rank);
+            if (sender_avail_it == chunk_available_at_rank.end()) {
+                Sys::sys_panic(
+                    "RootFetchRing tried to send a chunk before it was available");
+            }
+
+            StageKey start =
+                transfer_start_after(protocol_round, sender_avail_it->second);
+            const StageKey sender_block =
+                rank_send_blocked_until.at(sender_rank);
+            if (sender_block.round == start.round &&
+                sender_block.substep > start.substep) {
+                start.substep = sender_block.substep;
+            }
+
             auto failure_it = failures_by_link.find(sender_index);
             if (failure_it == failures_by_link.end() ||
                 failure_it->second.round > protocol_round) {
                 transfers.push_back(TransferSpec{
-                    sender_rank, receiver_rank, protocol_round, 0,
+                    sender_rank, receiver_rank, start.round, start.substep,
                     transfer_id++, false, root_rank});
+                chunk_available_at_rank[receiver_rank] =
+                    transfer_completion(start);
                 continue;
             }
 
@@ -307,11 +473,33 @@ void RootFetchRing::append_ring_phase_transfers(
                 receiver_rank, sender_rank, protocol_round, failures,
                 ring_order);
             std::vector<int> data_path(query_path.rbegin(), query_path.rend());
+            StageKey hop_start = start;
             for (std::size_t hop = 0; hop + 1 < data_path.size(); ++hop) {
+                const int hop_src = data_path.at(hop);
+                const int hop_dst = data_path.at(hop + 1);
+                auto hop_src_avail_it = chunk_available_at_rank.find(hop_src);
+                if (hop_src_avail_it != chunk_available_at_rank.end()) {
+                    hop_start = max_stage_key(hop_start, hop_src_avail_it->second);
+                }
+                const StageKey hop_src_block =
+                    rank_send_blocked_until.at(hop_src);
+                if (hop_src_block.round == hop_start.round &&
+                    hop_src_block.substep > hop_start.substep) {
+                    hop_start.substep = hop_src_block.substep;
+                }
+
                 transfers.push_back(TransferSpec{
-                    data_path.at(hop), data_path.at(hop + 1), protocol_round,
-                    static_cast<int>(hop), transfer_id++, true, root_rank});
+                    hop_src, hop_dst, hop_start.round, hop_start.substep,
+                    transfer_id++, true, root_rank});
+
+                const StageKey hop_done = transfer_completion(hop_start);
+                chunk_available_at_rank[hop_dst] = hop_done;
+                hop_start = hop_done;
             }
+
+            const StageKey fetch_done = chunk_available_at_rank.at(receiver_rank);
+            rank_send_blocked_until[receiver_rank] = max_stage_key(
+                rank_send_blocked_until.at(receiver_rank), fetch_done);
         }
     }
 }

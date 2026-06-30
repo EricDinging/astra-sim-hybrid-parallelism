@@ -1,0 +1,4 @@
+topology: [ RailNvlink ]
+npus_count: [ 16 ]
+bandwidth: [ 50 ]
+latency: [ 500.0 ]
