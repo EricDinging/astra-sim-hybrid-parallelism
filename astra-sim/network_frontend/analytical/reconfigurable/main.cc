@@ -243,6 +243,7 @@ int main(int argc, char* argv[]) {
         cmd_line_parser.get<bool>("rendezvous-protocol");
     const auto npus_per_dim_str =
         cmd_line_parser.get<std::string>("npus-per-dim");
+    const auto bidi = cmd_line_parser.get<bool>("bidi");
 
     const auto job_arrival_file =
         cmd_line_parser.get<std::string>("job-arrival-file");
@@ -352,6 +353,9 @@ int main(int argc, char* argv[]) {
                              npus_count);
             std::exit(1);
         }
+        logger->info("torus DOR arc selection: {}",
+                     bidi ? "bidirectional (shorter arc)"
+                          : "unidirectional (+1)");
     }
 
     // Select failed NPUs once, before any topology/placement setup. Seed is
@@ -371,7 +375,8 @@ int main(int argc, char* argv[]) {
 
     auto tm = std::make_shared<TopologyManager>(
         npus_count, npus_count, event_queue.get(), std::move(bw_schedules),
-        std::move(latency_schedules), npus_per_dim, !npus_per_dim.empty());
+        std::move(latency_schedules), npus_per_dim, !npus_per_dim.empty(),
+        bidi);
 
     // DOR route-cache ceiling (on-demand routing; no-op in BFS mode).
     tm->set_route_cache_budget_bytes(static_cast<std::size_t>(

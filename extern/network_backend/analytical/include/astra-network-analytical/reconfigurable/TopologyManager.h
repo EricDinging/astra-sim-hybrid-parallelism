@@ -36,7 +36,8 @@ class TopologyManager {
                     std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules,
                     std::map<int, std::vector<std::vector<Latency>>> latency_schedules,
                     std::vector<int> npus_per_dim = {},
-                    bool is_torus = false) noexcept;
+                    bool is_torus = false,
+                    bool bidi = false) noexcept;
 
     std::shared_ptr<Device> get_device(const DeviceId deviceId) noexcept;
 

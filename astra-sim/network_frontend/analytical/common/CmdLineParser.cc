@@ -121,6 +121,13 @@ void CmdLineParser::define_options() noexcept {
         "--preserve-placement-order=false to restore the legacy sorted-id "
         "ring.",
         cxxopts::value<bool>()->default_value("true"))(
+        "bidi",
+        "Bidirectional torus DOR: baseline routes pick the shorter arc per "
+        "dimension instead of always +1 (reconfigurable backend, "
+        "--npus-per-dim "
+        "only). Mapping-aware policies (folding/rfold) still override this for "
+        "their own ring edges. Default false (unidirectional).",
+        cxxopts::value<bool>()->default_value("false"))(
         "route-cache-budget-gb",
         "DOR route-cache memory ceiling in GiB (reconfigurable backend with "
         "--npus-per-dim only). DOR routes are computed on demand and cached up "

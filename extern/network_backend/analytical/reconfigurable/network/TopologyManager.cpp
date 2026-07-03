@@ -15,7 +15,8 @@ TopologyManager::TopologyManager(int npus_count,
                                  std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules,
                                  std::map<int, std::vector<std::vector<Latency>>> latency_schedules,
                                  std::vector<int> npus_per_dim,
-                                 bool is_torus) noexcept {
+                                 bool is_torus,
+                                 bool bidi) noexcept {
     this->npus_count = npus_count;
     this->devices_count = devices_count;
     this->event_queue = event_queue;
@@ -44,11 +45,13 @@ TopologyManager::TopologyManager(int npus_count,
     reconfig_time = Latency(0);
 
     if (!npus_per_dim.empty()) {
-        // Baseline DOR is unidirectional (+1 arc per axis). Mapping-aware
-        // placement policies (folding/rfold) install their own per-job routes
-        // via apply_job_wiring(), which override this table for their ring
-        // edges; everything else (firstfit, scatter baselines) routes here.
-        set_topology_dims(npus_per_dim, is_torus, false);
+        // Baseline DOR arc selection is unidirectional (+1 arc per axis) by
+        // default; pass bidi=true to pick the shorter arc per dimension.
+        // Mapping-aware placement policies (folding/rfold) install their own
+        // per-job routes via apply_job_wiring(), which override this table for
+        // their ring edges; everything else (firstfit, scatter baselines)
+        // routes here.
+        set_topology_dims(npus_per_dim, is_torus, bidi);
     } else {
         // BFS mode (no geometry): fall back to all-pairs connectivity. Only
         // used for small non-torus / test topologies.
