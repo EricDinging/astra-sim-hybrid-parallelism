@@ -17,6 +17,7 @@ LICENSE file in the root directory of this source tree.
 
 #include <algorithm>
 #include <iostream>
+#include <queue>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -93,38 +94,67 @@ Workload::Workload(Sys* sys,
     this->current_comm_group_idx = 0;
     delete temp_et_feeder;
 
-    // Pre-compute (cg_id, node_id) -> ordinal map.  We need the ordinal to
-    // be invariant across all ranks of a CG so the deterministic stream-ID
-    // computation in issue_coll_comm() produces the same stream_id on every
-    // rank for the same logical collective.  Building the map from the
-    // sorted set of node_ids per CG gives that invariance regardless of
-    // the actual issue order at runtime.
+    // Pre-compute (cg_id, node_id) -> ordinal map. Two consumers, two
+    // requirements:
+    //   * the deterministic stream-ID computation in issue_coll_comm() needs
+    //     ordinals that are invariant across all ranks of a CG;
+    //   * per-group in-order collective admission (comm_admission_in_order)
+    //     additionally needs the ordinal order to be a linear extension of
+    //     the trace DAG. Plain node-id order is NOT one: the trace generator
+    //     numbers nodes per layer at definition time, so a layer's backward
+    //     collective can transitively depend on higher-id nodes, and
+    //     admitting in id order wedges TP groups.
+    // A Kahn traversal that always visits the smallest dependency-free node
+    // id satisfies both: deterministic, identical on every member rank of a
+    // CG (member ranks carry identical DAGs), and dependency-consistent.
     {
         auto* scan_feeder = new ETFeeder(workload_filename);
+        auto& resolver = scan_feeder->getDependancyResolver();
+        const auto& dep_layer = resolver.get_enabled_dependancy();
+        std::priority_queue<uint64_t, std::vector<uint64_t>,
+                            std::greater<uint64_t>>
+            ready;
+        std::unordered_set<uint64_t> queued;
+        for (const uint64_t node_id : resolver.get_dependancy_free_nodes()) {
+            ready.push(node_id);
+            queued.insert(node_id);
+        }
         std::unordered_map<int, std::vector<uint64_t>> cg_to_node_ids;
-        while (scan_feeder->hasNodesToIssue()) {
-            auto node = scan_feeder->getNextIssuableNode();
+        while (!ready.empty()) {
+            const uint64_t node_id = ready.top();
+            ready.pop();
+            auto node = scan_feeder->lookupNode(node_id);
             if (node->type() == ChakraNodeType::COMM_COLL_NODE) {
                 std::string pg = node->pg_name<std::string>("");
                 if (!pg.empty()) {
                     try {
                         int cg_id = std::stoi(pg);
-                        cg_to_node_ids[cg_id].push_back(node->id());
+                        cg_to_node_ids[cg_id].push_back(node_id);
                     } catch (const std::exception&) {
                     }
                 }
             }
-            scan_feeder->freeChildrenNodes(node->id());
+            // Snapshot children before finish_node mutates the layer, then
+            // enqueue those that became dependency-free.
+            const auto children = dep_layer.get_children(node_id);
+            resolver.take_node(node_id);
+            resolver.finish_node(node_id);
+            const auto& now_free = resolver.get_dependancy_free_nodes();
+            for (const uint64_t child : children) {
+                if (now_free.count(child) != 0U &&
+                    queued.insert(child).second) {
+                    ready.push(child);
+                }
+            }
         }
         delete scan_feeder;
         for (auto& kv : cg_to_node_ids) {
-            auto& nids = kv.second;
-            std::sort(nids.begin(), nids.end());
             auto& ord_map = cg_node_to_ordinal_[kv.first];
-            for (size_t i = 0; i < nids.size(); ++i) {
-                ord_map[nids[i]] = static_cast<int>(i);
+            for (size_t i = 0; i < kv.second.size(); ++i) {
+                ord_map[kv.second[i]] = static_cast<int>(i);
             }
         }
+        reset_comm_admission_order();
     }
 
     this->et_feeder = new ETFeeder(workload_filename);
@@ -285,15 +315,76 @@ void Workload::issue_dep_free_nodes() {
     bool success = true;
     for (const auto node_id : dependancy_free_nodes_set) {
         std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
-        if (hw_resource->is_available(node)) {
+        // Grouped collectives must additionally be admitted in the
+        // rank-invariant per-group order; see comm_admission_in_order. A
+        // collective skipped here because a lower ordinal is still pending
+        // is simply retried on a later call (this runs on every event), so
+        // the gate delays admission but never strands a node.
+        if (hw_resource->is_available(node) && comm_admission_in_order(node)) {
             success = issue(node);
-            if (!success) {
+            if (success) {
+                mark_comm_admitted(node);
+            } else {
                 auto logger = LoggerFactory::get_logger("workload");
                 logger->warn("Workload::issue failed, sys->id={}, node->id={}, "
                              "node->name={}, node->type={}",
                              sys->id, node->id(), node->name(),
                              static_cast<uint64_t>(node->type()));
             }
+        }
+    }
+}
+
+bool Workload::comm_admission_in_order(
+    shared_ptr<Chakra::FeederV3::ETFeederNode> node) const {
+    if (node->type() != ChakraNodeType::COMM_COLL_NODE ||
+        hw_resource->comm_cap_bypass) {
+        return true;
+    }
+    const int cg_id = HardwareResource::comm_group_of(node);
+    if (cg_id < 0) {
+        return true;
+    }
+    const auto cg_it = cg_node_to_ordinal_.find(cg_id);
+    if (cg_it == cg_node_to_ordinal_.end()) {
+        // Legacy path without a precomputed ordinal map: no ordering.
+        return true;
+    }
+    const auto ord_it = cg_it->second.find(node->id());
+    if (ord_it == cg_it->second.end()) {
+        return true;
+    }
+    const auto unadmitted_it = cg_unadmitted_ordinals_.find(cg_id);
+    if (unadmitted_it == cg_unadmitted_ordinals_.end() ||
+        unadmitted_it->second.empty()) {
+        return true;
+    }
+    return ord_it->second == *unadmitted_it->second.begin();
+}
+
+void Workload::mark_comm_admitted(
+    shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const int cg_id = HardwareResource::comm_group_of(node);
+    if (cg_id < 0) {
+        return;
+    }
+    const auto cg_it = cg_node_to_ordinal_.find(cg_id);
+    if (cg_it == cg_node_to_ordinal_.end()) {
+        return;
+    }
+    const auto ord_it = cg_it->second.find(node->id());
+    if (ord_it == cg_it->second.end()) {
+        return;
+    }
+    cg_unadmitted_ordinals_[cg_id].erase(ord_it->second);
+}
+
+void Workload::reset_comm_admission_order() {
+    cg_unadmitted_ordinals_.clear();
+    for (const auto& cg_entry : cg_node_to_ordinal_) {
+        auto& unadmitted = cg_unadmitted_ordinals_[cg_entry.first];
+        for (const auto& node_ordinal : cg_entry.second) {
+            unadmitted.insert(node_ordinal.second);
         }
     }
 }
@@ -883,6 +974,10 @@ void Workload::advance_to_next_iteration() {
     // current_comm_group_idx counts collective completions within an
     // iteration; reset it so it indexes from the start of the new iteration.
     this->current_comm_group_idx = 0;
+
+    // Node ids repeat across iterations, so per-group admission order starts
+    // over from the first ordinal.
+    reset_comm_admission_order();
 
     // Should be unreachable (a drained iteration has 0 in-flight comm ops, so
     // every wrapper was erased on completion). Surface a straggler instead of

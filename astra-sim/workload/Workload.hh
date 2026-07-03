@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 #define __WORKLOAD_HH__
 
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 
@@ -104,11 +105,43 @@ class Workload : public Callable {
         std::shared_ptr<Chakra::ETFeederNode> node);
     int previous_group_id = 0;
 
-    // (cg_id, node_id) -> ordinal map, pre-computed from the trace so
-    // ordinals are invariant across ranks of a CG even if ranks issue
-    // collectives in different orders.
+    // (cg_id, node_id) -> ordinal map, pre-computed from the trace via a
+    // min-node-id Kahn traversal, so ordinals are (a) invariant across ranks
+    // of a CG even if ranks issue collectives in different orders and (b) a
+    // linear extension of the trace DAG (required by the in-order admission
+    // gate below; plain node-id order is not dependency-consistent).
     std::unordered_map<int, std::unordered_map<uint64_t, int>>
         cg_node_to_ordinal_;
+
+    // --- Deadlock-free collective admission ---------------------------------
+    // A comm group's collectives are admitted strictly in ordinal order (the
+    // rank-invariant order from cg_node_to_ordinal_), at most
+    // HardwareResource::kMaxInflightCommPerGroup in flight per group. Because
+    // every member rank admits the same collectives in the same order, the
+    // oldest unfinished collective of a group always gets a slot on all of its
+    // ranks, so circular waits between collectives cannot form (the failure
+    // mode behind the SchedRuntime liveness valve).
+    //
+    // cg_unadmitted_ordinals_ holds, per comm group, the ordinals not yet
+    // admitted in the CURRENT iteration; only the smallest one is admissible.
+    // A plain cursor would wedge after a valve bypass admits out of order, so
+    // we track the exact unadmitted set instead. Rebuilt (from
+    // cg_node_to_ordinal_) at construction and at every iteration boundary.
+    std::unordered_map<int, std::set<int>> cg_unadmitted_ordinals_;
+
+    // True iff admitting `node` now respects the per-group admission order
+    // (always true for non-collectives, ungrouped collectives, and while the
+    // liveness-valve bypass is active).
+    bool comm_admission_in_order(
+        std::shared_ptr<Chakra::FeederV3::ETFeederNode> node) const;
+    // Record a successful admission: drop the node's ordinal from its group's
+    // unadmitted set. No-op for nodes without a tracked ordinal.
+    void mark_comm_admitted(
+        std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
+    // Reset per-group admission state to "nothing admitted yet"; called at
+    // construction and at each iteration boundary (node ids repeat across
+    // iterations).
+    void reset_comm_admission_order();
 
     // --- Multi-iteration (training-loop) support ---------------------------
     // The single-iteration Chakra trace is replayed total_iterations_ times to

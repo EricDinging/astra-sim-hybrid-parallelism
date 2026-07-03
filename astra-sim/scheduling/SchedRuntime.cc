@@ -407,16 +407,19 @@ void SchedRuntime::run() {
             }
         }
         if (event_queue_->finished() && !simulation_done()) {
-            // Liveness valve: with >kMaxInflightGpuCommOps independent
-            // collectives contending for a rank's comm slots, ranks can admit
-            // divergent subsets and circular-wait (each collective missing a
-            // member whose slots are full). At quiescence nothing else can
-            // move, so re-issue once with the cap lifted; runs that never
-            // drain incomplete are byte-identical.
+            // Liveness valve (backstop). Grouped collectives are admitted
+            // in-order per comm group (Workload::comm_admission_in_order),
+            // which makes collective admission deadlock-free, so this should
+            // never fire for them; if it does, the trace's dependency
+            // structure contradicts the node-id admission order (or a
+            // pg-less collective hit the legacy shared cap). At quiescence
+            // nothing else can move, so re-issue once with caps and ordering
+            // lifted; runs that never drain incomplete are byte-identical.
             auto logger = LoggerFactory::get_logger("scheduling");
             logger->warn("event queue drained with jobs incomplete — lifting "
                          "GPU comm cap once to break a collective-admission "
-                         "deadlock");
+                         "deadlock (unexpected under ordered admission; check "
+                         "trace/admission-order consistency)");
             for (auto* sys : all_sys_) {
                 if (sys && sys->active_workload) {
                     sys->active_workload->hw_resource->comm_cap_bypass = true;

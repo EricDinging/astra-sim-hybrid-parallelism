@@ -17,6 +17,7 @@ HardwareResource::HardwareResource(uint32_t num_npus, int sys_id)
     : num_npus(num_npus),
       num_in_flight_cpu_ops(0),
       num_in_flight_gpu_comm_ops(0),
+      num_in_flight_ungrouped_comm_ops(0),
       num_in_flight_gpu_comp_ops(0),
       sys_id(sys_id) {
 
@@ -52,6 +53,12 @@ void HardwareResource::occupy(
                 return;
             }
             ++num_in_flight_gpu_comm_ops;
+            const int cg_id = comm_group_of(node);
+            if (cg_id >= 0) {
+                ++num_in_flight_comm_per_group[cg_id];
+            } else {
+                ++num_in_flight_ungrouped_comm_ops;
+            }
             ++num_gpu_comms;
             // gpu_comms_node = node;
             gpu_comms_node.emplace(node->id());
@@ -75,6 +82,16 @@ void HardwareResource::release(
                 return;
             }
             --num_in_flight_gpu_comm_ops;
+            const int cg_id = comm_group_of(node);
+            if (cg_id >= 0) {
+                auto it = num_in_flight_comm_per_group.find(cg_id);
+                assert(it != num_in_flight_comm_per_group.end() &&
+                       it->second > 0);
+                --it->second;
+            } else {
+                assert(num_in_flight_ungrouped_comm_ops > 0);
+                --num_in_flight_ungrouped_comm_ops;
+            }
             this->gpu_comms_node.erase(node->id());
         }
     }
@@ -97,15 +114,41 @@ bool HardwareResource::is_available(
             }
         } else {
             // RECV nodes always allowed (they don't occupy the comm slot).
-            // Other comm nodes (collectives and sends) are bounded to avoid
-            // overwhelming the network event queue and to bound how far a
-            // fast rank can get ahead of its peers.
+            // Other comm nodes are bounded to avoid overwhelming the network
+            // event queue and to bound how far a fast rank can get ahead of
+            // its peers: grouped collectives by a per-comm-group window
+            // (order-of-admission is enforced separately by Workload),
+            // ungrouped comm ops (sends, pg-less collectives) by a shared cap.
             if (node->type() == ChakraNodeType::COMM_RECV_NODE) {
                 return true;
             }
-            return comm_cap_bypass ||
-                   num_in_flight_gpu_comm_ops < kMaxInflightGpuCommOps;
+            if (comm_cap_bypass) {
+                return true;
+            }
+            const int cg_id = comm_group_of(node);
+            if (cg_id >= 0) {
+                auto it = num_in_flight_comm_per_group.find(cg_id);
+                return it == num_in_flight_comm_per_group.end() ||
+                       it->second < kMaxInflightCommPerGroup;
+            }
+            return num_in_flight_ungrouped_comm_ops < kMaxInflightGpuCommOps;
         }
+    }
+}
+
+int HardwareResource::comm_group_of(
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
+    if (node->type() != ChakraNodeType::COMM_COLL_NODE) {
+        return -1;
+    }
+    const std::string pg = node->pg_name<std::string>("");
+    if (pg.empty()) {
+        return -1;
+    }
+    try {
+        return std::stoi(pg);
+    } catch (const std::exception&) {
+        return -1;
     }
 }
 
