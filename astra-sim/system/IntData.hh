@@ -10,10 +10,10 @@ namespace AstraSim {
 
 class IntData : public CallData {
   public:
-    IntData(int d) {
+    IntData(uint64_t d) {
         data = d;
     }
-    int data;
+    uint64_t data;
     uint64_t execution_time;
 };
 

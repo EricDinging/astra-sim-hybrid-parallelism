@@ -63,3 +63,17 @@ int ChunkIdGenerator::create_recv_chunk_id(
     entry->second.increment_recv_id();
     return entry->second.get_recv_id();
 }
+
+void ChunkIdGenerator::retire_chunk(const int tag,
+                                    const int src,
+                                    const int dest,
+                                    const ChunkSize chunk_size) noexcept {
+    const auto key = std::make_tuple(tag, src, dest, chunk_size);
+    const auto entry = chunk_id_map.find(key);
+    assert(entry != chunk_id_map.end());
+
+    entry->second.increment_completed();
+    if (entry->second.fully_retired()) {
+        chunk_id_map.erase(entry);
+    }
+}

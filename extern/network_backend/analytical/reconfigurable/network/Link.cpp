@@ -28,13 +28,6 @@ void Link::set_event_queue(std::shared_ptr<EventQueue> event_queue_ptr) noexcept
     Link::event_queue = std::move(event_queue_ptr);
 }
 
-int Link::get_current_time() noexcept {
-    assert(event_queue != nullptr);
-
-    // return current time of the event queue
-    return Link::event_queue->get_current_time();
-}
-
 void Link::schedule_event(EventTime event_time, Callback callback, void* const arg) noexcept {
     assert(event_queue != nullptr);
     assert(callback != nullptr);

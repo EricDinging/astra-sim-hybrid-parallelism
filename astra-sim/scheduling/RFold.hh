@@ -52,6 +52,9 @@ class RFold : public PlacementPolicy {
     void set_sched_context(const SchedContext* ctx) override {
         runtime_ctx_ = ctx;
     }
+    bool wants_sched_context() const override {
+        return ranker_->wants_context();
+    }
 
   private:
     // True iff `shape` places on a fully-idle cluster: some fold variant

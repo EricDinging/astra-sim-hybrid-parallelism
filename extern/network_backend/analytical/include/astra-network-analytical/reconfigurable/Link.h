@@ -20,7 +20,6 @@ namespace NetworkAnalyticalReconfigurable {
  */
 class Link {
   public:
-
     static int num_drained_links;
 
     static std::function<void()> increment_callback;
@@ -71,8 +70,6 @@ class Link {
      */
     unsigned long reconfigure(Bandwidth bandwidth, Latency latency, Latency reconfig_time) noexcept;
 
-    static int get_current_time() noexcept;
-
     /**
      * Get the bandwidth of the link in GB/s.
      *
@@ -80,6 +77,15 @@ class Link {
      */
     [[nodiscard]] Bandwidth get_bandwidth() const noexcept {
         return bandwidth;
+    }
+
+    /**
+     * Get the latency of the link in ns.
+     *
+     * @return latency of the link
+     */
+    [[nodiscard]] Latency get_latency() const noexcept {
+        return latency;
     }
 
     static void schedule_event(EventTime event_time, Callback callback, void* const arg) noexcept;

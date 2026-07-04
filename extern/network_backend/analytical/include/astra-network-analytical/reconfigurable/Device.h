@@ -8,7 +8,6 @@ LICENSE file in the root directory of this source tree.
 #include "common/Type.h"
 #include "reconfigurable/Type.h"
 #include <functional>
-#include <link.h>
 #include <map>
 #include <memory>
 #include <queue>
@@ -72,10 +71,23 @@ class Device : public std::enable_shared_from_this<Device> {
      */
     void connect(DeviceId id, Bandwidth bandwidth, Latency latency) noexcept;
 
-    void reconfigure(std::vector<Bandwidth> bandwidths,
-                     std::vector<Route> routes,
-                     std::vector<Latency> latencies,
-                     Latency reconfigTime) noexcept;
+    // Rows are taken by const reference: they are full N-wide vectors and a
+    // global reconfigure calls this once per device (O(N^2) copied if taken
+    // by value).
+    //
+    // scoped = per-job wiring (apply_job_wiring): only links whose
+    // bandwidth/latency actually changed are touched, and topology_iteration
+    // is NOT bumped -- in-flight chunks routed on the base topology stay
+    // valid, and unchanged links keep their busy state and pending queues
+    // (bumping marked every transiting chunk stale so the refresh truncated
+    // its route, P0-1; the unconditional +1ns free events force-freed busy
+    // links, P0-2). Global reconfigure (scoped = false, post-drain) keeps the
+    // original bump-everything behavior.
+    void reconfigure(const std::vector<Bandwidth>& bandwidths,
+                     const std::vector<Route>& routes,
+                     const std::vector<Latency>& latencies,
+                     Latency reconfigTime,
+                     bool scoped = false) noexcept;
 
     /// In DOR mode the device fetches routes on demand from this Router instead
     /// of holding a per-row copy. nullptr (BFS mode) falls back to `routes`.

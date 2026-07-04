@@ -36,6 +36,13 @@ class CustomAlgorithm : public Algorithm {
   public:
     CustomAlgorithm(std::string et_filename, int id);
 
+    // Owns et_feeder (an open trace fd plus a full node index); without this
+    // every collective phase leaked one -- the EMFILE mechanism -- under
+    // *-implementation-custom configs.
+    ~CustomAlgorithm() override {
+        delete et_feeder;
+    }
+
     // Runs the collective algorithm. This function is only called once to start
     // the algorithm.
     virtual void run(EventType event, CallData* data);

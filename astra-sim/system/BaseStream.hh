@@ -31,9 +31,6 @@ class BaseStream : public Callable, public StreamStat {
     virtual void consume(RecvPacketEventHandlerData* message) = 0;
     virtual void init() = 0;
 
-    static std::map<int, int> synchronizer;
-    static std::map<int, int> ready_counter;
-    static std::map<int, std::list<BaseStream*>> suspended_streams;
     int stream_id;
     int total_packets_sent;
     SchedulingPolicy preferred_scheduling;

@@ -48,6 +48,11 @@ template <typename T> bool read_message(std::istream& f, T& msg) {
     }
     std::string buf(size, '\0');
     f.read(buf.data(), static_cast<std::streamsize>(size));
+    if (f.gcount() != static_cast<std::streamsize>(size)) {
+        // Truncated file: fail cleanly instead of parsing a zero-padded
+        // buffer.
+        return false;
+    }
     return msg.ParseFromArray(buf.data(), static_cast<int>(size));
 }
 

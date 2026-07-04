@@ -16,7 +16,6 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/system/CommunicatorGroup.hh"
 #include "astra-sim/system/MemBus.hh"
 #include "astra-sim/system/Roofline.hh"
-#include "astra-sim/system/UsageTracker.hh"
 #include "astra-sim/system/astraccl/native_collectives/logical_topology/RingTopology.hh"
 #include "astra-sim/workload/Workload.hh"
 
@@ -55,9 +54,7 @@ class Sys : public Callable {
         std::map<int, std::list<BaseStream*>::iterator> stream_pointer;
         std::vector<Tick> latency_per_dimension;
         std::vector<double> total_chunks_per_dimension;
-        std::vector<uint64_t> total_active_chunks_per_dimension;
         std::map<int, int> queue_id_to_dimension;
-        std::vector<UsageTracker> usage;
     };
     //---------------------------------------------------------------------------
 
@@ -183,7 +180,6 @@ class Sys : public Callable {
     int get_priority(int explicit_priority);
     void insert_into_ready_list(BaseStream* stream);
     void insert_stream(std::list<BaseStream*>* queue, BaseStream* baseStream);
-    void ask_for_schedule(int max);
     void schedule(int num);
     void proceed_to_next_vnet_baseline(StreamBaseline* stream);
     //---------------------------------------------------------------------------
@@ -288,6 +284,15 @@ class Sys : public Callable {
         num_streams = 0;
         total_running_streams = 0;
         first_phase_streams = 0;
+        // Per-NPU scheduler state must not bleed to the next tenant (P4-12).
+        // Under the current config this is a no-op: LIFO priorities are only
+        // compared among live streams (none at detach), and the round-robin/
+        // offline-greedy inter-dimension schedulers are unused. But a
+        // RoundRobin/OfflineGreedy run would otherwise make a job's dimension
+        // ordering depend on which jobs previously ran on its NPUs.
+        round_robin_inter_dimension_scheduler = 0;
+        priority_counter = 0;
+        last_scheduled_collective = 0;
     }
 
     // roofline model

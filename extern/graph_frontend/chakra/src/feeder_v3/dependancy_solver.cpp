@@ -109,6 +109,48 @@ void _DependancyLayer::resolve_dependancy_free_nodes() {
   this->dirty = false;
 }
 
+void _DependancyLayer::capture_pristine() {
+  std::unique_lock<std::shared_mutex> lock(this->mutex);
+  if (this->dirty) {
+    throw std::runtime_error(
+        "capture_pristine requires a sealed layer (call resolve_dependancy_free_nodes first)");
+  }
+  if (!this->ongoing_nodes.empty()) {
+    throw std::runtime_error(
+        "capture_pristine must run before any node is taken");
+  }
+  this->pristine_child_map_parent = this->child_map_parent;
+  this->pristine_captured = true;
+}
+
+void _DependancyLayer::reset() {
+  std::unique_lock<std::shared_mutex> lock(this->mutex);
+  if (!this->pristine_captured) {
+    throw std::runtime_error("reset without a prior capture_pristine");
+  }
+  if (!this->ongoing_nodes.empty() || !this->dependancy_free_nodes.empty()) {
+    throw std::runtime_error(
+        "reset requires a fully-consumed graph (drained iteration boundary)");
+  }
+  this->child_map_parent = this->pristine_child_map_parent;
+  this->parent_map_child.clear();
+  for (const auto& it : this->child_map_parent) {
+    const auto& node = it.first;
+    this->_helper_allocate_bucket(node);
+    for (const auto& parent : it.second) {
+      this->parent_map_child[parent].insert(node);
+    }
+    if (it.second.empty()) {
+      this->dependancy_free_nodes.insert(node);
+    }
+  }
+  if (this->dependancy_free_nodes.empty()) {
+    throw std::runtime_error(
+        "No dependancy free nodes found after reset, there might be deadlocks");
+  }
+  this->dirty = false;
+}
+
 const std::unordered_set<NodeId>& _DependancyLayer::get_dependancy_free_nodes()
     const {
   return this->dependancy_free_nodes;
@@ -184,6 +226,18 @@ void DependancyResolver::resolve_dependancy_free_nodes() {
   this->data_dependancy.resolve_dependancy_free_nodes();
   this->ctrl_dependancy.resolve_dependancy_free_nodes();
   this->enabled_dependancy.resolve_dependancy_free_nodes();
+}
+
+void DependancyResolver::capture_pristine() {
+  this->data_dependancy.capture_pristine();
+  this->ctrl_dependancy.capture_pristine();
+  this->enabled_dependancy.capture_pristine();
+}
+
+void DependancyResolver::reset() {
+  this->data_dependancy.reset();
+  this->ctrl_dependancy.reset();
+  this->enabled_dependancy.reset();
 }
 
 const std::unordered_set<NodeId>& DependancyResolver::

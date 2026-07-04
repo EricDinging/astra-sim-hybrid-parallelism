@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "common/EventList.h"
 #include "common/Type.h"
+#include <map>
 
 namespace NetworkAnalytical {
 
@@ -56,8 +57,11 @@ class EventQueue {
     /// current time of the event queue
     EventTime current_time;
 
-    /// list of EventLists
-    std::list<EventList> event_queue;
+    /// pending EventLists keyed (and ordered) by event time. A map makes
+    /// schedule_event O(log K) instead of a linear scan over all pending
+    /// timestamps; iteration order (ascending time) and same-time FIFO
+    /// semantics are identical to the previous sorted list.
+    std::map<EventTime, EventList> event_queue;
 };
 
 }  // namespace NetworkAnalytical

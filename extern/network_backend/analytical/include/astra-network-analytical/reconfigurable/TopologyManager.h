@@ -60,6 +60,15 @@ class TopologyManager {
                           Bandwidth link_bw,
                           Latency link_lt) noexcept;
 
+    // Mirror of apply_job_wiring, called when the owning job completes: erase
+    // the (src, dst) route overrides, zero the OCS edges' bw/lt cells, and
+    // disconnect the OCS links. Torus-adjacent edge pairs are skipped (they
+    // never got an OCS link). Deliberately does NOT go through
+    // Device::reconfigure: no iteration bumps, no link-free events. DOR mode
+    // only; a warning is logged (once) in BFS mode.
+    void remove_job_wiring(const std::vector<std::pair<int, int>>& ocs_edges,
+                           const std::vector<std::vector<int>>& routes) noexcept;
+
     // Test/inspection accessors.
     [[nodiscard]] const Route& get_precomputed_route(DeviceId src, DeviceId dst) const noexcept;
     [[nodiscard]] Bandwidth get_cell_bandwidth(DeviceId u, DeviceId v) const noexcept;

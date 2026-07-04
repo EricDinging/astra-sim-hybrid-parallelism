@@ -43,12 +43,28 @@ class ChunkIdGeneratorEntry {
      */
     void increment_recv_id() noexcept;
 
+    /**
+     * Record that one chunk of this entry fully retired (both send and recv
+     * callbacks fired and the tracker entry was popped).
+     */
+    void increment_completed() noexcept;
+
+    /**
+     * True when every issued chunk has retired and sends/recvs are balanced:
+     * the entry can be erased, and a later reuse of the same
+     * (tag, src, dest, chunk_size) key restarts both sides symmetrically.
+     */
+    [[nodiscard]] bool fully_retired() const noexcept;
+
   private:
     /// current available chunk id for sim_send() call
     int send_id;
 
     /// current available chunk id for sim_recv() call
     int recv_id;
+
+    /// number of chunks of this entry that fully completed
+    int completed;
 };
 
 }  // namespace AstraSimAnalytical

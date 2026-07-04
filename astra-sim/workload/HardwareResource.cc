@@ -137,9 +137,16 @@ bool HardwareResource::is_available(
 }
 
 int HardwareResource::comm_group_of(
-    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) const {
     if (node->type() != ChakraNodeType::COMM_COLL_NODE) {
         return -1;
+    }
+    // Fast path: the Workload's Kahn scan already parsed every grouped
+    // COMM_COLL node, so a miss means "ungrouped" -- no attribute fetch
+    // through the (global, mutex-guarded) feeder cache per occupancy check.
+    if (node_cg_map_ != nullptr) {
+        const auto it = node_cg_map_->find(node->id());
+        return it != node_cg_map_->end() ? it->second : -1;
     }
     const std::string pg = node->pg_name<std::string>("");
     if (pg.empty()) {

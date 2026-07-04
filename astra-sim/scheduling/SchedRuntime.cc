@@ -137,6 +137,7 @@ void SchedRuntime::place_job(JobInstance* job, const std::vector<int>& npus) {
                          npus.size(), job->num_ranks);
         std::exit(1);
     }
+    std::unordered_set<int> unique_npus;
     for (int n : npus) {
         if (busy_npus_.find(n) != busy_npus_.end()) {
             logger->critical("policy returned a busy NPU id {}", n);
@@ -146,11 +147,20 @@ void SchedRuntime::place_job(JobInstance* job, const std::vector<int>& npus) {
             logger->critical("policy returned a failed NPU id {}", n);
             std::exit(1);
         }
+        if (!unique_npus.insert(n).second) {
+            // The busy/failed checks all run against the pre-placement sets,
+            // so a duplicated free NPU passes them and silently overwrites
+            // the first rank's Workload at attach -- the job then hangs far
+            // from the root cause.
+            logger->critical("policy returned duplicate NPU id {}", n);
+            std::exit(1);
+        }
     }
 
     job->rank_map = npus;
     job->execution_time = static_cast<Tick>(event_queue_->get_current_time());
     job->status = JobStatus::RUNNING;
+    running_jobs_.push_back(job);
     job->rank_workloads.resize(job->num_ranks);
 
     for (int r = 0; r < job->num_ranks; ++r) {
@@ -177,6 +187,9 @@ void SchedRuntime::post_detach(JobInstance* job) {
 void SchedRuntime::detach_job(JobInstance* job) {
     auto logger = LoggerFactory::get_logger("scheduling");
     job->status = JobStatus::COMPLETED;
+    running_jobs_.erase(
+        std::remove(running_jobs_.begin(), running_jobs_.end(), job),
+        running_jobs_.end());
     for (int r = 0; r < job->num_ranks; ++r) {
         all_sys_[job->rank_map[r]]->detach_workload();
         busy_npus_.erase(job->rank_map[r]);
@@ -196,6 +209,15 @@ void SchedRuntime::detach_job(JobInstance* job) {
     // finished workload has no further pending events.
     job->rank_workloads.clear();
 
+    // Tear down the job's wiring (OCS links, route overrides, matrix cells).
+    // Safe here for the same reason rank_workloads.clear() is: the job is
+    // fully drained, and nothing else can be riding its OCS links -- DOR
+    // route computation is pure torus geometry, so those links are reachable
+    // only through this job's own overrides, which die with them.
+    if (reconfig_hook_ != nullptr && !job->reconfig_plan.empty()) {
+        reconfig_hook_->release(job->reconfig_plan);
+    }
+
     sweep();
 }
 
@@ -209,7 +231,8 @@ void SchedRuntime::commit_placement(JobInstance* job,
     remove_from_pending(job);
     job->ordered_rings = r.ordered_rings || preserve_placement_order_;
     if (reconfig_hook_ != nullptr && !r.reconfig_plan.empty()) {
-        reconfig_hook_->apply(r.reconfig_plan);
+        job->reconfig_plan = r.reconfig_plan;
+        reconfig_hook_->apply(job->reconfig_plan);
     }
     place_job(job, r.npus);
 }
@@ -230,8 +253,11 @@ void SchedRuntime::sweep() {
         if (job == nullptr) {
             break;
         }
-        auto ctx = make_sched_context(job);
-        placement_->set_sched_context(&ctx);
+        SchedContext ctx;
+        if (placement_->wants_sched_context()) {
+            ctx = make_sched_context(job);
+            placement_->set_sched_context(&ctx);
+        }
         auto r = placement_->try_place(*job, snapshot_cluster_view());
         placement_->set_sched_context(nullptr);
         if (r.outcome == PlacementOutcome::PLACED) {
@@ -267,8 +293,11 @@ void SchedRuntime::greedy_sweep() {
             break;
         }
         eligible.erase(std::find(eligible.begin(), eligible.end(), job));
-        auto ctx = make_sched_context(job);
-        placement_->set_sched_context(&ctx);
+        SchedContext ctx;
+        if (placement_->wants_sched_context()) {
+            ctx = make_sched_context(job);
+            placement_->set_sched_context(&ctx);
+        }
         auto r = placement_->try_place(*job, snapshot_cluster_view());
         placement_->set_sched_context(nullptr);
         if (r.outcome == PlacementOutcome::PLACED) {
@@ -304,8 +333,11 @@ void SchedRuntime::easy_sweep() {
     // dropping any unplaceable head along the way.
     while (!pending_.empty()) {
         JobInstance* head = fcfs_head();
-        auto ctx = make_sched_context(head);
-        placement_->set_sched_context(&ctx);
+        SchedContext ctx;
+        if (placement_->wants_sched_context()) {
+            ctx = make_sched_context(head);
+            placement_->set_sched_context(&ctx);
+        }
         auto r = placement_->try_place(*head, snapshot_cluster_view());
         placement_->set_sched_context(nullptr);
         if (r.outcome == PlacementOutcome::PLACED) {
@@ -328,16 +360,16 @@ void SchedRuntime::easy_sweep() {
         const int free_now = static_cast<int>(all_sys_.size()) -
                              static_cast<int>(busy_npus_.size()) -
                              static_cast<int>(failed_npus_.size());
+        // Iterate the maintained running list, not the whole registry: the
+        // registry keeps every job ever created (for end-of-run stats), so a
+        // full scan per DEFER is O(total-jobs x sweep-events) over a run.
         std::vector<RunningJob> running;
-        for (const auto& kv : registry_.jobs()) {
-            const JobInstance* j = kv.second.get();
-            if (j->status != JobStatus::RUNNING) {
-                continue;
-            }
+        running.reserve(running_jobs_.size());
+        for (const JobInstance* j : running_jobs_) {
             const Tick exec = j->execution_time.value_or(now);
             const auto est = static_cast<Tick>(j->est_duration.value_or(0));
             running.push_back(
-                RunningJob{std::max(now, exec + est), j->num_ranks});
+                RunningJob{std::max(now, exec + est), j->num_ranks, j->job_id});
         }
         const Reservation res = compute_reservation(
             now, head->num_ranks, free_now, std::move(running));
@@ -368,8 +400,11 @@ void SchedRuntime::easy_sweep() {
             if (!backfill_safe(res, cand_end, cand->num_ranks, extra)) {
                 continue;
             }
-            auto ctx = make_sched_context(cand);
-            placement_->set_sched_context(&ctx);
+            SchedContext ctx;
+            if (placement_->wants_sched_context()) {
+                ctx = make_sched_context(cand);
+                placement_->set_sched_context(&ctx);
+            }
             auto cr = placement_->try_place(*cand, snapshot_cluster_view());
             placement_->set_sched_context(nullptr);
             if (cr.outcome == PlacementOutcome::PLACED) {

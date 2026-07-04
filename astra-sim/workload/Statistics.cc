@@ -3,6 +3,7 @@
 #include "astra-sim/workload/Workload.hh"
 #include <algorithm>
 #include <cassert>
+#include <limits>
 #include <map>
 #include <unordered_map>
 #include <vector>
@@ -32,7 +33,6 @@ void Statistics::record_start(std::shared_ptr<Chakra::ETFeederNode> node,
     const auto type = OperatorStatistics::get_operator_type(node);
     operator_statistics[node_id] =
         OperatorStatistics(node_id, start_time, type);
-    start_times.insert({start_time, node_id});
 }
 
 void Statistics::record_end(std::shared_ptr<Chakra::ETFeederNode> node,
@@ -63,13 +63,18 @@ Statistics::OperatorStatistics::OperatorType Statistics::OperatorStatistics::
         stat_node_type = Statistics::OperatorStatistics::OperatorType::COMM;
         break;
     case ChakraNodeType::INVALID_NODE:
+    case ChakraNodeType::METADATA_NODE:
+        // Both complete synchronously via skip_invalid; bucket them together
+        // (record_start runs for every issued node, METADATA included).
         stat_node_type = Statistics::OperatorStatistics::OperatorType::INVALID;
         break;
     default:
+        // Deterministic failure: the old assert(false) fell through to
+        // returning an uninitialized enum when asserts were compiled out.
         LoggerFactory::get_logger("statistics")
             ->critical("Invalid node_type, node.id={}, node.type={}",
                        node->id(), static_cast<uint64_t>(node->type()));
-        assert(false);
+        exit(EXIT_FAILURE);
     }
     return stat_node_type;
 }
@@ -89,30 +94,24 @@ void Statistics::extract_type_time() {
 }
 
 void Statistics::extract_comp_comm_overlap() {
-    bool has_comp = false;
-    bool has_comm = false;
-    for (const auto& [type, time] : this->type_time) {
-        switch (type) {
-        case OperatorStatistics::OperatorType::GPU:
-            has_comp = true;
-            break;
-        case OperatorStatistics::OperatorType::COMM:
-            has_comm = true;
-            break;
-        default:
-            throw std::runtime_error(
-                "Only GPU and COMM types are supported for overlap extraction");
-        }
-    }
+    // Other operator types (CPU, REMOTE_MEM, INVALID/METADATA...) simply do
+    // not participate in comp/comm overlap; they used to throw here, killing
+    // the run at the first job report of any trace containing them.
+    const bool has_comp =
+        this->type_time.count(OperatorStatistics::OperatorType::GPU) != 0U;
+    const bool has_comm =
+        this->type_time.count(OperatorStatistics::OperatorType::COMM) != 0U;
     if (!has_comp || !has_comm) {
         this->comp_comm_overlap = 0;
         return;
     }
-    Tick overlap = 0;
-    overlap = this->type_time.at(OperatorStatistics::OperatorType::GPU) +
-              this->type_time.at(OperatorStatistics::OperatorType::COMM) -
-              this->wall_time;
-    this->comp_comm_overlap = overlap;
+    // Clamp: gpu + comm can be smaller than the wall span (idle gaps), and
+    // Tick is unsigned -- the old expression underflowed to a garbage value.
+    const Tick busy =
+        this->type_time.at(OperatorStatistics::OperatorType::GPU) +
+        this->type_time.at(OperatorStatistics::OperatorType::COMM);
+    this->comp_comm_overlap =
+        busy > this->wall_time ? busy - this->wall_time : Tick(0);
 }
 
 Tick Statistics::_calculateTotalRuntimeFromIntervals(
@@ -267,16 +266,22 @@ void Statistics::post_processing() {
     logger->info("sys[{}]. Post statistics processing start.",
                  this->workload->sys->id);
 
-    this->wall_time = 0;
+    // Wall time is the span max(end) - min(start) over the recorded
+    // operators, not the absolute max end tick: dynamically scheduled jobs
+    // start at arbitrary ticks, and the absolute value made every derived
+    // stat (overlap, bound percentages) meaningless for them.
+    Tick max_end = 0;
+    Tick min_start = std::numeric_limits<Tick>::max();
     for (const auto& [node_id, stat] : operator_statistics) {
         if (stat.end_time == Statistics::OperatorStatistics::INVALID_TICK) {
             logger->critical("Node {} did not finish, start_time={}", node_id,
                              stat.start_time);
             exit(EXIT_FAILURE);
-        } else {
-            this->wall_time = std::max(this->wall_time, stat.end_time);
         }
+        max_end = std::max(max_end, stat.end_time);
+        min_start = std::min(min_start, stat.start_time);
     }
+    this->wall_time = operator_statistics.empty() ? 0 : max_end - min_start;
     extract_type_time();
     if (workload->sys->roofline_enabled) {
         extract_utilizations();

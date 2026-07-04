@@ -16,10 +16,13 @@ CmdLineParser::CmdLineParser(const char* const argv0) noexcept
 }
 
 void CmdLineParser::define_options() noexcept {
-    options.set_width(70).allow_unrecognised_options().add_options()(
-        "workload-configuration", "Workload configuration file",
-        cxxopts::value<std::string>())(
-        "comm-group-configuration", "Communicator group configuration fi`le",
+    // No allow_unrecognised_options(): a typo'd flag (--failure-porb=...)
+    // must be a startup error, not a silent fallback to the default -- that
+    // failure mode is dangerous for multi-day farm sweeps.
+    options.set_width(70).add_options()("workload-configuration",
+                                        "Workload configuration file",
+                                        cxxopts::value<std::string>())(
+        "comm-group-configuration", "Communicator group configuration file",
         cxxopts::value<std::string>()->default_value("empty"))(
         "system-configuration", "System configuration file",
         cxxopts::value<std::string>())("remote-memory-configuration",

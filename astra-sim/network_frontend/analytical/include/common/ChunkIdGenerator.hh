@@ -56,6 +56,22 @@ class ChunkIdGenerator {
                                            int dest,
                                            ChunkSize chunk_size) noexcept;
 
+    /**
+     * Record one fully-retired chunk for the key and erase the entry once
+     * all its chunks retired with balanced send/recv counts. Without this
+     * the map gains one entry per distinct (tag, src, dest, chunk_size) for
+     * the life of the process -- multi-GB over a 50k-job run.
+     *
+     * @param tag tag of the retired chunk
+     * @param src src NPU ID of the retired chunk
+     * @param dest dest NPU ID of the retired chunk
+     * @param chunk_size chunk size of the retired chunk
+     */
+    void retire_chunk(int tag,
+                      int src,
+                      int dest,
+                      ChunkSize chunk_size) noexcept;
+
   private:
     /// map from (tag, src, dest, chunk_size) tuple to ChunkIdGeneratorEntry
     std::map<Key, ChunkIdGeneratorEntry> chunk_id_map;

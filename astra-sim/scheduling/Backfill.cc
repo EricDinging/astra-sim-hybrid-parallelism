@@ -20,12 +20,19 @@ Reservation compute_reservation(Tick now,
         return Reservation{/*exists=*/true, /*shadow_time=*/now,
                            /*extra=*/free_now - k_head};
     }
-    // Drain running jobs in projected-end order. Tie order among equal
-    // projected_end does not affect shadow_time or extra (both depend only on
-    // the cumulative free count at the crossing).
+    // Drain running jobs in projected-end order. Ties among equal
+    // projected_end DO affect `extra` (which tied job crosses the k_head
+    // threshold decides the surplus), so break them deterministically --
+    // the caller's container order must never leak into placement decisions.
     std::sort(running.begin(), running.end(),
               [](const RunningJob& a, const RunningJob& b) {
-                  return a.projected_end < b.projected_end;
+                  if (a.projected_end != b.projected_end) {
+                      return a.projected_end < b.projected_end;
+                  }
+                  if (a.ranks != b.ranks) {
+                      return a.ranks < b.ranks;
+                  }
+                  return a.job_id < b.job_id;
               });
     int avail = free_now;
     for (const RunningJob& job : running) {

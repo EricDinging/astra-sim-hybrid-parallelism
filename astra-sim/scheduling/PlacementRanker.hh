@@ -31,6 +31,12 @@ class PlacementRanker {
     virtual void set_context(const SchedContext* ctx) {
         (void)ctx;
     }
+    // True iff set_context is actually consumed. Lets SchedRuntime skip
+    // building the sched context (a copy + sort of the whole pending queue)
+    // for the fixed rankers, which never read it.
+    virtual bool wants_context() const {
+        return false;
+    }
     // When false, MinReconfig's "fully-closed contiguous wins immediately"
     // early-return is skipped so scatter can compete in the ranker
     // (cost-model with the scatter guard off). Everything else returns true.
@@ -126,6 +132,9 @@ class CostModelRanker : public PlacementRanker {
     void set_context(const SchedContext* ctx) override {
         ctx_ = ctx;
     }
+    bool wants_context() const override {
+        return true;
+    }
     bool scatter_never_beats_closed() const override {
         return guard_;
     }
@@ -159,6 +168,9 @@ class DynamicSwitch : public PlacementRanker {
     }
     void set_context(const SchedContext* ctx) override {
         ctx_ = ctx;
+    }
+    bool wants_context() const override {
+        return true;
     }
     std::string name() const override {
         return "switch";

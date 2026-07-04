@@ -50,8 +50,11 @@ void CommonNetworkApi::process_chunk_arrival(void* args) noexcept {
         entry.value()->invoke_send_handler();
         entry.value()->invoke_recv_handler();
 
-        // remove entry
+        // remove entry; also let the chunk-id generator drop the key once
+        // all of its chunks retired, so the map stops growing for the whole
+        // run
         tracker.pop_entry(tag, src, dest, count, chunk_id);
+        chunk_id_generator.retire_chunk(tag, src, dest, count);
     } else {
         // run only send callback, as recv is not ready yet.
         entry.value()->invoke_send_handler();
@@ -116,8 +119,9 @@ int CommonNetworkApi::sim_recv(void* const buffer,
         if (entry.value()->is_transmission_finished()) {
             // transmission already finished, run callback immediately
 
-            // pop entry
+            // pop entry (and retire the chunk-id key when fully drained)
             callback_tracker.pop_entry(tag, src, dst, count, chunk_id);
+            chunk_id_generator.retire_chunk(tag, src, dst, count);
 
             // run recv callback immediately
             const auto delta = timespec_t{NS, 0};

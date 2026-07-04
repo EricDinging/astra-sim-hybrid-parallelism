@@ -41,6 +41,24 @@ class _DependancyLayer {
   void push_back_node(const NodeId& node);
   void resolve_dependancy_free_nodes();
 
+  /**
+   * @brief Snapshot the (sealed, not-yet-consumed) edge structure so the
+   * layer can later be rewound with reset(). finish_node() consumes the
+   * graph destructively, so the snapshot must be taken before the first
+   * finish -- right after resolve_dependancy_free_nodes(). Opt-in: callers
+   * that never reset (throwaway scan feeders, one-shot runs) skip the
+   * memory cost of the copy.
+   */
+  void capture_pristine();
+
+  /**
+   * @brief Rewind the layer to the captured pristine state: restore the edge
+   * maps and re-derive the dependancy-free roots. Requires a prior
+   * capture_pristine() and a fully-consumed graph (no ongoing and no
+   * dependancy-free nodes), i.e. a drained iteration boundary.
+   */
+  void reset();
+
   const std::unordered_set<NodeId>& get_dependancy_free_nodes() const;
   const std::unordered_set<NodeId>& get_ongoing_nodes() const;
   const std::unordered_set<NodeId>& get_children(NodeId node) const;
@@ -51,6 +69,11 @@ class _DependancyLayer {
   std::unordered_map<NodeId, std::unordered_set<NodeId>> parent_map_child;
   std::unordered_set<NodeId> dependancy_free_nodes;
   std::unordered_set<NodeId> ongoing_nodes;
+  // Pristine node->parents edges captured by capture_pristine(); empty until
+  // then. parent_map_child is re-derived from it on reset() by inversion.
+  std::unordered_map<NodeId, std::unordered_set<NodeId>>
+      pristine_child_map_parent;
+  bool pristine_captured = false;
   bool dirty = true;
   void _helper_allocate_bucket(NodeId node_id);
   std::shared_mutex mutex;
@@ -70,6 +93,11 @@ class DependancyResolver {
   void push_back_node(const NodeId& node);
   void finish_node(const NodeId& node);
   void resolve_dependancy_free_nodes();
+  // See _DependancyLayer::capture_pristine()/reset(): snapshot the sealed
+  // graph, and rewind all three layers to it at a drained iteration
+  // boundary (avoids re-parsing the trace to rebuild the resolver).
+  void capture_pristine();
+  void reset();
 
   const std::unordered_set<NodeId>& get_dependancy_free_nodes() const;
   const std::unordered_set<NodeId>& get_ongoing_nodes() const;

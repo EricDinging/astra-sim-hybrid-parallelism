@@ -30,6 +30,13 @@ class PlacementPolicy {
     virtual void set_sched_context(const SchedContext* ctx) {
         (void)ctx;
     }
+    // True iff set_sched_context is actually consumed (rfold with a
+    // context-aware ranker). SchedRuntime skips building the context -- a
+    // copy + sort of the whole pending queue per placement attempt -- when
+    // this is false.
+    virtual bool wants_sched_context() const {
+        return false;
+    }
 };
 
 // Returns nullptr on unknown name (caller hard-exits with a clearer message).

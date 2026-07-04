@@ -15,7 +15,6 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/system/CommunicatorGroup.hh"
 #include "astra-sim/workload/HardwareResource.hh"
 #include "astra-sim/workload/LocalMemUsageTracker.hh"
-#include "astra-sim/workload/Scheduler.hh"
 #include "astra-sim/workload/Statistics.hh"
 #include "extern/graph_frontend/chakra/src/feeder_v3/et_feeder.h"
 
@@ -29,7 +28,6 @@ namespace AstraSim {
 
 class Sys;
 class DataSet;
-class Scheduler;
 
 class Workload : public Callable {
   public:
@@ -82,25 +80,42 @@ class Workload : public Callable {
     Sys* sys;
     Statistics* stats;
     std::unique_ptr<LocalMemUsageTracker> local_mem_usage_tracker;
-    std::unordered_map<int, uint64_t> collective_comm_node_id_map;
-    std::unordered_map<int, DataSet*> collective_comm_wrapper_map;
+    std::unordered_map<uint64_t, uint64_t> collective_comm_node_id_map;
+    std::unordered_map<uint64_t, DataSet*> collective_comm_wrapper_map;
     bool is_finished;
-    Scheduler* scheduler;
 
     int job_local_rank = -1;
     Scheduling::JobInstance* parent_job = nullptr;
 
+    // node id -> comm group id for every grouped COMM_COLL node, built by the
+    // constructor's Kahn scan and consumed by HardwareResource::comm_group_of
+    // (avoids a feeder attribute fetch per occupancy check). Node ids are
+    // iteration-invariant, so the map survives per-iteration feeder rebuilds.
+    std::unordered_map<uint64_t, int> node_cg_map_;
+
+    // Stream-id layout for scheduled jobs:
+    //   ((job_id % kJobIdWindow) * kMaxCGPerJob + cg_id) * kStreamsPerCG
+    //     + ordinal * kMaxStreamsPerCollective + intra-collective offset.
+    // kJobIdWindow * kMaxCGPerJob * kStreamsPerCG must exactly tile the
+    // collective tag window (see Sys::FrontEndSendRecvType and the
+    // static_assert in the Workload constructor), so a stream id can never
+    // leave [0, COLLECTIVE) -- the tag mapping in front_end_sim_send stays a
+    // no-op and ids stay non-negative at any job count. Jobs whose ids are
+    // kJobIdWindow apart reuse a range; that is safe only because concurrent
+    // jobs never share NPUs and chunk pairing is keyed by (tag, src, dst,
+    // size).
     static constexpr int kMaxStreamsPerCollective = 64;
+    static constexpr int kMaxCGPerJob = 500;
+    static constexpr int kStreamsPerCG = 40000;
+    static constexpr int kJobIdWindow = 25;
 
   private:
+    // Legacy one-shot path only (feeds a constructor debug log).
+    std::vector<int> comm_group_list;
+
     // From the ET node, find out the corresponding communicator group, and
     // return the pointer. If no communicator group is specified for this ET
     // node, return nullptr.
-    std::vector<int> comm_group_list;
-    int current_comm_group_idx;
-
-    int cached_reconfig_topo_id;
-
     CommunicatorGroup* extract_comm_group(
         std::shared_ptr<Chakra::ETFeederNode> node);
     int previous_group_id = 0;

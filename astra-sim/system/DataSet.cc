@@ -10,7 +10,7 @@ LICENSE file in the root directory of this source tree.
 
 using namespace AstraSim;
 
-int DataSet::id_auto_increment = 0;
+uint64_t DataSet::id_auto_increment = 0;
 
 DataSet::DataSet(int total_streams) {
     this->my_id = id_auto_increment++;

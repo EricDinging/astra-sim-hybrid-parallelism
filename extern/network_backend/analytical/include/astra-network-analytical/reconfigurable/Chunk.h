@@ -28,7 +28,6 @@ class Chunk {
      */
     static void chunk_arrived_next_device(void* chunk_ptr) noexcept;
 
-
     /**
      * Constructor.
      *
@@ -37,7 +36,11 @@ class Chunk {
      * @param callback: callback to be invoked when the chunk arrives destination
      * @param callback_arg: argument of the callback
      */
-    Chunk(ChunkSize chunk_size, Route route, Callback callback, CallbackArg callback_arg, int topology_iteration) noexcept;
+    Chunk(ChunkSize chunk_size,
+          Route route,
+          Callback callback,
+          CallbackArg callback_arg,
+          int topology_iteration) noexcept;
 
     Chunk(ChunkSize chunk_size, Route route, Callback callback, CallbackArg callback_arg) noexcept
         : Chunk(chunk_size, std::move(route), callback, callback_arg, -1) {}
@@ -104,6 +107,11 @@ class Chunk {
         return on_route_chunks;
     }
 
+    /// route of the chunk to its destination, structured
+    /// [current device, next device, ..., dest device]; e.g., a chunk from
+    /// device 5 to destination 3 could hold [5, 1, 6, 2, 3]. The last element
+    /// is invariantly the true destination (routes are only ever installed
+    /// whole), which is what the stale-route refresh in Device::send relies on.
     Route route;
 
   private:
@@ -111,15 +119,6 @@ class Chunk {
 
     /// size of the chunk
     ChunkSize chunk_size;
-
-    /// route of the chunk to its destination.
-    /// Route has the structure of [current device, next device, ..., dest device]
-    /// e.g., if a chunk starts from device 5, then reaches destination 3,
-    /// the route would be e.g., [5, 1, 6, 2, 3]
-
-    DeviceId src_id;
-
-    DeviceId dest_id;
 
     /// callback to be invoked when the chunk arrives at its destination
     Callback callback;

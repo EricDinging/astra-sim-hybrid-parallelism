@@ -21,8 +21,10 @@ class DataSet : public Callable, public StreamStat {
     void call(EventType event, CallData* data);
     bool is_finished();
 
-    static int id_auto_increment;
-    int my_id;
+    // 64-bit: incremented once per collective per rank for the whole
+    // process; a plain int plausibly wraps on multi-day large-cluster runs.
+    static uint64_t id_auto_increment;
+    uint64_t my_id;
     int total_streams;
     int finished_streams;
     bool finished;

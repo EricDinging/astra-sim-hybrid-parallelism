@@ -52,15 +52,25 @@ class TmReconfigHook : public AstraSim::Scheduling::ReconfigHook {
           bw_(bw),
           lt_(lt) {}
     void apply(const AstraSim::Scheduling::ReconfigPlan& plan) override {
+        tm_->apply_job_wiring(plan.ocs_edges, hop_lists(plan), bw_, lt_);
+    }
+
+    // Teardown at job completion: mirror of apply().
+    void release(const AstraSim::Scheduling::ReconfigPlan& plan) override {
+        tm_->remove_job_wiring(plan.ocs_edges, hop_lists(plan));
+    }
+
+  private:
+    static std::vector<std::vector<int>> hop_lists(
+        const AstraSim::Scheduling::ReconfigPlan& plan) {
         std::vector<std::vector<int>> routes;
         routes.reserve(plan.routes.size());
         for (const auto& row : plan.routes) {
             routes.push_back(row.hops);
         }
-        tm_->apply_job_wiring(plan.ocs_edges, routes, bw_, lt_);
+        return routes;
     }
 
-  private:
     std::shared_ptr<TopologyManager> tm_;
     Bandwidth bw_;
     Latency lt_;
@@ -96,7 +106,16 @@ std::map<int, std::vector<std::vector<T>>> parse_schedule_file(
         }
 
         if (line.substr(0, 2) == tag) {
-            int topo_id = std::stoi(line.substr(3));
+            int topo_id = 0;
+            try {
+                topo_id = std::stoi(line.substr(3));
+            } catch (const std::exception&) {
+                std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
+                          << "Malformed schedule header '" << line << "' in "
+                          << filename << " (expected '" << tag << " <id>')"
+                          << std::endl;
+                std::exit(1);
+            }
             std::vector<std::vector<T>> matrix;
 
             while (std::getline(file, line)) {
@@ -329,7 +348,15 @@ int main(int argc, char* argv[]) {
         std::istringstream ss(npus_per_dim_str);
         std::string token;
         while (std::getline(ss, token, ',')) {
-            int dim = std::stoi(token);
+            int dim = 0;
+            try {
+                dim = std::stoi(token);
+            } catch (const std::exception&) {
+                std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
+                          << "Malformed --npus-per-dim token '" << token << "'"
+                          << std::endl;
+                return 1;
+            }
             if (dim > 1) {
                 npus_per_dim.push_back(dim);
             }
@@ -356,6 +383,16 @@ int main(int argc, char* argv[]) {
         logger->info("torus DOR arc selection: {}",
                      bidi ? "bidirectional (shorter arc)"
                           : "unidirectional (+1)");
+    }
+
+    // The failure-sidestep detour table in Router covers dimensions 0-2
+    // only; on a >3-D torus a failed node whose detour would need dim >= 3
+    // dies with a premature exit deep in routing. Refuse up front instead.
+    if (failure_prob > 0.0 && npus_per_dim.size() > 3) {
+        std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
+                  << "--failure-prob requires a <=3-D torus (got "
+                  << npus_per_dim.size() << " dims)" << std::endl;
+        return 1;
     }
 
     // Select failed NPUs once, before any topology/placement setup. Seed is

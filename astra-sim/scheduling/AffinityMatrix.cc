@@ -4,6 +4,7 @@ LICENSE file in the root directory of this source tree.
 *******************************************************************************/
 
 #include "astra-sim/scheduling/AffinityMatrix.hh"
+#include "astra-sim/common/Logging.hh"
 #include "astra-sim/scheduling/ChakraTrace.hh"
 
 #include "extern/graph_frontend/chakra/src/feeder_v3/common.h"
@@ -46,6 +47,12 @@ std::vector<std::vector<double>> assemble_matrix(
             std::vector<int> sorted_group = git->second;
             std::sort(sorted_group.begin(), sorted_group.end());
             int dst = find_next_wrap(sorted_group, n);
+            // Defensive mirror of the send-path guard below: group members
+            // are validated at parse time in build_affinity_matrix, but this
+            // write must stay safe for any future caller.
+            if (dst < 0 || dst >= K) {
+                continue;
+            }
             mat[n][dst] += static_cast<double>(vol_bytes / 1000000ULL);
         }
         for (const auto& [dst, vol_bytes] : rc.send_bytes) {
@@ -72,15 +79,27 @@ std::optional<std::vector<std::vector<double>>> build_affinity_matrix(
         json j;
         try {
             in >> j;
+            for (auto it = j.begin(); it != j.end(); ++it) {
+                std::vector<int> ranks;
+                for (const auto& r : it.value()) {
+                    const int rank = r.get<int>();
+                    // Group members are job-local ranks and index K-wide
+                    // matrix rows in assemble_matrix; an out-of-range member
+                    // (e.g. a global NPU id) would corrupt the heap.
+                    if (rank < 0 || rank >= K) {
+                        LoggerFactory::get_logger("scheduling")
+                            ->warn("{}/comm_group.json: group {} member {} "
+                                   "outside [0, {}); rejecting affinity "
+                                   "matrix",
+                                   trace_dir, it.key(), rank, K);
+                        return std::nullopt;
+                    }
+                    ranks.push_back(rank);
+                }
+                comm_group[it.key()] = std::move(ranks);
+            }
         } catch (...) {
             return std::nullopt;
-        }
-        for (auto it = j.begin(); it != j.end(); ++it) {
-            std::vector<int> ranks;
-            for (const auto& r : it.value()) {
-                ranks.push_back(r.get<int>());
-            }
-            comm_group[it.key()] = std::move(ranks);
         }
     }
 

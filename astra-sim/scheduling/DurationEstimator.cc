@@ -5,6 +5,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "astra-sim/scheduling/DurationEstimator.hh"
 
+#include "astra-sim/common/Logging.hh"
 #include "astra-sim/scheduling/ChakraTrace.hh"
 #include "astra-sim/scheduling/JobInstance.hh"
 
@@ -50,13 +51,25 @@ RooflineCommEstimator::RooflineCommEstimator(double peak_perf,
 
 Tick RooflineCommEstimator::estimate(const JobInstance& job) const {
     const std::string path = job.trace_dir + "/chakra_trace.0.et";
+    // Fail fast on an unreadable trace instead of returning 0: a silent zero
+    // is indistinguishable from a real estimate and corrupts EASY's
+    // reservation math -- a running job with est 0 appears to free its NPUs
+    // immediately, and a pending candidate with est 0 is always
+    // backfill-safe, degrading EASY into unbounded aggressive backfill that
+    // can starve the pivot.
     std::ifstream f(path, std::ios::binary);
     if (!f) {
-        return 0;
+        LoggerFactory::get_logger("scheduling")
+            ->critical("job {}: cannot read {} for duration estimation",
+                       job.job_id, path);
+        std::exit(1);
     }
     ChakraGlobalMetadata gm;
     if (!read_message<ChakraGlobalMetadata>(f, gm)) {
-        return 0;
+        LoggerFactory::get_logger("scheduling")
+            ->critical("job {}: {} is truncated or not a Chakra trace",
+                       job.job_id, path);
+        std::exit(1);
     }
 
     double compute_ns = 0.0;

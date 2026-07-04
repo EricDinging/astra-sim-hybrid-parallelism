@@ -82,8 +82,18 @@ std::optional<std::vector<int>> TopoMatchSolver::solve(
 
     // malloc the matrix; ownership transfers to tm_free_affinity_mat (free()).
     double** mat = static_cast<double**>(malloc(sizeof(double*) * K));
+    if (mat == nullptr) {
+        return std::nullopt;
+    }
     for (int i = 0; i < K; ++i) {
         mat[i] = static_cast<double*>(malloc(sizeof(double) * K));
+        if (mat[i] == nullptr) {
+            for (int r = 0; r < i; ++r) {
+                free(mat[r]);
+            }
+            free(mat);
+            return std::nullopt;
+        }
         for (int j = 0; j < K; ++j) {
             mat[i][j] = affinity[i][j];
         }

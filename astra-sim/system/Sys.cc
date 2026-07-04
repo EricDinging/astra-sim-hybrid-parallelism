@@ -27,9 +27,9 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/system/astraccl/native_collectives/collective_algorithm/DoubleBinaryTreeAllReduce.hh"
 #include "astra-sim/system/astraccl/native_collectives/collective_algorithm/HalvingDoubling.hh"
 #include "astra-sim/system/astraccl/native_collectives/collective_algorithm/Ring.hh"
-#include "astra-sim/system/scheduling/OfflineGreedy.hh"
 #include "astra-sim/system/astraccl/native_collectives/logical_topology/BasicLogicalTopology.hh"
 #include "astra-sim/system/astraccl/native_collectives/logical_topology/GeneralComplexTopology.hh"
+#include "astra-sim/system/scheduling/OfflineGreedy.hh"
 #include <json/json.hpp>
 
 using namespace std;
@@ -52,7 +52,6 @@ Sys::SchedulerUnit::SchedulerUnit(Sys* sys,
     this->queue_threshold = queue_threshold;
     this->latency_per_dimension.resize(queues.size(), 0);
     this->total_chunks_per_dimension.resize(queues.size(), 0);
-    this->total_active_chunks_per_dimension.resize(queues.size(), 0);
 
     int base = 0;
     int dimension = 0;
@@ -65,16 +64,10 @@ Sys::SchedulerUnit::SchedulerUnit(Sys* sys,
             base++;
         }
         dimension++;
-        UsageTracker u(2);
-        usage.push_back(u);
     }
 }
 
 void Sys::SchedulerUnit::notify_stream_added(int vnet) {
-    if (sys->id == 0 &&
-        ++total_active_chunks_per_dimension[queue_id_to_dimension[vnet]] == 1) {
-        usage[queue_id_to_dimension[vnet]].increase_usage();
-    }
     stream_pointer[vnet] = sys->active_Streams[vnet].begin();
     advance(stream_pointer[vnet], running_streams[vnet]);
     while (stream_pointer[vnet] != sys->active_Streams[vnet].end() &&
@@ -98,10 +91,6 @@ void Sys::SchedulerUnit::notify_stream_added_into_ready_list() {
 }
 
 void Sys::SchedulerUnit::notify_stream_removed(int vnet, Tick running_time) {
-    if (sys->id == 0 &&
-        --total_active_chunks_per_dimension[queue_id_to_dimension[vnet]] == 0) {
-        usage[queue_id_to_dimension[vnet]].decrease_usage();
-    }
     running_streams[vnet]--;
 
     int dimension = this->queue_id_to_dimension[vnet];
@@ -623,9 +612,9 @@ bool Sys::initialize_sys(string name) {
     this->track_local_mem = false;
     if (j.contains("track-local-mem")) {
         if (j["track-local-mem"] != 0) {
-        this->track_local_mem = true;
+            this->track_local_mem = true;
         } else {
-        this->track_local_mem = false;
+            this->track_local_mem = false;
         }
     }
 
@@ -670,10 +659,10 @@ CollectiveImpl* Sys::generate_collective_impl_from_input(
     }
 }
 
-CollectiveImpl* Sys::generate_custom_collective_impl(
-    string chakra_filepath) {
+CollectiveImpl* Sys::generate_custom_collective_impl(string chakra_filepath) {
     string filename = chakra_filepath + "." + to_string(id) + ".et";
-    return new CustomCollectiveImpl(CollectiveImplType::CustomCollectiveImpl, filename);
+    return new CustomCollectiveImpl(CollectiveImplType::CustomCollectiveImpl,
+                                    filename);
 }
 
 Tick Sys::boostedTick() {
@@ -918,10 +907,12 @@ DataSet* Sys::generate_collective(
     ComType collective_type,
     int explicit_priority,
     CommunicatorGroup* communicator_group) {
-    // TODO(jinsun): For custom collective, we do not need the chunk_size here (since the chunk size is already determined)
-    // Therefore, we also do not need the 'preferred-dataset-splits' value from the system JSON input. 
-    // However, this variable is intertwined deeply in this function so that we cannot remove it for now.
-    // Therefore, we have to keep that value in the JSON input. TODO: Refactor and remove. 
+    // TODO(jinsun): For custom collective, we do not need the chunk_size here
+    // (since the chunk size is already determined) Therefore, we also do not
+    // need the 'preferred-dataset-splits' value from the system JSON input.
+    // However, this variable is intertwined deeply in this function so that we
+    // cannot remove it for now. Therefore, we have to keep that value in the
+    // JSON input. TODO: Refactor and remove.
     uint64_t chunk_size = determine_chunk_size(size, collective_type);
     uint64_t recommended_chunk_size = chunk_size;
     int streams = ceil(((double)size) / chunk_size);
@@ -1213,7 +1204,8 @@ CollectivePhase Sys::generate_collective_phase(
                                                (RingTopology*)topology,
                                                data_size));
         return vn;
-    } else if (collective_impl->type == CollectiveImplType::CustomCollectiveImpl) {
+    } else if (collective_impl->type ==
+               CollectiveImplType::CustomCollectiveImpl) {
         string filename = ((CustomCollectiveImpl*)collective_impl)->filename;
         CollectivePhase vn(this, queue_id, new CustomAlgorithm(filename, id));
         return vn;
@@ -1452,32 +1444,6 @@ void Sys::insert_stream(list<BaseStream*>* queue, BaseStream* baseStream) {
     queue->insert(it, baseStream);
 }
 
-void Sys::ask_for_schedule(int max) {
-    if (ready_list.size() == 0 ||
-        ready_list.front()->synchronizer[ready_list.front()->stream_id] <
-            all_sys.size()) {
-        return;
-    }
-    int top = ready_list.front()->stream_id;
-    uint64_t min = ready_list.size();
-    if (min > max) {
-        min = static_cast<uint64_t>(max);
-    }
-    for (auto& sys : all_sys) {
-        if (sys->ready_list.size() == 0 ||
-            sys->ready_list.front()->stream_id != top) {
-            return;
-        }
-        if (sys->ready_list.size() < min) {
-            min = sys->ready_list.size();
-        }
-    }
-    for (auto& sys : all_sys) {
-        sys->schedule(min);
-    }
-    return;
-}
-
 void Sys::schedule(int num) {
     int ready_list_size = ready_list.size();
     int counter = min(num, ready_list_size);
@@ -1490,12 +1456,8 @@ void Sys::schedule(int num) {
 
         if (ready_list.front()->current_queue_id == -1) {
             Sys::sys_panic(
-                "should not happen! " +
-                to_string(
-                    BaseStream::synchronizer[ready_list.front()->stream_id]) +
-                " , " +
-                to_string(
-                    BaseStream::ready_counter[ready_list.front()->stream_id]) +
+                "should not happen! stream id: " +
+                to_string(ready_list.front()->stream_id) +
                 " , top queue id: " + to_string(top_vn) +
                 " , total phases: " + to_string(total_phases) +
                 " , waiting streams: " + to_string(total_waiting_streams));
@@ -1703,22 +1665,22 @@ bool Sys::sim_reconfig(int topo_id) {
 }
 
 void Sys::increment_inflight_coll() {
-     if (comm_NI) {
-         comm_NI->increment_inflight_coll();
-     }
+    if (comm_NI) {
+        comm_NI->increment_inflight_coll();
+    }
 }
 
 void Sys::decrement_inflight_coll() {
-     if (comm_NI) {
-         comm_NI->decrement_inflight_coll();
-     }
+    if (comm_NI) {
+        comm_NI->decrement_inflight_coll();
+    }
 }
 
 int Sys::get_inflight_coll() {
-     if (comm_NI) {
-         return comm_NI->get_inflight_coll();
-     }
-     return 0;
+    if (comm_NI) {
+        return comm_NI->get_inflight_coll();
+    }
+    return 0;
 }
 
 int Sys::sim_send(Tick delay,

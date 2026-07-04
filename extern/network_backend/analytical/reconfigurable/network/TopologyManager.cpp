@@ -117,32 +117,35 @@ void TopologyManager::increment_callback() noexcept {
     reconfiguring = false;
 
     // All links have been drained, increment the topology iteration
-    debug_print("Drained Network, reconfiguring to TOPO ITERATION #" + std::to_string(topology_iteration));
-    for (auto row : bandwidths) {
-        std::string msg;
-        for (auto bw : row) {
-            msg += std::to_string(static_cast<int>(bw)) + " ";
+    // Message construction guarded: these loops stringify the full NxN matrix
+    // (O(N^2) to_string + row copies) and must be statically dead when
+    // verbose logging is compiled out.
+    if (kVerboseLogging) {
+        debug_print("Drained Network, reconfiguring to TOPO ITERATION #" + std::to_string(topology_iteration));
+        for (const auto& row : bandwidths) {
+            std::string msg;
+            for (auto bw : row) {
+                msg += std::to_string(static_cast<int>(bw)) + " ";
+            }
+            debug_print(msg);
         }
-        debug_print(msg);
     }
 
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
-        // std::vector<Route> routes;
-        // Create a route for each device
-        std::vector<Bandwidth> bw_device = bandwidths[i];
-
-        debug_print("BW Vector for device " + std::to_string(i) + ":");
-        std::string msg;
-        for (auto bw : bw_device) {
-            msg += std::to_string(static_cast<int>(bw)) + " ";
+        if (kVerboseLogging) {
+            debug_print("BW Vector for device " + std::to_string(i) + ":");
+            std::string msg;
+            for (auto bw : bandwidths[i]) {
+                msg += std::to_string(static_cast<int>(bw)) + " ";
+            }
+            debug_print(msg);
         }
-        debug_print(msg);
 
         // DOR mode fetches routes on demand (router_); pass an empty route row
         // so the device reconfigures links only. BFS mode pushes the full row.
-        device->reconfigure(bandwidths[i], use_dor ? std::vector<Route>{} : precomputed_routes[i], latencies[i],
-                            reconfig_time);
+        static const std::vector<Route> kNoRoutes;
+        device->reconfigure(bandwidths[i], use_dor ? kNoRoutes : precomputed_routes[i], latencies[i], reconfig_time);
     }
 }
 
@@ -172,12 +175,14 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
                 ", inflight_coll " + std::to_string(inflight_coll));
     debug_print("TM: bandwidths size: " + std::to_string(bandwidths.size()) +
                 ", latencies size: " + std::to_string(latencies.size()));
-    for (auto row : bandwidths) {
-        std::string msg;
-        for (auto bw : row) {
-            msg += std::to_string(static_cast<int>(bw)) + " ";
+    if (kVerboseLogging) {
+        for (const auto& row : bandwidths) {
+            std::string msg;
+            for (auto bw : row) {
+                msg += std::to_string(static_cast<int>(bw)) + " ";
+            }
+            debug_print(msg);
         }
-        debug_print(msg);
     }
 
     assert(bandwidths.size() == devices_count);
@@ -423,16 +428,113 @@ void TopologyManager::apply_job_wiring(const std::vector<std::pair<int, int>>& o
     }
 
     // Reconfigure only the touched devices -- no global drain. DOR mode fetches
-    // routes on demand, so push an empty route row (links only).
+    // routes on demand, so push an empty route row (links only). scoped=true:
+    // only the links this wiring actually changed are retuned, and the
+    // per-device topology_iteration is left alone (see Device::reconfigure).
     for (int d : touched) {
-        topology->get_device(d)->reconfigure(bandwidths[d], use_dor ? std::vector<Route>{} : precomputed_routes[d],
-                                             latencies[d], Latency(0));
+        static const std::vector<Route> kNoRoutes;
+        topology->get_device(d)->reconfigure(bandwidths[d], use_dor ? kNoRoutes : precomputed_routes[d], latencies[d],
+                                             Latency(0), /*scoped=*/true);
     }
 
     if (std::getenv("RFOLD_WIRING_LOG") != nullptr) {
         std::cerr << "[wiring] ocs_edges=" << ocs_edges.size() << " routes=" << routes.size()
                   << " overrides=" << (router_ != nullptr ? router_->override_count() : precomputed_routes.size())
                   << " touched=" << touched.size() << std::endl;
+    }
+}
+
+namespace {
+// True iff u and v are adjacent in the base torus: coordinates differ by
+// +-1 mod D in exactly one dimension. Same id encoding as Router (dims[0]
+// fastest-varying). Independent of DOR arc direction (--bidi).
+bool is_torus_neighbor(const std::vector<int>& dims, DeviceId u, DeviceId v) noexcept {
+    if (dims.empty() || u == v) {
+        return false;
+    }
+    int cu = u;
+    int cv = v;
+    int diff_dims = 0;
+    bool adjacent = false;
+    for (const int d : dims) {
+        const int xu = cu % d;
+        const int xv = cv % d;
+        cu /= d;
+        cv /= d;
+        if (xu == xv) {
+            continue;
+        }
+        diff_dims++;
+        if (diff_dims > 1) {
+            return false;
+        }
+        adjacent = (xv == (xu + 1) % d) || (xv == (xu - 1 + d) % d);
+        if (!adjacent) {
+            return false;
+        }
+    }
+    return diff_dims == 1 && adjacent;
+}
+}  // namespace
+
+void TopologyManager::remove_job_wiring(const std::vector<std::pair<int, int>>& ocs_edges,
+                                        const std::vector<std::vector<int>>& routes) noexcept {
+    if (!use_dor) {
+        // The dynamic-scheduling flow is DOR-only; restoring a BFS eager-table
+        // row would need a route recompute this path does not attempt.
+        static bool warned = false;
+        if (!warned) {
+            std::cerr << "[unwiring] BFS mode: job-wiring teardown unsupported; overrides persist" << std::endl;
+            warned = true;
+        }
+        return;
+    }
+
+    for (const auto& path : routes) {
+        if (path.empty()) {
+            continue;
+        }
+        router_->erase_override(path.front(), path.back());
+    }
+
+    for (const auto& e : ocs_edges) {
+        const int u = e.first;
+        const int v = e.second;
+        assert(u >= 0 && u < devices_count && v >= 0 && v < devices_count);
+        if (is_torus_neighbor(npus_per_dim, u, v)) {
+            // Adjacent pairs never got an OCS link (connect_ocs_edge skips
+            // already-connected pairs); zeroing their cells would take down a
+            // real torus link.
+            std::cerr << "[unwiring] warning: plan lists torus-adjacent OCS edge (" << u << ", " << v << "); skipping"
+                      << std::endl;
+            continue;
+        }
+        const auto du = topology->get_device(u);
+        const auto dv = topology->get_device(v);
+        if (!du->connected(v) || !dv->connected(u)) {
+            std::cerr << "[unwiring] warning: OCS edge (" << u << ", " << v << ") not connected; skipping" << std::endl;
+            continue;
+        }
+        if (du->get_links().at(v)->is_busy() || dv->get_links().at(u)->is_busy() || du->pending_chunks_count(v) > 0 ||
+            dv->pending_chunks_count(u) > 0) {
+            // Structural invariant broken: the owning job is drained, so its
+            // OCS link cannot be carrying or queueing traffic. Leak the link
+            // rather than erase it under an outstanding link-free event
+            // (use-after-free).
+            std::cerr << "[unwiring] CRITICAL: OCS link (" << u << ", " << v
+                      << ") busy or has pending chunks at teardown; leaking it" << std::endl;
+            continue;
+        }
+        bandwidths[u][v] = bandwidths[v][u] = Bandwidth(0);
+        latencies[u][v] = latencies[v][u] = Latency(0);
+        du->disconnect(v);
+        dv->disconnect(u);
+    }
+
+    if (std::getenv("RFOLD_WIRING_LOG") != nullptr) {
+        std::cerr << "[unwiring] ocs_edges=" << ocs_edges.size() << " routes=" << routes.size()
+                  << " overrides=" << (router_ != nullptr ? router_->override_count() : precomputed_routes.size())
+                  << std::endl;
     }
 }
 

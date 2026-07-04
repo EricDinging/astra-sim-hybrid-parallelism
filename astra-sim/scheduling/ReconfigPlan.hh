@@ -31,12 +31,16 @@ struct ReconfigPlan {
     }
 };
 
-// Seam: SchedRuntime calls apply() on PLACED; the frontend implements it over
-// the backend TopologyManager. Keeps scheduling decoupled from the backend.
+// Seam: SchedRuntime calls apply() on PLACED and release() on job
+// completion; the frontend implements both over the backend TopologyManager.
+// Keeps scheduling decoupled from the backend. release() is pure virtual on
+// purpose: a hook that installs wiring but cannot tear it down leaks OCS
+// links and route overrides for the rest of the run.
 class ReconfigHook {
   public:
     virtual ~ReconfigHook() = default;
     virtual void apply(const ReconfigPlan& plan) = 0;
+    virtual void release(const ReconfigPlan& plan) = 0;
 };
 
 }  // namespace Scheduling

@@ -10,7 +10,8 @@ using namespace AstraSimAnalytical;
 
 ChunkIdGeneratorEntry::ChunkIdGeneratorEntry() noexcept
     : send_id(-1),
-      recv_id(-1) {}
+      recv_id(-1),
+      completed(0) {}
 
 int ChunkIdGeneratorEntry::get_send_id() const noexcept {
     assert(send_id >= 0);
@@ -30,4 +31,14 @@ void ChunkIdGeneratorEntry::increment_send_id() noexcept {
 
 void ChunkIdGeneratorEntry::increment_recv_id() noexcept {
     recv_id++;
+}
+
+void ChunkIdGeneratorEntry::increment_completed() noexcept {
+    completed++;
+    assert(completed <= send_id + 1);
+}
+
+bool ChunkIdGeneratorEntry::fully_retired() const noexcept {
+    // ids start at -1 and pre-increment, so send_id + 1 == chunks issued.
+    return completed > 0 && send_id == recv_id && completed == send_id + 1;
 }

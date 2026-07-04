@@ -65,6 +65,15 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     // printf("Pending chunk topology iteration: %d, current topology iteration: %d\n",
     //        pending_chunks[link_id].front()->get_topology_iteration(), topology_iteration);
 
+    if (links[link_id]->get_bandwidth() == Bandwidth(0)) {
+        // A pending chunk must stay queued while the link has no bandwidth:
+        // sending would compute an infinite serialization delay and cast it
+        // to an integer event time (UB). Reachable when a reconfigure
+        // schedules free events for a still-0-BW link (BFS mode, or a bad
+        // schedule file in DOR mode).
+        return;
+    }
+
     std::unique_ptr<Chunk> chunk = std::move(pending_chunks[link_id].front());
     pending_chunks[link_id].pop_front();
 
@@ -115,9 +124,13 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     //     std::cout << std::endl;
     // }
     if (chunk->get_topology_iteration() < topology_iteration) {
-        const DeviceId next_id = chunk->next_device()->get_id();
+        // The chunk was routed on an older topology: recompute its route to
+        // its true destination (route.back()). Refreshing toward the *next
+        // hop* here truncated the route to one hop and delivered the chunk
+        // there as if it had arrived (P0-1).
+        const DeviceId dest_id = chunk->route.back()->get_id();
         // DOR mode: fetch the route on demand; BFS mode: use the per-row copy.
-        const Route& r = (router_ != nullptr) ? router_->lookup(device_id, next_id) : routes[next_id];
+        const Route& r = (router_ != nullptr) ? router_->lookup(device_id, dest_id) : routes[dest_id];
         chunk->update_route(r, topology_iteration);
     }
 
@@ -134,9 +147,11 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
         chunk->get_topology_iteration() > topology_iteration) {
         // link is busy, add the chunk to pending chunks
         pending_chunks[next_dest_id].push_back(std::move(chunk));
-        debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(next_dest_id) +
-                    " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " +
-                    std::to_string(pending_chunks[next_dest_id].size()));
+        if (kVerboseLogging) {
+            debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(next_dest_id) +
+                        " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " +
+                        std::to_string(pending_chunks[next_dest_id].size()));
+        }
         return;
     }
 
@@ -160,16 +175,23 @@ void Device::connect(const DeviceId id, const Bandwidth bandwidth, const Latency
     pending_chunks[id] = std::list<std::unique_ptr<Chunk>>();
 }
 
-void Device::reconfigure(std::vector<Bandwidth> bandwidth,
-                         std::vector<Route> routes,
-                         std::vector<Latency> latency,
-                         Latency reconfig_time) noexcept {
+void Device::reconfigure(const std::vector<Bandwidth>& bandwidth,
+                         const std::vector<Route>& routes,
+                         const std::vector<Latency>& latency,
+                         Latency reconfig_time,
+                         bool scoped) noexcept {
     // bandwidth/latency are full-width device-indexed rows; links are now
     // sparse (~6 torus neighbors + OCS edges + self-loop), so we index the rows
     // by link id rather than requiring size == links.size().
     assert(bandwidth.size() == latency.size());
 
-    topology_iteration++;
+    if (!scoped) {
+        // Per-job (scoped) wiring must not bump the iteration: chunks are
+        // stamped with TopologyManager's GLOBAL iteration, so a per-device
+        // bump here desyncs the counters and every chunk later transiting
+        // this device is treated as stale (P0-1).
+        topology_iteration++;
+    }
 
     for (const auto& [id, link] : links) {
         assert(id >= 0);
@@ -182,15 +204,36 @@ void Device::reconfigure(std::vector<Bandwidth> bandwidth,
         assert(latency[id] >= 0);
         assert(connected(id));
 
+        if (scoped) {
+            if (bandwidth[id] == link->get_bandwidth() && latency[id] == link->get_latency()) {
+                // Link untouched by this job's wiring: leave its busy state
+                // and pending queue alone. Scheduling the unconditional +1ns
+                // free event here force-freed busy links (P0-2).
+                continue;
+            }
+            if (link->is_busy()) {
+                // Retuning a link mid-transmission would invalidate its
+                // in-flight completion events (P4-11: Link::reconfigure
+                // asserts !busy, aborting the run). Keep the old values and
+                // warn; only reachable by re-wiring a previously leaked busy
+                // OCS link.
+                std::cerr << "[wiring] warning: device " << device_id << " link to " << id
+                          << " busy at scoped reconfigure; keeping old bw/lt" << std::endl;
+                continue;
+            }
+        }
+
         // update the route (BFS mode only; DOR mode passes an empty routes
         // vector and fetches on demand via router_).
         if (!routes.empty()) {
             this->routes[id] = routes[id];
         }
         // reconfigure the link
-        debug_print("Device " + std::to_string(device_id) + ": Reconfiguring link to " + std::to_string(id) +
-                    ", pending chunk size: " + std::to_string(pending_chunks[id].size()) +
-                    ", new bandwidth: " + std::to_string(bandwidth[id]));
+        if (kVerboseLogging) {
+            debug_print("Device " + std::to_string(device_id) + ": Reconfiguring link to " + std::to_string(id) +
+                        ", pending chunk size: " + std::to_string(pending_chunks[id].size()) +
+                        ", new bandwidth: " + std::to_string(bandwidth[id]));
+        }
         auto free_time = link->reconfigure(bandwidth[id], latency[id], reconfig_time);
         // create a callback argument for the link free event
 
@@ -232,9 +275,11 @@ void Device::disconnect(const DeviceId id) noexcept {
 
     // assert there's an existing connection
     assert(connected(id));
+    assert(pending_chunks[id].empty());
 
-    // remove the link
+    // remove the link and its pending queue
     links.erase(id);
+    pending_chunks.erase(id);
 }
 
 bool Device::connected(const DeviceId dest) const noexcept {

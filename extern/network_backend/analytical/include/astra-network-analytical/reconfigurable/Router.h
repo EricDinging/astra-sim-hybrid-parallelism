@@ -61,6 +61,10 @@ class Router {
     /// Install an OCS override for (s, t) and drop any stale cached entry.
     void set_override(DeviceId s, DeviceId t, Route route) noexcept;
 
+    /// Remove the (s, t) override, if any; (s, t) reverts to computed DOR on
+    /// the next lookup (the cache never holds override routes).
+    void erase_override(DeviceId s, DeviceId t) noexcept;
+
     /// Drop all overrides and cached routes (== a full reconfigure to pure DOR).
     void clear() noexcept;
 

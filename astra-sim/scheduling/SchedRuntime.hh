@@ -124,6 +124,10 @@ class SchedRuntime {
 
     int next_arrival_idx_ = 0;
     std::vector<JobInstance*> pending_;
+    // Jobs currently RUNNING (registry-owned pointers), maintained by
+    // place_job/detach_job so reservation sweeps don't scan the ever-growing
+    // registry.
+    std::vector<JobInstance*> running_jobs_;
     JobRegistry registry_;
     std::unordered_set<int> busy_npus_;
     std::unordered_set<int> failed_npus_;

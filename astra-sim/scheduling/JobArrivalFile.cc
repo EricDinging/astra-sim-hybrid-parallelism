@@ -9,6 +9,7 @@ LICENSE file in the root directory of this source tree.
 
 #include <algorithm>
 #include <fstream>
+#include <limits>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -39,20 +40,58 @@ std::vector<std::string> split_csv(const std::string& line) {
     return out;
 }
 
+// std::stoi wrapper that maps malformed input to the CSV's fail-fast path
+// instead of an uncaught std::invalid_argument -> std::terminate with no row
+// diagnostic. Rejects negative values: the unsigned columns previously went
+// through stoull, where "-5" silently wraps to ~2^64 (an arrival sentinel
+// that never fires, so the run "completes" while missing a job).
+int parse_int(const std::string& s, int row, const char* col) {
+    try {
+        size_t pos = 0;
+        const long v = std::stol(s, &pos);
+        if (pos != s.size() || v < 0 || v > std::numeric_limits<int>::max()) {
+            throw std::invalid_argument(s);
+        }
+        return static_cast<int>(v);
+    } catch (const std::exception&) {
+        LoggerFactory::get_logger("scheduling")
+            ->critical("arrival CSV row {}: malformed {} '{}'", row, col, s);
+        std::exit(1);
+    }
+}
+
+unsigned long long parse_u64(const std::string& s, int row, const char* col) {
+    try {
+        size_t pos = 0;
+        if (!s.empty() && s[0] == '-') {
+            throw std::invalid_argument(s);
+        }
+        const unsigned long long v = std::stoull(s, &pos);
+        if (pos != s.size()) {
+            throw std::invalid_argument(s);
+        }
+        return v;
+    } catch (const std::exception&) {
+        LoggerFactory::get_logger("scheduling")
+            ->critical("arrival CSV row {}: malformed {} '{}'", row, col, s);
+        std::exit(1);
+    }
+}
+
 std::array<int, 3> parse_shape(const std::string& s, int row) {
     std::array<int, 3> out{};
     std::vector<int> dims;
     std::string token;
     for (char c : s) {
         if (c == 'x' || c == 'X') {
-            dims.push_back(std::stoi(token));
+            dims.push_back(parse_int(token, row, "shape"));
             token.clear();
         } else {
             token += c;
         }
     }
     if (!token.empty()) {
-        dims.push_back(std::stoi(token));
+        dims.push_back(parse_int(token, row, "shape"));
     }
     if (dims.size() != 3 || dims[0] <= 0 || dims[1] <= 0 || dims[2] <= 0) {
         auto logger = LoggerFactory::get_logger("scheduling");
@@ -110,11 +149,12 @@ std::vector<JobArrival> JobArrivalFile::parse(const std::string& path) {
             std::exit(1);
         }
         JobArrival ja;
-        ja.job_id = std::stoi(cols[0]);
-        ja.arrival_time = static_cast<Tick>(std::stoull(cols[1]));
-        ja.num_ranks = std::stoi(cols[2]);
+        ja.job_id = parse_int(cols[0], row, "job_id");
+        ja.arrival_time =
+            static_cast<Tick>(parse_u64(cols[1], row, "arrival_time_ns"));
+        ja.num_ranks = parse_int(cols[2], row, "num_ranks");
         ja.shape = parse_shape(cols[3], row);
-        ja.num_iterations = std::stoi(cols[4]);
+        ja.num_iterations = parse_int(cols[4], row, "num_iterations");
         if (ja.num_iterations < 1) {
             logger->critical("arrival CSV row {}: num_iterations must be >= 1",
                              row);

@@ -106,7 +106,6 @@ class Statistics {
     double average_operation_intensity_;
     Workload* workload;
     std::unordered_map<NodeId, OperatorStatistics> operator_statistics;
-    std::multimap<Tick, NodeId> start_times;
 };
 
 }  // namespace AstraSim

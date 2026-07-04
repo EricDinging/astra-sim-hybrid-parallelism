@@ -6,8 +6,8 @@
 #include <memory>
 #include <string>
 #include <tuple>
-#include <vector>
 #include <unordered_set>
+#include <vector>
 #include "cache.h"
 #include "common.h"
 #include "dependancy_solver.h"
@@ -59,12 +59,24 @@ class ETFeeder {
     return dependancy_resolver;
   }
 
+  // Opt-in support for rewinding the feeder at iteration boundaries instead
+  // of re-parsing the trace: capture right after construction (graph sealed,
+  // nothing consumed yet), reset at a drained boundary. The trace file,
+  // index_map, and the (feeder-id-keyed) node cache all stay valid across
+  // resets, so a reset is pure in-memory work.
+  void capture_pristine_dependancy() {
+    dependancy_resolver.capture_pristine();
+  }
+  void reset_dependancy() {
+    dependancy_resolver.reset();
+  }
+
   std::shared_ptr<ETFeederNode> lookupNode(const NodeId& node_id);
   bool hasNodesToIssue();
   std::shared_ptr<ETFeederNode> getNextIssuableNode();
   void pushBackIssuableNode(const NodeId& node_id);
-  void freeChildrenNodes(const NodeId& node_id);  
-  
+  void freeChildrenNodes(const NodeId& node_id);
+
   // Destructively traverse all nodes (topological order as produced by
   // dependency resolver) and collect unique communicator group ids from
   // nodes that define a pg_name attribute. Order of returned ids follows

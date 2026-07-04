@@ -18,6 +18,7 @@ struct RunningJob {
     Tick projected_end;  // absolute tick the job is expected to finish (caller
                          // computes max(now, execution_time + est_duration))
     int ranks;
+    int job_id = 0;  // deterministic tie-break for equal projected_end
 };
 
 // The pivot's (FCFS head's) reservation under count-based aggressive
@@ -31,10 +32,13 @@ struct Reservation {
 };
 
 // Earliest time at which >= k_head NPUs are free, counting free_now plus
-// running jobs draining in projected-end order. `running` is taken by value and
-// sorted internally; tie order among equal projected_end does not change the
-// result. If free_now >= k_head already (the head DEFERed on torus shape, not
-// capacity), shadow_time == now and extra == free_now - k_head.
+// running jobs draining in projected-end order. `running` is taken by value
+// and sorted internally. Tie order among equal projected_end DOES affect
+// `extra` (the crossing job's surplus depends on which tied job crosses), so
+// the sort breaks ties deterministically by (ranks, job_id) rather than
+// inheriting the caller's container order. If free_now >= k_head already
+// (the head DEFERed on torus shape, not capacity), shadow_time == now and
+// extra == free_now - k_head.
 Reservation compute_reservation(Tick now,
                                 int k_head,
                                 int free_now,

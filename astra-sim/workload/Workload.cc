@@ -12,7 +12,6 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/system/RecvPacketEventHandlerData.hh"
 #include "astra-sim/system/SendPacketEventHandlerData.hh"
 #include "astra-sim/system/WorkloadLayerHandlerData.hh"
-#include "astra-sim/workload/Scheduler.hh"
 #include <json/json.hpp>
 
 #include <algorithm>
@@ -49,7 +48,6 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     }
     auto temp_et_feeder = new ETFeeder(workload_filename);
     this->comm_group_list = temp_et_feeder->traverse_comm_group();
-    this->current_comm_group_idx = 0;
     delete temp_et_feeder;
     this->et_feeder = new ETFeeder(workload_filename);
     this->workload_filename_ = workload_filename;
@@ -89,10 +87,8 @@ Workload::Workload(Sys* sys,
         LoggerFactory::get_logger("workload")->critical(error_msg);
         std::exit(EXIT_FAILURE);
     }
-    auto temp_et_feeder = new ETFeeder(workload_filename);
-    this->comm_group_list = temp_et_feeder->traverse_comm_group();
-    this->current_comm_group_idx = 0;
-    delete temp_et_feeder;
+    // (No comm_group_list scan here: it fed only a legacy-path debug log,
+    // and the scan cost a full extra trace parse per rank per attach.)
 
     // Pre-compute (cg_id, node_id) -> ordinal map. Two consumers, two
     // requirements:
@@ -120,6 +116,22 @@ Workload::Workload(Sys* sys,
             queued.insert(node_id);
         }
         std::unordered_map<int, std::vector<uint64_t>> cg_to_node_ids;
+        // Rank-invariance fingerprint (see check below): FNV-1a over the
+        // ordinal-ordered (name, comm_size) of each CG's collectives.
+        // Logical identity -- not node ids -- is what tag pairing needs: the
+        // k-th admitted collective of a CG must be the same collective on
+        // every member rank.
+        constexpr uint64_t kFnvOffset = 1469598103934665603ULL;
+        constexpr uint64_t kFnvPrime = 1099511628211ULL;
+        std::unordered_map<int, uint64_t> cg_fingerprint;
+        const auto fnv_fold = [](uint64_t h, const void* data,
+                                 size_t len) noexcept {
+            const auto* p = static_cast<const unsigned char*>(data);
+            for (size_t i = 0; i < len; ++i) {
+                h = (h ^ p[i]) * kFnvPrime;
+            }
+            return h;
+        };
         while (!ready.empty()) {
             const uint64_t node_id = ready.top();
             ready.pop();
@@ -130,6 +142,15 @@ Workload::Workload(Sys* sys,
                     try {
                         int cg_id = std::stoi(pg);
                         cg_to_node_ids[cg_id].push_back(node_id);
+                        node_cg_map_[node_id] = cg_id;
+                        auto it =
+                            cg_fingerprint.emplace(cg_id, kFnvOffset).first;
+                        const std::string name = node->name();
+                        const uint64_t comm_size = node->comm_size();
+                        uint64_t h =
+                            fnv_fold(it->second, name.data(), name.size());
+                        h = fnv_fold(h, &comm_size, sizeof(comm_size));
+                        it->second = h;
                     } catch (const std::exception&) {
                     }
                 }
@@ -154,10 +175,37 @@ Workload::Workload(Sys* sys,
                 ord_map[kv.second[i]] = static_cast<int>(i);
             }
         }
+        // Deadlock-freedom of per-group ordered admission (and correctness
+        // of ordinal-derived stream ids/tags) requires every member rank of
+        // a CG to derive the same ordinal sequence of collectives. That
+        // holds when member ranks carry structurally identical DAGs -- true
+        // for the STG generator, but nothing enforced it. Verify at attach:
+        // the first member rank records each CG's fingerprint in the
+        // JobInstance; every later member must match, else the job would
+        // wedge at runtime with no indication why.
+        for (const auto& [cg_id, fp] : cg_fingerprint) {
+            auto ins = parent_job->cg_ordinal_fingerprint.emplace(cg_id, fp);
+            if (!ins.second && ins.first->second != fp) {
+                LoggerFactory::get_logger("workload")
+                    ->critical("job {} rank {}: comm group {} ordinal sequence "
+                               "diverges "
+                               "from earlier member ranks (fingerprint {:#x} "
+                               "vs {:#x}); "
+                               "per-group ordered admission requires identical "
+                               "collective order on every member rank",
+                               parent_job->job_id, job_local_rank, cg_id, fp,
+                               ins.first->second);
+                std::exit(1);
+            }
+        }
         reset_comm_admission_order();
     }
 
     this->et_feeder = new ETFeeder(workload_filename);
+    // Snapshot the sealed dependency graph so advance_to_next_iteration can
+    // rewind the resolver in memory instead of re-parsing the trace per
+    // iteration. Must happen before any node is issued.
+    this->et_feeder->capture_pristine_dependancy();
     this->workload_filename_ = workload_filename;
     // Replay the single-iteration trace once per training iteration. Clamp to
     // >= 1 so a malformed/zero count degrades to single-iteration rather than
@@ -165,6 +213,9 @@ Workload::Workload(Sys* sys,
     this->total_iterations_ = std::max(1, parent_job->num_iterations);
     this->comm_groups.clear();
     this->hw_resource = new HardwareResource(1, sys->id);
+    // Node ids are iteration-invariant, so the map stays valid across the
+    // per-iteration resolver rewinds.
+    this->hw_resource->set_node_cg_map(&node_cg_map_);
     this->local_mem_usage_tracker =
         std::make_unique<LocalMemUsageTracker>(sys->id);
 
@@ -177,10 +228,35 @@ Workload::Workload(Sys* sys,
                    parent_job->job_id);
     } else {
         std::ifstream inFile(cg_path);
+        if (!inFile.is_open()) {
+            // access() passed but open failed: almost always fd exhaustion
+            // (EMFILE), which otherwise surfaces as an opaque nlohmann
+            // parse_error ("unexpected end of input").
+            LoggerFactory::get_logger("workload")
+                ->critical("job {}: cannot open {} (errno={}); out of file "
+                           "descriptors?",
+                           parent_job->job_id, cg_path, errno);
+            std::exit(EXIT_FAILURE);
+        }
         json j;
-        inFile >> j;
+        try {
+            inFile >> j;
+        } catch (const std::exception& e) {
+            LoggerFactory::get_logger("workload")
+                ->critical("job {}: cannot parse {}: {}", parent_job->job_id,
+                           cg_path, e.what());
+            std::exit(EXIT_FAILURE);
+        }
         for (json::iterator it = j.begin(); it != j.end(); ++it) {
-            int cg_id = std::stoi(it.key());
+            int cg_id = 0;
+            try {
+                cg_id = std::stoi(it.key());
+            } catch (const std::exception&) {
+                LoggerFactory::get_logger("workload")
+                    ->critical("job {}: non-numeric comm group key '{}' in {}",
+                               parent_job->job_id, it.key(), cg_path);
+                std::exit(EXIT_FAILURE);
+            }
             std::vector<int> translated;
             for (const auto& local_rank_json : it.value()) {
                 int local_rank = local_rank_json.get<int>();
@@ -193,17 +269,35 @@ Workload::Workload(Sys* sys,
                 }
                 translated.push_back(parent_job->rank_map[local_rank]);
             }
+            if (cg_id < 0 || cg_id >= kMaxCGPerJob) {
+                LoggerFactory::get_logger("workload")
+                    ->critical("job {}: comm group id {} outside [0, {}) in "
+                               "{} -- unsupported by the stream-id layout",
+                               parent_job->job_id, cg_id, kMaxCGPerJob,
+                               cg_path);
+                std::exit(1);
+            }
             auto* cg = new CommunicatorGroup(cg_id, translated, sys,
                                              parent_job->ordered_rings);
             // Stream IDs derive from CommunicatorGroup::num_streams (set to
             // id * 1000000 by default). Since all jobs share the same local
-            // cg_ids, concurrent jobs would collide in the global
-            // BaseStream::synchronizer. Override with a (job_id, cg_id)-unique
-            // base so every comm group across every job gets its own range.
-            static constexpr int kMaxCGPerJob = 500;
-            static constexpr int kStreamsPerCG = 40000;
-            int base =
-                (parent_job->job_id * kMaxCGPerJob + cg_id) * kStreamsPerCG;
+            // cg_ids, concurrent jobs would collide in the network
+            // frontend's tag space. Override with a (job_id mod window,
+            // cg_id)-unique base so every comm group of every concurrently
+            // running job gets its own range. The layout exactly tiles the
+            // collective tag window, so ids can never overflow int, go
+            // negative, or escape the window (see Workload.hh for the
+            // window-reuse safety argument).
+            static_assert(static_cast<int64_t>(kJobIdWindow) * kMaxCGPerJob *
+                                  kStreamsPerCG ==
+                              static_cast<int64_t>(
+                                  Sys::FrontEndSendRecvType::COLLECTIVE) -
+                                  Sys::FrontEndSendRecvType::NATIVE,
+                          "stream-id layout must exactly tile the collective "
+                          "tag window");
+            const int base =
+                ((parent_job->job_id % kJobIdWindow) * kMaxCGPerJob + cg_id) *
+                kStreamsPerCG;
             cg->num_streams = base;
             cg->num_streams_base = base;
             comm_groups[cg_id] = cg;
@@ -240,11 +334,32 @@ void Workload::initialize_comm_groups(string comm_group_filename) {
     ifstream inFile;
     json j;
     inFile.open(comm_group_filename);
-    inFile >> j;
+    if (!inFile.is_open()) {
+        LoggerFactory::get_logger("workload")
+            ->critical("cannot open comm group file {} (errno={})",
+                       comm_group_filename, errno);
+        exit(EXIT_FAILURE);
+    }
+    try {
+        inFile >> j;
+    } catch (const std::exception& e) {
+        LoggerFactory::get_logger("workload")
+            ->critical("cannot parse comm group file {}: {}",
+                       comm_group_filename, e.what());
+        exit(EXIT_FAILURE);
+    }
 
     for (json::iterator it = j.begin(); it != j.end(); ++it) {
         std::string comm_group_name = it.key();
-        int comm_group_id = std::stoi(comm_group_name);
+        int comm_group_id = 0;
+        try {
+            comm_group_id = std::stoi(comm_group_name);
+        } catch (const std::exception&) {
+            LoggerFactory::get_logger("workload")
+                ->critical("non-numeric comm group key '{}' in {}",
+                           comm_group_name, comm_group_filename);
+            exit(EXIT_FAILURE);
+        }
 
         std::vector<int> involved_NPUs;
         for (auto id : it.value()) {
@@ -267,6 +382,12 @@ void Workload::issue_pytorch_pg_metadata(
     if (pg_info.empty()) {
         return;
     }
+    if (pg_info.size() < 4) {
+        LoggerFactory::get_logger("workload")
+            ->critical("rank {}: malformed pg_info '{}' in METADATA node",
+                       sys->id, pg_info);
+        std::exit(EXIT_FAILURE);
+    }
     pg_info = pg_info.substr(2, pg_info.size() - 4);
 
     try {
@@ -287,9 +408,38 @@ void Workload::issue_pytorch_pg_metadata(
             // To ensure pgName > 0
             // parent_job may be null on the legacy (non-scheduled) path; fall
             // back to false so the ring sorts as before (D4 opt-in).
+            // Multi-iteration jobs re-issue METADATA nodes each iteration;
+            // free the previous group (and its lazily-built CollectivePlans)
+            // instead of leaking it under the overwrite below. Safe at the
+            // iteration boundary: a drained iteration has no live streams
+            // referencing the old group.
+            auto existing = this->comm_groups.find(pgNameInt);
+            if (existing != this->comm_groups.end()) {
+                delete existing->second;
+            }
             CommunicatorGroup* cg = new CommunicatorGroup(
                 pgNameInt + 1, involved_NPUs, sys,
                 (parent_job != nullptr ? parent_job->ordered_rings : false));
+            // Scheduled jobs: apply the same windowed (job, cg)-unique
+            // stream-id base as the comm_group.json path above. The
+            // constructor default (id * 1000000) both collides across jobs
+            // and leaves the collective tag window for ids > 499.
+            if (parent_job != nullptr) {
+                if (pgNameInt < 0 || pgNameInt >= kMaxCGPerJob) {
+                    LoggerFactory::get_logger("workload")
+                        ->critical("job {}: pg metadata group id {} outside "
+                                   "[0, {}) -- unsupported by the stream-id "
+                                   "layout",
+                                   parent_job->job_id, pgNameInt, kMaxCGPerJob);
+                    std::exit(1);
+                }
+                const int base =
+                    ((parent_job->job_id % kJobIdWindow) * kMaxCGPerJob +
+                     pgNameInt) *
+                    kStreamsPerCG;
+                cg->num_streams = base;
+                cg->num_streams_base = base;
+            }
             this->comm_groups[pgNameInt] = cg;
         }
     } catch (const std::exception& e) {
@@ -300,36 +450,56 @@ void Workload::issue_pytorch_pg_metadata(
 
 void Workload::issue_dep_free_nodes() {
     auto& dependancy_resolver = this->et_feeder->getDependancyResolver();
-    auto dependancy_free_nodes =
-        dependancy_resolver.get_dependancy_free_nodes();
-    std::set<uint64_t> dependancy_free_nodes_set;
-    for (const auto node_id : dependancy_free_nodes) {
-        dependancy_free_nodes_set.insert(node_id);
-    }
 
-    // std::cout << "Workload::issue_dep_free_nodes, sys->id=" << sys->id
-    //           << ", tick=" << Sys::boostedTick()
-    //           << ", dependancy_free_nodes_set.size="
-    //           << dependancy_free_nodes_set.size() << std::endl;
+    // Some nodes complete synchronously inside issue() (skip_invalid:
+    // METADATA and INVALID nodes, zero-tensor-size COMP): finish_node frees
+    // their children mid-pass, but the children are not in this pass's
+    // snapshot and a synchronous completion registers no event that would
+    // re-enter this function. Without a re-scan, a rank whose only
+    // remaining work was freed that way goes silent until the
+    // global-quiescence re-issue -- effectively end-of-run under load.
+    // Loop to a fix-point: re-snapshot while new dependency-free nodes
+    // appeared during the pass. Terminates because a new appearance
+    // requires finish_node, which permanently consumes a DAG node.
+    bool rescan = true;
+    while (rescan) {
+        rescan = false;
 
-    bool success = true;
-    for (const auto node_id : dependancy_free_nodes_set) {
-        std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
-        // Grouped collectives must additionally be admitted in the
-        // rank-invariant per-group order; see comm_admission_in_order. A
-        // collective skipped here because a lower ordinal is still pending
-        // is simply retried on a later call (this runs on every event), so
-        // the gate delays admission but never strands a node.
-        if (hw_resource->is_available(node) && comm_admission_in_order(node)) {
-            success = issue(node);
-            if (success) {
-                mark_comm_admitted(node);
-            } else {
-                auto logger = LoggerFactory::get_logger("workload");
-                logger->warn("Workload::issue failed, sys->id={}, node->id={}, "
-                             "node->name={}, node->type={}",
-                             sys->id, node->id(), node->name(),
-                             static_cast<uint64_t>(node->type()));
+        std::set<uint64_t> dependancy_free_nodes_set;
+        for (const auto node_id :
+             dependancy_resolver.get_dependancy_free_nodes()) {
+            dependancy_free_nodes_set.insert(node_id);
+        }
+
+        bool success = true;
+        for (const auto node_id : dependancy_free_nodes_set) {
+            std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
+            // Grouped collectives must additionally be admitted in the
+            // rank-invariant per-group order; see comm_admission_in_order. A
+            // collective skipped here because a lower ordinal is still
+            // pending is simply retried on a later call (this runs on every
+            // event), so the gate delays admission but never strands a node.
+            if (hw_resource->is_available(node) &&
+                comm_admission_in_order(node)) {
+                success = issue(node);
+                if (success) {
+                    mark_comm_admitted(node);
+                } else {
+                    auto logger = LoggerFactory::get_logger("workload");
+                    logger->warn(
+                        "Workload::issue failed, sys->id={}, node->id={}, "
+                        "node->name={}, node->type={}",
+                        sys->id, node->id(), node->name(),
+                        static_cast<uint64_t>(node->type()));
+                }
+            }
+        }
+
+        for (const auto node_id :
+             dependancy_resolver.get_dependancy_free_nodes()) {
+            if (dependancy_free_nodes_set.count(node_id) == 0U) {
+                rescan = true;
+                break;
             }
         }
     }
@@ -341,7 +511,7 @@ bool Workload::comm_admission_in_order(
         hw_resource->comm_cap_bypass) {
         return true;
     }
-    const int cg_id = HardwareResource::comm_group_of(node);
+    const int cg_id = hw_resource->comm_group_of(node);
     if (cg_id < 0) {
         return true;
     }
@@ -364,7 +534,7 @@ bool Workload::comm_admission_in_order(
 
 void Workload::mark_comm_admitted(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
-    const int cg_id = HardwareResource::comm_group_of(node);
+    const int cg_id = hw_resource->comm_group_of(node);
     if (cg_id < 0) {
         return;
     }
@@ -611,7 +781,7 @@ bool Workload::issue_coll_comm(
     // progress at different speeds and may have multiple collectives
     // in-flight on the same CG simultaneously.  The stream_id must be
     // invariant across ranks for the SAME logical collective so that
-    // BaseStream's global synchronizer and the network frontend's tag
+    // the network frontend's tag
     // matching can pair sends and receives.  We use the pre-computed
     // (cg_id, node_id) -> ordinal map (built from the sorted set of
     // node_ids per CG at construction time) — this is invariant across
@@ -627,14 +797,49 @@ bool Workload::issue_coll_comm(
                 ordinal = n_it->second;
             }
         }
+        if (ordinal >= kStreamsPerCG / kMaxStreamsPerCollective) {
+            LoggerFactory::get_logger("workload")
+                ->critical("job {}: comm group {} has more than {} "
+                           "collectives per iteration -- stream-id range "
+                           "would bleed into the next comm group",
+                           (parent_job != nullptr ? parent_job->job_id : -1),
+                           cg_id, kStreamsPerCG / kMaxStreamsPerCollective);
+            std::exit(1);
+        }
         comm_group->num_streams =
             comm_group->num_streams_base + ordinal * kMaxStreamsPerCollective;
     }
 
     auto logger = LoggerFactory::get_logger("workload");
-    logger->debug("RANK: {} Issuing collective {}", this->sys->id,
-                  comm_group->to_string());
-    previous_group_id = comm_group->get_id();
+    // A pg-less collective is only meaningful in the legacy one-shot flow,
+    // where every NPU in the system participates. In the scheduled flow the
+    // dims-based fallback would enroll NPUs outside this job, so the
+    // collective can never complete and the whole job wedges until global
+    // quiescence. Fail fast with a diagnostic instead. (Mapping pg-less to
+    // an implicit all-ranks group -- PyTorch default-pg semantics -- would
+    // need the ordinal scan and admission gate to know about it; revisit if
+    // real PyTorch traces become an input.)
+    if (comm_group == nullptr && parent_job != nullptr) {
+        logger->critical("job {} rank {}: COMM_COLL node {} has no pg_name; "
+                         "pg-less collectives are unsupported in scheduled "
+                         "mode",
+                         parent_job->job_id, job_local_rank, node->id());
+        std::exit(1);
+    }
+    // comm_group stays legitimately null on the legacy one-shot path (runs
+    // under the ungrouped cap; generate_* handle a null group). spdlog
+    // evaluates its arguments eagerly, so both the dereference and the
+    // O(group-size) to_string() below must sit behind the null check and a
+    // level check.
+    if (comm_group != nullptr) {
+        if (logger->should_log(spdlog::level::debug)) {
+            logger->debug("RANK: {} Issuing collective {}", this->sys->id,
+                          comm_group->to_string());
+        }
+        previous_group_id = comm_group->get_id();
+    } else {
+        logger->debug("RANK: {} Issuing ungrouped collective", this->sys->id);
+    }
 
     sys->increment_inflight_coll();
     logger->debug("RANK: {} inflight collective count: {}", this->sys->id,
@@ -646,27 +851,34 @@ bool Workload::issue_coll_comm(
     stats->get_operator_statistics(node->id()).comm_size = comm_size;
     const auto comm_priority = node->comm_priority<uint32_t>();  // default 0u
 
+    DataSet* fp = nullptr;
     if (comm_type == ChakraCollectiveCommType::ALL_REDUCE) {
-        DataSet* fp = sys->generate_all_reduce(comm_size, involved_dims,
-                                               comm_group, comm_priority);
-        collective_comm_node_id_map[fp->my_id] = node->id();
-        collective_comm_wrapper_map[fp->my_id] = fp;
-        fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        fp = sys->generate_all_reduce(comm_size, involved_dims, comm_group,
+                                      comm_priority);
     } else if (comm_type == ChakraCollectiveCommType::ALL_TO_ALL) {
-        DataSet* fp = sys->generate_all_to_all(comm_size, involved_dims,
-                                               comm_group, comm_priority);
-        collective_comm_node_id_map[fp->my_id] = node->id();
-        collective_comm_wrapper_map[fp->my_id] = fp;
-        fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        fp = sys->generate_all_to_all(comm_size, involved_dims, comm_group,
+                                      comm_priority);
     } else if (comm_type == ChakraCollectiveCommType::ALL_GATHER) {
-        DataSet* fp = sys->generate_all_gather(comm_size, involved_dims,
-                                               comm_group, comm_priority);
-        collective_comm_node_id_map[fp->my_id] = node->id();
-        collective_comm_wrapper_map[fp->my_id] = fp;
-        fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
+        fp = sys->generate_all_gather(comm_size, involved_dims, comm_group,
+                                      comm_priority);
     } else if (comm_type == ChakraCollectiveCommType::REDUCE_SCATTER) {
-        DataSet* fp = sys->generate_reduce_scatter(comm_size, involved_dims,
-                                                   comm_group, comm_priority);
+        fp = sys->generate_reduce_scatter(comm_size, involved_dims, comm_group,
+                                          comm_priority);
+    }
+    if (fp != nullptr) {
+        // A DataSet that produced no streams (all dims size 1 -- e.g. a
+        // collective over a single-member comm group) is created inactive
+        // and never notifies: the node would wait forever and the job would
+        // wedge until global quiescence. No current trace generator emits
+        // these; fail fast if one appears.
+        if (!fp->active) {
+            logger->critical("job {} rank {}: COMM_COLL node {} produced no "
+                             "streams (single-member comm group?); "
+                             "unsupported",
+                             (parent_job != nullptr ? parent_job->job_id : -1),
+                             job_local_rank, node->id());
+            std::exit(1);
+        }
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
@@ -675,7 +887,7 @@ bool Workload::issue_coll_comm(
         if (node->runtime() != 0ul) {
             runtime = node->runtime() * 1000;
         }
-        DataSet* fp = new DataSet(1);
+        fp = new DataSet(1);
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
         collective_comm_node_id_map[fp->my_id] = node->id();
         collective_comm_wrapper_map[fp->my_id] = fp;
@@ -695,6 +907,14 @@ bool Workload::issue_send_comm(
     const auto dst = node->comm_dst<uint32_t>();
     int dst_npu = static_cast<int>(dst);
     if (parent_job != nullptr) {
+        if (dst_npu >= static_cast<uint32_t>(parent_job->num_ranks)) {
+            LoggerFactory::get_logger("workload")
+                ->critical("job {} rank {}: COMM_SEND node {} names peer rank "
+                           "{} outside [0, {})",
+                           parent_job->job_id, job_local_rank, node->id(),
+                           dst_npu, parent_job->num_ranks);
+            std::exit(EXIT_FAILURE);
+        }
         dst_npu = parent_job->rank_map[dst_npu];
     }
     const auto size = node->comm_size<uint64_t>();
@@ -732,6 +952,14 @@ bool Workload::issue_recv_comm(
     const auto src = node->comm_src<uint32_t>();
     int src_npu = static_cast<int>(src);
     if (parent_job != nullptr) {
+        if (src_npu >= static_cast<uint32_t>(parent_job->num_ranks)) {
+            LoggerFactory::get_logger("workload")
+                ->critical("job {} rank {}: COMM_RECV node {} names peer rank "
+                           "{} outside [0, {})",
+                           parent_job->job_id, job_local_rank, node->id(),
+                           src_npu, parent_job->num_ranks);
+            std::exit(EXIT_FAILURE);
+        }
         src_npu = parent_job->rank_map[src_npu];
     }
     const auto dst = node->comm_dst<uint32_t>(this->sys->id);
@@ -791,6 +1019,12 @@ void Workload::call(EventType event, CallData* data) {
     if (is_finished) {
         logger->debug("Rank {}: workload already finished, ignore event {}",
                       this->sys->id, static_cast<int>(event));
+        // Deliberately does NOT delete `data`: payload ownership is mixed
+        // (DataSet deletes the IntData it passes right after call() returns;
+        // other paths expect the callee to free), so a blanket delete here
+        // would double-free collective completions. The path is defensive
+        // and unreachable under the drain invariant; the potential leak is
+        // accepted.
         return;
     }
 
@@ -800,8 +1034,6 @@ void Workload::call(EventType event, CallData* data) {
         sys->decrement_inflight_coll();
         logger->debug("RANK: {} finish collective: {}, inflight collective {}",
                       this->sys->id, coll_comm_id, sys->get_inflight_coll());
-
-        current_comm_group_idx++;
 
         // if (current_comm_group_idx < comm_group_list.size()) {
         //     int next_comm_group_id = comm_group_list[current_comm_group_idx];
@@ -823,7 +1055,10 @@ void Workload::call(EventType event, CallData* data) {
         // }
 
         hw_resource->tics_gpu_comms += int_data->execution_time;
-        uint64_t node_id = collective_comm_node_id_map[coll_comm_id];
+        // .at(): a miss here means the completion event has no issued
+        // collective behind it; fail loudly instead of operator[]'s silent
+        // default-insert of node id 0.
+        uint64_t node_id = collective_comm_node_id_map.at(coll_comm_id);
         shared_ptr<Chakra::FeederV3::ETFeederNode> node =
             et_feeder->lookupNode(node_id);
 
@@ -859,6 +1094,9 @@ void Workload::call(EventType event, CallData* data) {
         // dump more statistics in the workload layer
         delete collective_comm_wrapper_map[coll_comm_id];
         collective_comm_wrapper_map.erase(coll_comm_id);
+        // Erase the node-id mapping with its wrapper; it previously grew by
+        // one entry per collective per iteration for the job's lifetime.
+        collective_comm_node_id_map.erase(coll_comm_id);
 
     } else {
         if (data == nullptr) {
@@ -944,10 +1182,12 @@ bool Workload::current_iteration_drained() const {
 }
 
 void Workload::advance_to_next_iteration() {
-    // Rebuild the feeder from the same trace file: this rewinds the trace
-    // stream and hands us a fresh DependencyResolver re-seeded from the DAG
-    // roots. cg_node_to_ordinal_ is invariant across iterations and is NOT
-    // recomputed; hw_resource keeps its tics_* accumulators (whole-job
+    // Rewind the feeder's dependency resolver to the pristine snapshot taken
+    // at construction: same effect as rebuilding the feeder from the trace
+    // file (a fresh resolver re-seeded from the DAG roots) without the
+    // per-iteration protobuf re-parse, and the feeder-id-keyed node cache
+    // stays warm. cg_node_to_ordinal_ is invariant across iterations and is
+    // NOT recomputed; hw_resource keeps its tics_* accumulators (whole-job
     // totals) while its in-flight counters are already 0 at a drain boundary.
     //
     // We deliberately REUSE every logical id rather than minting new ones,
@@ -959,21 +1199,16 @@ void Workload::advance_to_next_iteration() {
     //     collective's node ordinal -- issue_coll_comm() re-derives
     //     num_streams = num_streams_base + ordinal * kMaxStreamsPerCollective
     //     on every issue -- so the next iteration reproduces identical stream
-    //     ids. No stream with those ids is still live, and the only global
-    //     state keyed by stream id (BaseStream::synchronizer) is inert on this
-    //     frontend: its sole reader, Sys::ask_for_schedule(), has no caller.
+    //     ids. No stream with those ids is still live, and no global state
+    //     is keyed by stream id (the once-write-only BaseStream::synchronizer
+    //     bookkeeping was removed together with its dead reader).
     //   * send/recv tags are trace-defined and paired-and-cleared within an
     //     iteration before the next one begins.
     // The only monotonic ids in play are transient DataSet ids (the keys of
     // collective_comm_*_map), drawn from a global counter; letting them climb
     // across iterations is correct and collision-free, and the maps are empty
     // here because a drained iteration has no in-flight collectives.
-    delete this->et_feeder;
-    this->et_feeder = new ETFeeder(this->workload_filename_);
-
-    // current_comm_group_idx counts collective completions within an
-    // iteration; reset it so it indexes from the start of the new iteration.
-    this->current_comm_group_idx = 0;
+    this->et_feeder->reset_dependancy();
 
     // Node ids repeat across iterations, so per-group admission order starts
     // over from the first ordinal.
@@ -1032,7 +1267,15 @@ CommunicatorGroup* Workload::extract_comm_group(
         // No communicator group is specified for this communication ET node.
         return nullptr;
     }
-    int comm_group_id = std::stoi(comm_group_name);
+    int comm_group_id = 0;
+    try {
+        comm_group_id = std::stoi(comm_group_name);
+    } catch (const std::exception&) {
+        LoggerFactory::get_logger("workload")
+            ->critical("rank {} ET node {}: non-numeric pg_name '{}'", sys->id,
+                       node->id(), comm_group_name);
+        exit(EXIT_FAILURE);
+    }
     if (comm_groups.find(comm_group_id) == comm_groups.end()) {
         LoggerFactory::get_logger("workload")
             ->critical(

@@ -62,6 +62,10 @@ void Router::set_override(DeviceId s, DeviceId t, Route route) noexcept {
     overrides_[key(s, t)] = std::move(route);
 }
 
+void Router::erase_override(DeviceId s, DeviceId t) noexcept {
+    overrides_.erase(key(s, t));
+}
+
 void Router::invalidate(DeviceId s, DeviceId t) const noexcept {
     const auto cit = cache_.find(key(s, t));
     if (cit != cache_.end()) {

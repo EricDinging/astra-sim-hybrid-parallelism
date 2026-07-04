@@ -66,6 +66,10 @@ std::optional<std::vector<int>> scatter_assign(
         }
         if (nonunit == 1 && fp[axis] > blk[axis]) {
             std::vector<int> free_vec(free.begin(), free.end());
+            // Sort: every other snake_1d call site passes a sorted vector;
+            // hash-set iteration order must not decide which snake cycle the
+            // budgeted search finds (stdlib-dependent placement otherwise).
+            std::sort(free_vec.begin(), free_vec.end());
             auto cyc =
                 FoldEnumerator::snake_1d(free_vec, dims, fp[axis], budget);
             if (!cyc.empty()) {

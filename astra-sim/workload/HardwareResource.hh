@@ -67,14 +67,29 @@ class HardwareResource {
 
     // Communicator-group id of a collective node (its integer pg_name), or -1
     // for non-collectives and collectives without a parseable pg_name.
-    static int comm_group_of(
-        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    // Consults the precomputed node->cg map when one is installed (scheduled
+    // jobs: the Workload's Kahn scan builds it) instead of fetching the
+    // pg_name attribute through the global feeder cache on every occupancy
+    // check.
+    int comm_group_of(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node) const;
+
+    // Install the precomputed node->cg map (owned by the Workload, which
+    // outlives this object). The map must cover every grouped COMM_COLL node
+    // of the trace: a miss is then authoritative "ungrouped".
+    void set_node_cg_map(const std::unordered_map<uint64_t, int>* map) {
+        node_cg_map_ = map;
+    }
 
     std::unordered_set<uint64_t> cpu_ops_node;
     std::unordered_set<uint64_t> gpu_ops_node;
     std::unordered_set<uint64_t> gpu_comms_node;
 
     const int sys_id;
+
+    // Optional precomputed node->cg map; nullptr on the legacy one-shot path
+    // (comm_group_of falls back to the attribute fetch there).
+    const std::unordered_map<uint64_t, int>* node_cg_map_ = nullptr;
 
     const uint32_t num_npus;
     uint32_t num_in_flight_cpu_ops;
