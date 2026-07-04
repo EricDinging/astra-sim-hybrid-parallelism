@@ -74,7 +74,6 @@ class BlockSelector {
         const FragmentationScorer& scorer,
         const PlacementRanker& ranker,
         const std::vector<std::pair<int, int>>& ring_edges) const = 0;
-    virtual std::string name() const = 0;
 };
 
 // Contiguous placement (folding's anchor-scan); OCS realizes the ring edges
@@ -90,9 +89,6 @@ class ContiguousFirst : public BlockSelector {
         const FragmentationScorer& scorer,
         const PlacementRanker& ranker,
         const std::vector<std::pair<int, int>>& ring_edges) const override;
-    std::string name() const override {
-        return "contiguous";
-    }
 };
 
 // Scatter selector: place contiguously when possible (reusing ContiguousFirst,
@@ -109,9 +105,6 @@ class MinReconfig : public BlockSelector {
         const FragmentationScorer& scorer,
         const PlacementRanker& ranker,
         const std::vector<std::pair<int, int>>& ring_edges) const override;
-    std::string name() const override {
-        return "min-reconfig";
-    }
 
   private:
     int budget_;
@@ -130,9 +123,6 @@ class MaxDefrag : public BlockSelector {
         const FragmentationScorer& scorer,
         const PlacementRanker& ranker,
         const std::vector<std::pair<int, int>>& ring_edges) const override;
-    std::string name() const override {
-        return "max-defrag";
-    }
 
   private:
     int budget_;

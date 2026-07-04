@@ -45,10 +45,6 @@ class Chunk {
     Chunk(ChunkSize chunk_size, Route route, Callback callback, CallbackArg callback_arg) noexcept
         : Chunk(chunk_size, std::move(route), callback, callback_arg, -1) {}
 
-    bool no_route() noexcept {
-        return route.size() <= 1;
-    }
-
     void update_route(Route new_route, int topology_iteration) noexcept {
         route = std::move(new_route);
         this->topology_iteration = topology_iteration;
@@ -99,14 +95,6 @@ class Chunk {
      */
     void invoke_callback() noexcept;
 
-    void static add_on_route_chunk() noexcept {
-        on_route_chunks++;
-    }
-
-    [[nodiscard]] static int get_on_route_chunks() noexcept {
-        return on_route_chunks;
-    }
-
     /// route of the chunk to its destination, structured
     /// [current device, next device, ..., dest device]; e.g., a chunk from
     /// device 5 to destination 3 could hold [5, 1, 6, 2, 3]. The last element
@@ -115,8 +103,6 @@ class Chunk {
     Route route;
 
   private:
-    static int on_route_chunks;
-
     /// size of the chunk
     ChunkSize chunk_size;
 

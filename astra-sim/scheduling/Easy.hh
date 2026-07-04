@@ -21,10 +21,9 @@ namespace Scheduling {
 // arithmetic and the projected completion of running jobs both need durations.
 // select_next is a pure-FCFS fallback; it is never called on the normal EASY
 // path (SchedRuntime dispatches to easy_sweep instead).
-class Easy : public AdmissionPolicy {
+class Easy : public DurationKeyedPolicy {
   public:
-    explicit Easy(std::unique_ptr<DurationEstimator> estimator);
-    void on_arrival(JobInstance& job) override;
+    using DurationKeyedPolicy::DurationKeyedPolicy;
     // Pure FCFS head; a harmless fallback unused on the EASY path (SchedRuntime
     // dispatches to easy_sweep instead of select_next).
     JobInstance* select_next(const std::vector<JobInstance*>& pending,
@@ -35,9 +34,6 @@ class Easy : public AdmissionPolicy {
     std::string name() const override {
         return "easy";
     }
-
-  private:
-    std::unique_ptr<DurationEstimator> estimator_;
 };
 
 }  // namespace Scheduling

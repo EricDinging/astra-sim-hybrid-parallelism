@@ -4,6 +4,8 @@ LICENSE file in the root directory of this source tree.
 *******************************************************************************/
 #include "astra-sim/scheduling/FragmentationScorer.hh"
 
+#include "astra-sim/scheduling/Common.hh"
+
 #include <algorithm>
 #include <set>
 #include <sstream>
@@ -11,15 +13,24 @@ LICENSE file in the root directory of this source tree.
 namespace AstraSim {
 namespace Scheduling {
 
+namespace {
+
+// Number of distinct block-grid cells the placement's NPUs intersect.
+size_t count_blocks(const std::vector<int>& npus,
+                    const std::vector<int>& d,
+                    const std::array<int, 3>& block) {
+    std::set<std::array<int, 3>> blocks;
+    for (int n : npus) {
+        const auto c = coord_of(n, d[0], d[1]);
+        blocks.insert({c[0] / block[0], c[1] / block[1], c[2] / block[2]});
+    }
+    return blocks.size();
+}
+
+}  // namespace
+
 double FewestBlocksTouched::cost(const ScoredPlacement& p) const {
     const auto& d = *p.dims;
-    std::set<std::array<int, 3>> blocks;
-    for (int n : *p.npus) {
-        int x = n % d[0];
-        int y = (n / d[0]) % d[1];
-        int z = n / (d[0] * d[1]);
-        blocks.insert({x / block_[0], y / block_[1], z / block_[2]});
-    }
     // Pack (blocks_touched, max_footprint_dim) into one cost where the block
     // count strictly dominates. The tiebreak multiplier is the largest torus
     // axis + 1; a footprint dim can never exceed the torus, so the tiebreak
@@ -27,7 +38,8 @@ double FewestBlocksTouched::cost(const ScoredPlacement& p) const {
     const int max_footprint =
         std::max({p.footprint[0], p.footprint[1], p.footprint[2]});
     const int mult = std::max({d[0], d[1], d[2]}) + 1;
-    return static_cast<double>(blocks.size()) * mult + max_footprint;
+    return static_cast<double>(count_blocks(*p.npus, d, block_)) * mult +
+           max_footprint;
 }
 
 double Compactness::cost(const ScoredPlacement& p) const {
@@ -36,13 +48,6 @@ double Compactness::cost(const ScoredPlacement& p) const {
 
 double FewestBlocksThenOcsLinks::cost(const ScoredPlacement& p) const {
     const auto& d = *p.dims;
-    std::set<std::array<int, 3>> blocks;
-    for (int n : *p.npus) {
-        int x = n % d[0];
-        int y = (n / d[0]) % d[1];
-        int z = n / (d[0] * d[1]);
-        blocks.insert({x / block_[0], y / block_[1], z / block_[2]});
-    }
     // Pack (blocks, ocs_links, max_footprint) so each term strictly dominates
     // the next. max_footprint < wf; ocs_links <= 3*N < wo; so ocs*wf + mf can
     // never reach wo*wf (one block unit), and mf can never reach wf (one OCS
@@ -51,7 +56,7 @@ double FewestBlocksThenOcsLinks::cost(const ScoredPlacement& p) const {
     const int mf = std::max({p.footprint[0], p.footprint[1], p.footprint[2]});
     const double wf = std::max({d[0], d[1], d[2]}) + 1.0;
     const double wo = 3.0 * static_cast<double>(N) + 1.0;
-    return static_cast<double>(blocks.size()) * (wo * wf) +
+    return static_cast<double>(count_blocks(*p.npus, d, block_)) * (wo * wf) +
            static_cast<double>(p.ocs_links) * wf + mf;
 }
 

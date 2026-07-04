@@ -134,7 +134,6 @@ Sys::Sys(int id,
          vector<int> physical_dims,
          vector<int> queues_per_dim,
          double injection_scale,
-         double comm_scale,
          bool rendezvous_enabled) {
     if ((id + 1) > this->all_sys.size()) {
         this->all_sys.resize(id + 1);
@@ -165,7 +164,6 @@ Sys::Sys(int id,
     this->local_reduction_delay = 0;
 
     this->comm_NI = comm_NI;
-    this->comm_scale = comm_scale;
     this->rendezvous_enabled = rendezvous_enabled;
 
     this->scheduler_unit = nullptr;
@@ -259,7 +257,6 @@ Sys::Sys(int id,
          vector<int> physical_dims,
          vector<int> queues_per_dim,
          double injection_scale,
-         double comm_scale,
          bool rendezvous_enabled) {
     if ((id + 1) > this->all_sys.size()) {
         this->all_sys.resize(id + 1);
@@ -290,7 +287,6 @@ Sys::Sys(int id,
     this->local_reduction_delay = 0;
 
     this->comm_NI = comm_NI;
-    this->comm_scale = comm_scale;
     this->rendezvous_enabled = rendezvous_enabled;
 
     this->scheduler_unit = nullptr;
@@ -1517,8 +1513,6 @@ void Sys::proceed_to_next_vnet_baseline(StreamBaseline* stream) {
     CollectivePhase vi = stream->phases_to_go.front();
     stream->my_current_phase = vi;
     stream->phases_to_go.pop_front();
-    stream->test = 0;
-    stream->test2 = 0;
     stream->initialized = false;
     stream->last_phase_change = Sys::boostedTick();
     stream->total_packets_sent = 0;

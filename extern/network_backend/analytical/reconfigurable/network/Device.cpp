@@ -15,9 +15,8 @@ LICENSE file in the root directory of this source tree.
 using namespace NetworkAnalyticalReconfigurable;
 
 std::function<void()> Device::increment_callback = []() {};
-bool Device::drain_all_flow = true;
 
-Device::Device(const DeviceId id) noexcept : device_id(id), topology_iteration(0), reconfiguring(false) {
+Device::Device(const DeviceId id) noexcept : device_id(id), topology_iteration(0) {
     assert(id >= 0);
 }
 
@@ -53,12 +52,7 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     // process pending chunks if one exist
     if (pending_chunks[link_id].empty() ||
         pending_chunks[link_id].front()->get_topology_iteration() > topology_iteration) {
-        // std::cout << "Device " << device_id << ": link to " << link_id << " is free but no pending chunks or chunk
-        // from future topology iteration. Pending queue size: " << pending_chunks[link_id].size() << std::endl;
-        if (drain_all_flow) {
-            increment_callback();
-        }
-
+        increment_callback();
         return;
     }
 

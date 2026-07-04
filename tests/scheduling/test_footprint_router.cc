@@ -20,18 +20,6 @@ TEST(FootprintRouter, RingEdgesForShape) {
     EXPECT_EQ(edges.size(), 8u);
 }
 
-TEST(FootprintRouter, RoutesAreOneHop) {
-    std::vector<int> rank_map = {10, 11, 12, 13};
-    auto edges = FootprintRouter::ring_edges({2, 2, 1});
-    auto rows = FootprintRouter::routes(edges, rank_map);
-    ASSERT_EQ(rows.size(), edges.size());
-    for (const auto& r : rows) {
-        ASSERT_EQ(r.hops.size(), 2u);
-        EXPECT_EQ(r.hops.front(), r.src);
-        EXPECT_EQ(r.hops.back(), r.dst);
-    }
-}
-
 TEST(FootprintRouter, OcsEdgesAreNonAdjacentEdges) {
     // An OCS edge is a ring edge whose endpoints are NOT one torus hop apart
     // (no baseline link) -- it must be wired as a real 1-hop OCS link.

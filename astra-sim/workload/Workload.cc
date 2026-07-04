@@ -562,12 +562,6 @@ void Workload::reset_comm_admission_order() {
 bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     bool success = true;
     auto logger = LoggerFactory::get_logger("workload");
-    // std::cout << "Workload::issue, sys->id=" << sys->id
-    //           << ", tick=" << Sys::boostedTick()
-    //           << ", node->id=" << node->id()
-    //           << ", node->name=" << node->name()
-    //           << ", node->type=" << static_cast<uint64_t>(node->type())
-    //           << std::endl;
 
     if (sys->trace_enabled) {
         logger->debug("issue,sys->id={}, tick={}, node->id={}, "
@@ -655,9 +649,6 @@ void Workload::issue_replay(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     } else {
         hw_resource->tics_gpu_ops += runtime;
     }
-    // printf("Workload::issue_replay, sys->id=%d, node->id=%lu, runtime=%lu
-    // ns\n",
-    //        sys->id, node->id(), runtime);
     sys->register_event(this, EventType::General, wlhd, runtime);
 }
 
@@ -836,7 +827,6 @@ bool Workload::issue_coll_comm(
             logger->debug("RANK: {} Issuing collective {}", this->sys->id,
                           comm_group->to_string());
         }
-        previous_group_id = comm_group->get_id();
     } else {
         logger->debug("RANK: {} Issuing ungrouped collective", this->sys->id);
     }
@@ -922,15 +912,8 @@ bool Workload::issue_send_comm(
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
 
-    // stg_tp2_pp2
-    int cur_comm_group_id = -1;
     auto logger = LoggerFactory::get_logger("workload");
     logger->debug("RANK: {} Issuing SEND {}-{}", this->sys->id, src, dst);
-    previous_group_id = cur_comm_group_id;
-
-    // sys->increment_inflight_coll();
-    // std::cout << "RANK: " << this->sys->id << " inflight collective count: "
-    // << sys->get_inflight_coll() << std::endl;
 
     sim_request snd_req;
     snd_req.srcRank = src;
@@ -970,18 +953,6 @@ bool Workload::issue_recv_comm(
     // Record communication size for bandwidth calculation
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
-
-    // stg_tp2_pp2 no need to reconfigure because recv is paired with send
-    // if(previous_group_id >= 0) {
-    //     // TODO use suitable topo_id
-    //     int topo_id = 1;
-    //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-    //     if (!can_config) return false;
-    //     std::cout << "RANK: " << this->sys->id << " Switching to SEND/RECV
-    //     group " << std::endl;
-    // }
-
-    // previous_group_id = -1;
 
     auto logger = LoggerFactory::get_logger("workload");
     logger->debug("RANK: {} Issuing RECV {}-{}", this->sys->id, src, dst);
@@ -1034,25 +1005,6 @@ void Workload::call(EventType event, CallData* data) {
         sys->decrement_inflight_coll();
         logger->debug("RANK: {} finish collective: {}, inflight collective {}",
                       this->sys->id, coll_comm_id, sys->get_inflight_coll());
-
-        // if (current_comm_group_idx < comm_group_list.size()) {
-        //     int next_comm_group_id = comm_group_list[current_comm_group_idx];
-        //     int topo_id = 0;
-        //     if (next_comm_group_id == 3 || next_comm_group_id == 4) {
-        //         topo_id = 1;
-        //     }
-        //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        //     printf("RANK: %d attempted to provision to topo_id: %d, result:
-        //     %d\n", this->sys->id, topo_id, can_config);
-        // }
-
-        // if (coll_comm_id == 1921) {
-        //     // TODO change coll_comm_id
-        //     int topo_id = 0;
-        //     bool can_config = sys->comm_NI->sim_reconfig(topo_id);
-        //     printf("RANK: %d hard-code attempted to provision to topo_id: %d,
-        //     result: %d\n", this->sys->id, topo_id, can_config);
-        // }
 
         hw_resource->tics_gpu_comms += int_data->execution_time;
         // .at(): a miss here means the completion event has no issued

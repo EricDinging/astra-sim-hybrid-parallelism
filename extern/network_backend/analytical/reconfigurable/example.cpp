@@ -6,7 +6,6 @@ LICENSE file in the root directory of this source tree.
 #include "common/EventQueue.h"
 #include "common/NetworkParser.h"
 #include "reconfigurable/Chunk.h"
-#include "reconfigurable/Helper.h"
 #include "reconfigurable/Device.h"
 #include "reconfigurable/Link.h"
 #include "reconfigurable/TopologyManager.h"
@@ -30,10 +29,9 @@ void reschedule_callback(void* const tm_ptr) {
 
     // tm->get_device(0)->reconfigure(1, 1, 1, Latency(1000)); // reconfigure device 0
 
-    tm->reconfigure(
-        {{0, Bandwidth(20)}, {Bandwidth(20), 0}},  // bandwidths
-        {{Latency(10), Latency(20)}, {Latency(20), Latency(10)}},            // latencies
-        Latency(500)                                                         // reconfiguration time
+    tm->reconfigure({{0, Bandwidth(20)}, {Bandwidth(20), 0}},                  // bandwidths
+                    {{Latency(10), Latency(20)}, {Latency(20), Latency(10)}},  // latencies
+                    Latency(500)                                               // reconfiguration time
     );
 }
 struct ScheduleSendArgs {
@@ -45,7 +43,7 @@ struct ScheduleSendArgs {
     EventQueue* event_queue;
 };
 
-void schedule_send(void* const args){
+void schedule_send(void* const args) {
     auto* const schedule_args = static_cast<ScheduleSendArgs*>(args);
     auto& tm = *schedule_args->tm;
     const auto src = schedule_args->src;
@@ -75,19 +73,15 @@ int main() {
 
     // message settings
     const auto chunk_size = 1'048'576;  // 1 MB
-    
+
     tm.reconfigure(
         {
             {0, 100, 0},
             {100, 0, 100},
             {0, 100, 0},
-        },  // bandwidths
-        {
-            {10, 10, 10},
-            {10, 10, 10},
-            {10, 10, 10}
-        },            // latencies
-        Latency(500)                                                         // reconfiguration time
+        },                                           // bandwidths
+        {{10, 10, 10}, {10, 10, 10}, {10, 10, 10}},  // latencies
+        Latency(500)                                 // reconfiguration time
     );
 
     // Run All-Gather
@@ -100,13 +94,12 @@ int main() {
             // create a chunk
             auto route = tm.route(i, j);
             auto* event_queue_ptr = static_cast<void*>(event_queue.get());
-            auto chunk = std::make_unique<Chunk>(chunk_size, route, chunk_arrived_callback, event_queue_ptr,-1);
+            auto chunk = std::make_unique<Chunk>(chunk_size, route, chunk_arrived_callback, event_queue_ptr, -1);
 
             // send a chunk
             tm.send(std::move(chunk));
         }
     }
-
 
     // tm.reconfigure(
     //     {

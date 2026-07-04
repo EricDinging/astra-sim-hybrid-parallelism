@@ -6,7 +6,6 @@ LICENSE file in the root directory of this source tree.
 #ifndef __ASTRASIM_SCHEDULING_HILBERTCURVE_HH__
 #define __ASTRASIM_SCHEDULING_HILBERTCURVE_HH__
 
-#include <array>
 #include <cstdint>
 
 namespace AstraSim {
@@ -21,8 +20,6 @@ namespace Scheduling {
 // uint64_t: 3 * 21 = 63 bits).
 
 uint64_t hilbert_d_from_xyz(int x, int y, int z, int p);
-
-std::array<int, 3> hilbert_xyz_from_d(uint64_t d, int p);
 
 }  // namespace Scheduling
 }  // namespace AstraSim

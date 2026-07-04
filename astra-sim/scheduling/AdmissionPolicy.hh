@@ -63,6 +63,24 @@ class AdmissionPolicy {
     virtual std::string name() const = 0;
 };
 
+class DurationEstimator;
+
+// Base for duration-keyed admission policies (sjdf/ljdf/swf/lwf/easy): owns
+// the DurationEstimator and caches job.est_duration once at arrival, so
+// select_next can key on it.
+class DurationKeyedPolicy : public AdmissionPolicy {
+  public:
+    explicit DurationKeyedPolicy(std::unique_ptr<DurationEstimator> estimator);
+    ~DurationKeyedPolicy() override;
+    // The user-declared dtor would suppress the implicit move ctor, which
+    // derived-class factories (tests) rely on when returning by value.
+    DurationKeyedPolicy(DurationKeyedPolicy&&) = default;
+    void on_arrival(JobInstance& job) override;
+
+  private:
+    std::unique_ptr<DurationEstimator> estimator_;
+};
+
 // Shared selection scan for keyed admission policies: the job with the
 // smallest (key(job), arrival_time, job_id) wins; nullptr on empty pending.
 JobInstance* select_min_by_key(

@@ -103,15 +103,6 @@ class Link {
     /// latency of the link in ns
     Latency latency;
 
-    /// Duration of the link
-    EventTime duration;
-
-    bool draining;
-
-    EventTime pending_chunk_start_time;
-    EventTime pending_chunk_end_time;
-    ChunkSize pending_chunk_size;
-
     /// flag to indicate if the link is busy
     bool busy;
 

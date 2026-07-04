@@ -35,7 +35,6 @@ class Device : public std::enable_shared_from_this<Device> {
 
     static std::function<void()> increment_callback;  // Callback to be invoked when a link becomes free
 
-    static bool drain_all_flow;
     /**
      * Get id of the device.
      *
@@ -119,10 +118,6 @@ class Device : public std::enable_shared_from_this<Device> {
      * @return true if connected to the given device, false otherwise
      */
     [[nodiscard]] bool connected(DeviceId dest) const noexcept;
-
-    bool draining;
-
-    bool reconfiguring;
 
   private:
     /// device Id

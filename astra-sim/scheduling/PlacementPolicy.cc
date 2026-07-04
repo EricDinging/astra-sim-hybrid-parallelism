@@ -6,8 +6,10 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/PlacementPolicy.hh"
 
 #include "astra-sim/scheduling/BlockSelector.hh"
+#include "astra-sim/scheduling/ClusterView.hh"
 #include "astra-sim/scheduling/FirstFit.hh"
 #include "astra-sim/scheduling/FragmentationScorer.hh"
+#include "astra-sim/scheduling/JobInstance.hh"
 #include "astra-sim/scheduling/L1Clustering.hh"
 #include "astra-sim/scheduling/PlacementRanker.hh"
 #include "astra-sim/scheduling/RFold.hh"
@@ -17,6 +19,28 @@ LICENSE file in the root directory of this source tree.
 
 namespace AstraSim {
 namespace Scheduling {
+
+std::optional<PlacementResult> basic_precheck(const JobInstance& job,
+                                              const ClusterView& view,
+                                              const std::string& policy_name) {
+    PlacementResult r;
+    if (view.physical_dims().size() != 3) {
+        r.outcome = PlacementOutcome::DROP;
+        r.reason = policy_name + " requires 3-D physical_dims (--npus-per-dim)";
+        return r;
+    }
+    if (job.num_ranks > view.total_npus()) {
+        r.outcome = PlacementOutcome::DROP;
+        r.reason = "num_ranks exceeds total NPUs";
+        return r;
+    }
+    if (static_cast<int>(view.free_npus().size()) < job.num_ranks) {
+        r.outcome = PlacementOutcome::DEFER;
+        r.reason = "fewer free NPUs than num_ranks";
+        return r;
+    }
+    return std::nullopt;
+}
 
 std::unique_ptr<PlacementPolicy> make_placement_policy(
     const std::string& policy_name, const PlacementConfig& cfg) {

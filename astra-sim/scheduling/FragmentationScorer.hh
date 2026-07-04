@@ -28,7 +28,6 @@ class FragmentationScorer {
   public:
     virtual ~FragmentationScorer() = default;
     virtual double cost(const ScoredPlacement& p) const = 0;
-    virtual std::string name() const = 0;
 };
 
 // Counts how many A×B×C blocks the placement intersects (paper heuristic).
@@ -39,9 +38,6 @@ class FewestBlocksTouched : public FragmentationScorer {
   public:
     explicit FewestBlocksTouched(std::array<int, 3> block) : block_(block) {}
     double cost(const ScoredPlacement& p) const override;
-    std::string name() const override {
-        return "fewest-blocks";
-    }
 
   private:
     std::array<int, 3> block_;
@@ -51,9 +47,6 @@ class FewestBlocksTouched : public FragmentationScorer {
 class Compactness : public FragmentationScorer {
   public:
     double cost(const ScoredPlacement& p) const override;
-    std::string name() const override {
-        return "compactness";
-    }
 };
 
 // Lexicographic (blocks, ocs_links, max_footprint) packed into one double:
@@ -65,9 +58,6 @@ class FewestBlocksThenOcsLinks : public FragmentationScorer {
     explicit FewestBlocksThenOcsLinks(std::array<int, 3> block)
         : block_(block) {}
     double cost(const ScoredPlacement& p) const override;
-    std::string name() const override {
-        return "fewest-blocks-ocs";
-    }
 
   private:
     std::array<int, 3> block_;

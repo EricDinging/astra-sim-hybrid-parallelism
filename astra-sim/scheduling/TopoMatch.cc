@@ -14,24 +14,12 @@ namespace Scheduling {
 
 PlacementResult TopoMatch::try_place(const JobInstance& job,
                                      const ClusterView& view) {
+    if (auto guard = basic_precheck(job, view, "topomatch")) {
+        return *guard;
+    }
     PlacementResult r;
     const auto& dims = view.physical_dims();
-    if (dims.size() != 3) {
-        r.outcome = PlacementOutcome::DROP;
-        r.reason = "topomatch requires 3-D physical_dims (--npus-per-dim)";
-        return r;
-    }
-    if (job.num_ranks > view.total_npus()) {
-        r.outcome = PlacementOutcome::DROP;
-        r.reason = "num_ranks exceeds total NPUs";
-        return r;
-    }
     const auto& free = view.free_npus();
-    if (static_cast<int>(free.size()) < job.num_ranks) {
-        r.outcome = PlacementOutcome::DEFER;
-        r.reason = "fewer free NPUs than num_ranks";
-        return r;
-    }
 
     auto affinity = build_affinity_matrix(job.trace_dir, job.num_ranks);
     if (!affinity) {

@@ -9,6 +9,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/Common.hh"
 
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace AstraSim {
@@ -38,6 +39,13 @@ class PlacementPolicy {
         return false;
     }
 };
+
+// Common entry guards for 3-D torus placement policies: DROP for non-3-D
+// physical_dims or a job larger than the cluster, DEFER when there are fewer
+// free NPUs than ranks. Returns nullopt when all guards pass.
+std::optional<PlacementResult> basic_precheck(const JobInstance& job,
+                                              const ClusterView& view,
+                                              const std::string& policy_name);
 
 // Returns nullptr on unknown name (caller hard-exits with a clearer message).
 std::unique_ptr<PlacementPolicy> make_placement_policy(

@@ -12,15 +12,11 @@ namespace Scheduling {
 
 JobInstance* Fifo::select_next(const std::vector<JobInstance*>& pending,
                                const ClusterView& /*view*/) const {
-    JobInstance* best = nullptr;
-    for (JobInstance* job : pending) {
-        if (best == nullptr || job->arrival_time < best->arrival_time ||
-            (job->arrival_time == best->arrival_time &&
-             job->job_id < best->job_id)) {
-            best = job;
-        }
-    }
-    return best;
+    // FCFS: select_min_by_key already tie-breaks by (arrival_time, job_id),
+    // so keying on arrival_time yields exactly FIFO order.
+    return select_min_by_key(pending, [](const JobInstance& job) {
+        return static_cast<uint64_t>(job.arrival_time);
+    });
 }
 
 }  // namespace Scheduling

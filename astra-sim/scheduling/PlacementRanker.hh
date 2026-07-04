@@ -24,7 +24,6 @@ class PlacementRanker {
     virtual ~PlacementRanker() = default;
     // True iff a is strictly better than b.
     virtual bool better(const Placement& a, const Placement& b) const = 0;
-    virtual std::string name() const = 0;
     // State hook for context-aware rankers (cost-model, switch). The pointer
     // is valid only until the next call; callers re-install per decision and
     // clear with nullptr afterwards. Fixed rankers ignore it.
@@ -76,9 +75,6 @@ class CommFirst : public PlacementRanker {
   public:
     explicit CommFirst(CommFirstKeys keys = {}) : keys_(keys) {}
     bool better(const Placement& a, const Placement& b) const override;
-    std::string name() const override {
-        return "comm-first";
-    }
 
   private:
     CommFirstKeys keys_;
@@ -97,9 +93,6 @@ class CommFirst : public PlacementRanker {
 class PackingFirst : public PlacementRanker {
   public:
     bool better(const Placement& a, const Placement& b) const override;
-    std::string name() const override {
-        return "packing-first";
-    }
 };
 
 // State-aware scalar ranking (spec 2026-06-11 §4): cost in seconds,
@@ -141,9 +134,6 @@ class CostModelRanker : public PlacementRanker {
     int lookahead_finalists() const override {
         return lookahead_k_;
     }
-    std::string name() const override {
-        return "cost-model";
-    }
     double cost_of(const Placement& p) const;  // exposed for tests
 
   private:
@@ -171,9 +161,6 @@ class DynamicSwitch : public PlacementRanker {
     }
     bool wants_context() const override {
         return true;
-    }
-    std::string name() const override {
-        return "switch";
     }
 
   private:

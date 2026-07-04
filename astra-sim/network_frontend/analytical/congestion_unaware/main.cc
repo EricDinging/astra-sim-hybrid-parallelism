@@ -40,7 +40,6 @@ int main(int argc, char* argv[]) {
         cmd_line_parser.get<std::string>("logging-folder");
     const auto num_queues_per_dim =
         cmd_line_parser.get<int>("num-queues-per-dim");
-    const auto comm_scale = cmd_line_parser.get<double>("comm-scale");
     const auto injection_scale = cmd_line_parser.get<double>("injection-scale");
     const auto rendezvous_protocol =
         cmd_line_parser.get<bool>("rendezvous-protocol");
@@ -82,7 +81,7 @@ int main(int argc, char* argv[]) {
             new Sys(i, workload_configuration, comm_group_configuration,
                     system_configuration, memory_api.get(), network_api.get(),
                     npus_count_per_dim, queues_per_dim, injection_scale,
-                    comm_scale, rendezvous_protocol);
+                    rendezvous_protocol);
 
         // push back network and system
         network_apis.push_back(std::move(network_api));

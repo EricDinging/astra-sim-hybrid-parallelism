@@ -25,7 +25,6 @@ LICENSE file in the root directory of this source tree.
 namespace {
 
 using AstraSim::Scheduling::hilbert_d_from_xyz;
-using AstraSim::Scheduling::hilbert_xyz_from_d;
 
 using AstraSim::Scheduling::ClusterView;
 using AstraSim::Scheduling::JobArrival;
@@ -58,10 +57,6 @@ std::vector<int> all_ids(int total) {
 
 TEST(HilbertCurve, ZeroDistanceIsOrigin) {
     EXPECT_EQ(hilbert_d_from_xyz(0, 0, 0, 2), 0u);
-    auto p = hilbert_xyz_from_d(0, 2);
-    EXPECT_EQ(p[0], 0);
-    EXPECT_EQ(p[1], 0);
-    EXPECT_EQ(p[2], 0);
 }
 
 // Known (coord, distance) pairs generated from
@@ -79,16 +74,12 @@ TEST(HilbertCurve, KnownValuesP2) {
     for (const auto& k : kv) {
         EXPECT_EQ(hilbert_d_from_xyz(k.x, k.y, k.z, 2), k.d)
             << "coord (" << k.x << "," << k.y << "," << k.z << ")";
-        auto pt = hilbert_xyz_from_d(k.d, 2);
-        EXPECT_EQ(pt[0], k.x) << "d=" << k.d;
-        EXPECT_EQ(pt[1], k.y) << "d=" << k.d;
-        EXPECT_EQ(pt[2], k.z) << "d=" << k.d;
     }
 }
 
-// Round-trip every coord in the 2^p cube for p in {1, 2, 3, 4} and verify
-// distances are unique and cover [0, 2^(3p)).
-TEST(HilbertCurve, RoundTripAndUniqueness) {
+// Map every coord in the 2^p cube for p in {1, 2, 3, 4} and verify distances
+// are unique and cover [0, 2^(3p)) — a bijection onto the curve.
+TEST(HilbertCurve, UniquenessAndRange) {
     for (int p = 1; p <= 4; ++p) {
         const int side = 1 << p;
         const uint64_t total = static_cast<uint64_t>(side) * side * side;
@@ -101,10 +92,6 @@ TEST(HilbertCurve, RoundTripAndUniqueness) {
                     EXPECT_TRUE(seen.insert(d).second)
                         << "duplicate d=" << d << " at (" << x << "," << y
                         << "," << z << ") p=" << p;
-                    auto back = hilbert_xyz_from_d(d, p);
-                    EXPECT_EQ(back[0], x) << "p=" << p << " d=" << d;
-                    EXPECT_EQ(back[1], y) << "p=" << p << " d=" << d;
-                    EXPECT_EQ(back[2], z) << "p=" << p << " d=" << d;
                 }
             }
         }

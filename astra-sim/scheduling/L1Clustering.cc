@@ -5,6 +5,8 @@ LICENSE file in the root directory of this source tree.
 
 #include "astra-sim/scheduling/L1Clustering.hh"
 
+#include "astra-sim/scheduling/Common.hh"
+
 #include "astra-sim/scheduling/ClusterView.hh"
 #include "astra-sim/scheduling/JobInstance.hh"
 
@@ -19,14 +21,6 @@ namespace Scheduling {
 
 namespace {
 
-inline std::array<int, 3> decode_id(int id, int W, int L) {
-    const int z = id / (L * W);
-    const int rem = id % (L * W);
-    const int y = rem / W;
-    const int x = rem % W;
-    return {x, y, z};
-}
-
 inline int torus_l1(
     int ax, int ay, int az, int bx, int by, int bz, int W, int L, int H) {
     const int dx = std::abs(ax - bx);
@@ -39,30 +33,17 @@ inline int torus_l1(
 
 PlacementResult L1Clustering::try_place(const JobInstance& job,
                                         const ClusterView& view) {
+    if (auto guard = basic_precheck(job, view, "L1Clustering")) {
+        return *guard;
+    }
     PlacementResult r;
     const auto& dims = view.physical_dims();
-    if (dims.size() != 3) {
-        r.outcome = PlacementOutcome::DROP;
-        r.reason = "L1Clustering requires 3-D physical_dims (--npus-per-dim)";
-        return r;
-    }
     const int W = dims[0];
     const int L = dims[1];
     const int H = dims[2];
 
-    if (job.num_ranks > view.total_npus()) {
-        r.outcome = PlacementOutcome::DROP;
-        r.reason = "num_ranks exceeds total NPUs";
-        return r;
-    }
-
     const auto& free = view.free_npus();
     const int n_free = static_cast<int>(free.size());
-    if (n_free < job.num_ranks) {
-        r.outcome = PlacementOutcome::DEFER;
-        r.reason = "fewer free NPUs than num_ranks";
-        return r;
-    }
 
     const int k = job.num_ranks;
 
@@ -74,7 +55,7 @@ PlacementResult L1Clustering::try_place(const JobInstance& job,
     std::vector<Entry> entries;
     entries.reserve(n_free);
     for (int id : free) {
-        auto c = decode_id(id, W, L);
+        auto c = coord_of(id, W, L);
         entries.push_back({id, c[0], c[1], c[2]});
     }
 

@@ -19,7 +19,6 @@ class DataSet : public Callable, public StreamStat {
     void set_notifier(Callable* layer, EventType event);
     void notify_stream_finished(StreamStat* data);
     void call(EventType event, CallData* data);
-    bool is_finished();
 
     // 64-bit: incremented once per collective per rank for the whole
     // process; a plain int plausibly wraps on multi-day large-cluster runs.

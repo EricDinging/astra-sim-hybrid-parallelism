@@ -76,7 +76,6 @@ class Sys : public Callable {
         std::vector<int> physical_dims,
         std::vector<int> queues_per_dim,
         double injection_scale,
-        double comm_scale,
         bool rendezvous_enabled);
 
     // Workload-less constructor for the dynamic-scheduling runtime
@@ -90,7 +89,6 @@ class Sys : public Callable {
         std::vector<int> physical_dims,
         std::vector<int> queues_per_dim,
         double injection_scale,
-        double comm_scale,
         bool rendezvous_enabled);
 
     ~Sys();
@@ -319,7 +317,6 @@ class Sys : public Callable {
 
     // network
     AstraNetworkAPI* comm_NI;
-    double comm_scale;
     bool rendezvous_enabled;
 
     // scheduler

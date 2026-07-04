@@ -19,18 +19,14 @@ namespace Scheduling {
 // Sjdf. The estimate is computed once per job in on_arrival, exactly like
 // Sjdf. A failed estimate yields est_duration = 0, sorting the job last (in
 // Sjdf the same zero sorts it first); this matches the Lwf convention.
-class Ljdf : public AdmissionPolicy {
+class Ljdf : public DurationKeyedPolicy {
   public:
-    explicit Ljdf(std::unique_ptr<DurationEstimator> estimator);
-    void on_arrival(JobInstance& job) override;
+    using DurationKeyedPolicy::DurationKeyedPolicy;
     JobInstance* select_next(const std::vector<JobInstance*>& pending,
                              const ClusterView& view) const override;
     std::string name() const override {
         return "ljdf";
     }
-
-  private:
-    std::unique_ptr<DurationEstimator> estimator_;
 };
 
 }  // namespace Scheduling

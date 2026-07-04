@@ -18,6 +18,13 @@ namespace Scheduling {
 
 enum class JobStatus { PENDING, RUNNING, COMPLETED, DROPPED, DEFER_AT_EXIT };
 
+// Decode a global NPU id into (x, y, z) torus coords; id = z*L*W + y*W + x
+// with x the fastest-varying axis (matches FirstFit placement and DOR
+// routing). W and L are the sizes of the first two torus dimensions.
+inline std::array<int, 3> coord_of(int id, int W, int L) {
+    return {id % W, (id / W) % L, id / (W * L)};
+}
+
 enum class PlacementOutcome { PLACED, DEFER, DROP };
 
 struct PlacementResult {

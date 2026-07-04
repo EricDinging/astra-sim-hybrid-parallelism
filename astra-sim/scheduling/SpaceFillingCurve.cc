@@ -5,6 +5,8 @@ LICENSE file in the root directory of this source tree.
 
 #include "astra-sim/scheduling/SpaceFillingCurve.hh"
 
+#include "astra-sim/scheduling/Common.hh"
+
 #include "astra-sim/scheduling/ClusterView.hh"
 #include "astra-sim/scheduling/HilbertCurve.hh"
 #include "astra-sim/scheduling/JobInstance.hh"
@@ -25,16 +27,6 @@ namespace Scheduling {
 
 namespace {
 
-// id = z*L*W + y*W + x  (matches FirstFit.cc and precomputeRoutes_DOR;
-// x is the fastest-varying axis).
-inline std::array<int, 3> decode_id(int id, int W, int L) {
-    const int z = id / (L * W);
-    const int rem = id % (L * W);
-    const int y = rem / W;
-    const int x = rem % W;
-    return {x, y, z};
-}
-
 inline int ceil_log2_int(int n) {
     if (n <= 1) {
         return 0;
@@ -52,22 +44,14 @@ inline int ceil_log2_int(int n) {
 
 PlacementResult SpaceFillingCurve::try_place(const JobInstance& job,
                                              const ClusterView& view) {
+    if (auto guard = basic_precheck(job, view, "SFC")) {
+        return *guard;
+    }
     PlacementResult r;
     const auto& dims = view.physical_dims();
-    if (dims.size() != 3) {
-        r.outcome = PlacementOutcome::DROP;
-        r.reason = "SFC requires 3-D physical_dims (--npus-per-dim)";
-        return r;
-    }
     const int W = dims[0];
     const int L = dims[1];
     const int H = dims[2];
-
-    if (job.num_ranks > view.total_npus()) {
-        r.outcome = PlacementOutcome::DROP;
-        r.reason = "num_ranks exceeds total NPUs";
-        return r;
-    }
 
     const int p = ceil_log2_int(std::max({W, L, H}));
     if (p > 21) {
@@ -77,16 +61,11 @@ PlacementResult SpaceFillingCurve::try_place(const JobInstance& job,
     }
 
     const auto& free = view.free_npus();
-    if (static_cast<int>(free.size()) < job.num_ranks) {
-        r.outcome = PlacementOutcome::DEFER;
-        r.reason = "fewer free NPUs than num_ranks";
-        return r;
-    }
 
     std::vector<std::pair<uint64_t, int>> scored;
     scored.reserve(free.size());
     for (int id : free) {
-        const auto xyz = decode_id(id, W, L);
+        const auto xyz = coord_of(id, W, L);
         const uint64_t d = hilbert_d_from_xyz(xyz[0], xyz[1], xyz[2], p);
         scored.emplace_back(d, id);
     }

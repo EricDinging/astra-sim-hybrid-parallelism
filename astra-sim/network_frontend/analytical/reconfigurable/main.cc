@@ -17,7 +17,6 @@ LICENSE file in the root directory of this source tree.
 #include "reconfigurable/ReconfigurableNetworkApi.hh"
 #include <astra-network-analytical/common/EventQueue.h>
 #include <astra-network-analytical/common/NetworkParser.h>
-#include <astra-network-analytical/reconfigurable/Helper.h>
 #include <json/json.hpp>
 #include <remote_memory_backend/analytical/AnalyticalRemoteMemory.hh>
 
@@ -256,7 +255,6 @@ int main(int argc, char* argv[]) {
         cmd_line_parser.get<std::string>("logging-folder");
     const auto num_queues_per_dim =
         cmd_line_parser.get<int>("num-queues-per-dim");
-    const auto comm_scale = cmd_line_parser.get<double>("comm-scale");
     const auto injection_scale = cmd_line_parser.get<double>("injection-scale");
     const auto rendezvous_protocol =
         cmd_line_parser.get<bool>("rendezvous-protocol");
@@ -438,10 +436,9 @@ int main(int argc, char* argv[]) {
     std::vector<AstraSim::Sys*> systems;
     for (int i = 0; i < npus_count; ++i) {
         auto network_api = std::make_unique<ReconfigurableNetworkApi>(i);
-        auto* sys =
-            new AstraSim::Sys(i, system_configuration, memory_api.get(),
-                              network_api.get(), {npus_count}, queues_per_dim,
-                              injection_scale, comm_scale, rendezvous_protocol);
+        auto* sys = new AstraSim::Sys(
+            i, system_configuration, memory_api.get(), network_api.get(),
+            {npus_count}, queues_per_dim, injection_scale, rendezvous_protocol);
         network_apis.push_back(std::move(network_api));
         systems.push_back(sys);
     }

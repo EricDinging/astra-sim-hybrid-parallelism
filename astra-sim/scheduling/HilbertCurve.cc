@@ -52,30 +52,6 @@ void axes_to_transpose(uint32_t* X, int B) {
     }
 }
 
-// In-place reverse transform from transposed representation back to axes.
-void transpose_to_axes(uint32_t* X, int B) {
-    const uint32_t N2 = 2u << (B - 1);  // 2^B
-    // Gray decode by H ^ (H/2).
-    const uint32_t t = X[kDim - 1] >> 1;
-    for (int i = kDim - 1; i > 0; --i) {
-        X[i] ^= X[i - 1];
-    }
-    X[0] ^= t;
-    // Undo excess work.
-    for (uint32_t Q = 2; Q != N2; Q <<= 1) {
-        const uint32_t P = Q - 1;
-        for (int i = kDim - 1; i >= 0; --i) {
-            if (X[i] & Q) {
-                X[0] ^= P;
-            } else {
-                const uint32_t u = (X[0] ^ X[i]) & P;
-                X[0] ^= u;
-                X[i] ^= u;
-            }
-        }
-    }
-}
-
 }  // namespace
 
 uint64_t hilbert_d_from_xyz(int x, int y, int z, int p) {
@@ -96,24 +72,6 @@ uint64_t hilbert_d_from_xyz(int x, int y, int z, int p) {
         }
     }
     return d;
-}
-
-std::array<int, 3> hilbert_xyz_from_d(uint64_t d, int p) {
-    assert(p >= 0 && p <= 21);
-    if (p == 0) {
-        return {0, 0, 0};
-    }
-    uint32_t X[kDim] = {0, 0, 0};
-    for (int b = 0; b < p; ++b) {
-        for (int i = 0; i < kDim; ++i) {
-            const auto bit =
-                static_cast<uint32_t>((d >> (b * kDim + (kDim - 1 - i))) & 1u);
-            X[i] |= bit << b;
-        }
-    }
-    transpose_to_axes(X, p);
-    return {static_cast<int>(X[0]), static_cast<int>(X[1]),
-            static_cast<int>(X[2])};
 }
 
 }  // namespace Scheduling

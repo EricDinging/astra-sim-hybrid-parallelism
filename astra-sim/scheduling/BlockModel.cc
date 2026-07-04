@@ -4,6 +4,8 @@ LICENSE file in the root directory of this source tree.
 *******************************************************************************/
 #include "astra-sim/scheduling/BlockModel.hh"
 
+#include "astra-sim/scheduling/Common.hh"
+
 #include <map>
 #include <set>
 #include <tuple>
@@ -25,10 +27,7 @@ bool BlockModel::valid() const {
 }
 
 std::array<int, 3> BlockModel::coord(int id) const {
-    int x = id % dims_[0];
-    int y = (id / dims_[0]) % dims_[1];
-    int z = id / (dims_[0] * dims_[1]);
-    return {x, y, z};
+    return coord_of(id, dims_[0], dims_[1]);
 }
 
 std::array<int, 3> BlockModel::block_of(int id) const {

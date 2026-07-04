@@ -22,18 +22,14 @@ namespace Scheduling {
 // failed estimate yields est_duration = 0, zeroing the product, so the job
 // admits first regardless of its size — same fallback as Sjdf, but here
 // even a huge rank count cannot temper it.
-class Swf : public AdmissionPolicy {
+class Swf : public DurationKeyedPolicy {
   public:
-    explicit Swf(std::unique_ptr<DurationEstimator> estimator);
-    void on_arrival(JobInstance& job) override;
+    using DurationKeyedPolicy::DurationKeyedPolicy;
     JobInstance* select_next(const std::vector<JobInstance*>& pending,
                              const ClusterView& view) const override;
     std::string name() const override {
         return "swf";
     }
-
-  private:
-    std::unique_ptr<DurationEstimator> estimator_;
 };
 
 }  // namespace Scheduling

@@ -17,8 +17,8 @@ class WorkloadLayerHandlerData : public BasicEventHandlerData, public MetaData {
   public:
     int sys_id;
     Workload* workload;
-    uint64_t node_id;
-    WorkloadLayerHandlerData();
+    uint64_t node_id = 0;
+    WorkloadLayerHandlerData() = default;
 };
 
 }  // namespace AstraSim

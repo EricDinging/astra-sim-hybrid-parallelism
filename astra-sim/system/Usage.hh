@@ -15,7 +15,10 @@ class Usage {
     int level;
     uint64_t start;
     uint64_t end;
-    Usage(int level, uint64_t start, uint64_t end);
+    Usage(int level, uint64_t start, uint64_t end)
+        : level(level),
+          start(start),
+          end(end) {}
 };
 
 }  // namespace AstraSim

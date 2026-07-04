@@ -17,18 +17,14 @@ namespace Scheduling {
 // Shortest-job-duration-first admission: smallest (est_duration, arrival_time,
 // job_id) wins. The duration estimate is computed once per job in on_arrival
 // via an injected DurationEstimator.
-class Sjdf : public AdmissionPolicy {
+class Sjdf : public DurationKeyedPolicy {
   public:
-    explicit Sjdf(std::unique_ptr<DurationEstimator> estimator);
-    void on_arrival(JobInstance& job) override;
+    using DurationKeyedPolicy::DurationKeyedPolicy;
     JobInstance* select_next(const std::vector<JobInstance*>& pending,
                              const ClusterView& view) const override;
     std::string name() const override {
         return "sjdf";
     }
-
-  private:
-    std::unique_ptr<DurationEstimator> estimator_;
 };
 
 }  // namespace Scheduling

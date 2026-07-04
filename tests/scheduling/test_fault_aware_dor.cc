@@ -3,8 +3,10 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 *******************************************************************************/
 
-// Unit tests for fault-aware DOR in TopologyManager::precomputeRoutes_DOR().
-// A 4x4x4 torus is built directly; routes are read via get_precomputed_route.
+// Unit tests for fault-aware DOR. A 4x4x4 torus is built directly; routes are
+// computed on demand by the Router and read via get_precomputed_route()
+// (set_failed_npus() clears the router cache, so failures take effect on the
+// next lookup). The DOR + fault-detour logic lives in Router::compute_dor().
 
 #include <astra-network-analytical/common/EventQueue.h>
 #include <astra-network-analytical/reconfigurable/TopologyManager.h>
@@ -92,7 +94,6 @@ TopologyManager make_tm(EventQueue* eq) {
 TEST(FaultAwareDor, NoFailureEquivalence) {
     EventQueue eq;
     TopologyManager tm = make_tm(&eq);
-    tm.precomputeRoutes_DOR();
     for (int s = 0; s < N; ++s) {
         for (int t = 0; t < N; ++t) {
             EXPECT_EQ(route_ids(tm, s, t), expected_dor(s, t))
@@ -106,7 +107,6 @@ TEST(FaultAwareDor, DetoursAroundFailedNode) {
     EventQueue eq;
     TopologyManager tm = make_tm(&eq);
     tm.set_failed_npus({to_id(1, 0, 0)});  // sits on 0 -> 2 DOR path
-    tm.precomputeRoutes_DOR();
 
     const int s = to_id(0, 0, 0), t = to_id(2, 0, 0);
     std::vector<int> r = route_ids(tm, s, t);
@@ -123,7 +123,6 @@ TEST(FaultAwareDor, UnaffectedPairUnchanged) {
     EventQueue eq;
     TopologyManager tm = make_tm(&eq);
     tm.set_failed_npus({to_id(1, 0, 0)});
-    tm.precomputeRoutes_DOR();
     // 0 -> (0,1,0): DOR moves only in Y, never touches (1,0,0).
     const int s = to_id(0, 0, 0), t = to_id(0, 1, 0);
     EXPECT_EQ(route_ids(tm, s, t), expected_dor(s, t));
@@ -137,7 +136,6 @@ TEST(FaultAwareDor, FailedEndpointStub) {
     TopologyManager tm = make_tm(&eq);
     const int f = to_id(1, 0, 0);
     tm.set_failed_npus({f});
-    tm.precomputeRoutes_DOR();
 
     // Failed source: route(f, t) -> {f, t}.
     const int t = to_id(2, 2, 2);
@@ -154,8 +152,9 @@ TEST(FaultAwareDor, FailedEndpointStub) {
     EXPECT_EQ(rd.back(), f);
 }
 
-// When a node is boxed in (all six neighbors failed), the precompute hard-fails
-// with exit code 1. Use a 3x3x3 torus and fail all neighbors of node 0.
+// When a node is boxed in (all six neighbors failed), the first DOR lookup that
+// must leave it hard-fails with exit code 1. Use a 3x3x3 torus and fail all
+// neighbors of node 0.
 TEST(FaultAwareDorDeath, HardFailsWhenBoxedIn) {
     using NetworkAnalyticalReconfigurable::TopologyManager;
     EventQueue eq;
@@ -164,6 +163,8 @@ TEST(FaultAwareDorDeath, HardFailsWhenBoxedIn) {
     // Neighbors of (0,0,0) on a 3-torus: x=+/-1 -> ids 1,2; y -> 3,6; z ->
     // 9,18.
     tm.set_failed_npus({1, 2, 3, 6, 9, 18});
-    EXPECT_EXIT(tm.precomputeRoutes_DOR(), ::testing::ExitedWithCode(1),
+    // Routing 0 -> 13 (=(1,1,1)) must leave node 0, but every exit neighbor is
+    // failed; the on-demand DOR walk finds no detour and exits(1).
+    EXPECT_EXIT(route_ids(tm, 0, 13), ::testing::ExitedWithCode(1),
                 "no .*detour");
 }

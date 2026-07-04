@@ -22,10 +22,6 @@ class QueueLevels {
         int level);
     std::pair<int, RingTopology::Direction> get_next_queue_at_level_last(
         int level);
-    QueueLevels(int levels,
-                int queues_per_level,
-                int offset,
-                AstraNetworkAPI::BackendType backend);
     QueueLevels(std::vector<int> lv,
                 int offset,
                 AstraNetworkAPI::BackendType backend);

@@ -118,7 +118,6 @@ class Workload : public Callable {
     // node, return nullptr.
     CommunicatorGroup* extract_comm_group(
         std::shared_ptr<Chakra::ETFeederNode> node);
-    int previous_group_id = 0;
 
     // (cg_id, node_id) -> ordinal map, pre-computed from the trace via a
     // min-node-id Kahn traversal, so ordinals are (a) invariant across ranks

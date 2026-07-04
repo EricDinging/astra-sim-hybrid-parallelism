@@ -15,9 +15,9 @@ class WorkloadLayerHandlerData;
 
 class MemEventHandlerData : public BasicEventHandlerData {
   public:
-    MemEventHandlerData();
-    Workload* workload;
-    WorkloadLayerHandlerData* wlhd;
+    MemEventHandlerData() = default;
+    Workload* workload = nullptr;
+    WorkloadLayerHandlerData* wlhd = nullptr;
 };
 
 }  // namespace AstraSim

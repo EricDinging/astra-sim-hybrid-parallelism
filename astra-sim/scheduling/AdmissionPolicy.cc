@@ -20,15 +20,32 @@ LICENSE file in the root directory of this source tree.
 namespace AstraSim {
 namespace Scheduling {
 
-JobInstance* select_min_by_key(
+DurationKeyedPolicy::DurationKeyedPolicy(
+    std::unique_ptr<DurationEstimator> estimator)
+    : estimator_(std::move(estimator)) {}
+
+DurationKeyedPolicy::~DurationKeyedPolicy() = default;
+
+void DurationKeyedPolicy::on_arrival(JobInstance& job) {
+    job.est_duration = estimator_->estimate(job);
+}
+
+namespace {
+
+// Shared impl of select_min/max_by_key: only the primary comparison direction
+// flips. The (arrival_time, job_id) tie-break stays ascending in both: among
+// key-equals, the oldest (then lowest id) wins — FIFO fairness.
+JobInstance* select_by_key(
     const std::vector<JobInstance*>& pending,
-    const std::function<uint64_t(const JobInstance&)>& key) {
+    const std::function<uint64_t(const JobInstance&)>& key,
+    bool largest) {
     JobInstance* best = nullptr;
     uint64_t best_key = 0;
     for (JobInstance* job : pending) {
         const uint64_t k = key(*job);
+        const bool primary = largest ? k > best_key : k < best_key;
         const bool better =
-            best == nullptr || k < best_key ||
+            best == nullptr || primary ||
             (k == best_key && (job->arrival_time < best->arrival_time ||
                                (job->arrival_time == best->arrival_time &&
                                 job->job_id < best->job_id)));
@@ -40,28 +57,18 @@ JobInstance* select_min_by_key(
     return best;
 }
 
+}  // namespace
+
+JobInstance* select_min_by_key(
+    const std::vector<JobInstance*>& pending,
+    const std::function<uint64_t(const JobInstance&)>& key) {
+    return select_by_key(pending, key, /*largest=*/false);
+}
+
 JobInstance* select_max_by_key(
     const std::vector<JobInstance*>& pending,
     const std::function<uint64_t(const JobInstance&)>& key) {
-    JobInstance* best = nullptr;
-    uint64_t best_key = 0;
-    for (JobInstance* job : pending) {
-        const uint64_t k = key(*job);
-        // Only the primary comparison flips vs select_min_by_key (k >
-        // best_key). The (arrival_time, job_id) tie-break stays ascending:
-        // among equally-large jobs, the oldest (then lowest id) wins — FIFO
-        // fairness.
-        const bool better =
-            best == nullptr || k > best_key ||
-            (k == best_key && (job->arrival_time < best->arrival_time ||
-                               (job->arrival_time == best->arrival_time &&
-                                job->job_id < best->job_id)));
-        if (better) {
-            best = job;
-            best_key = k;
-        }
-    }
-    return best;
+    return select_by_key(pending, key, /*largest=*/true);
 }
 
 std::unique_ptr<AdmissionPolicy> make_admission_policy(

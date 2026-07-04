@@ -12,8 +12,6 @@ LICENSE file in the root directory of this source tree.
 
 using namespace NetworkAnalyticalReconfigurable;
 
-int Chunk::on_route_chunks = 0;
-
 void Chunk::chunk_arrived_next_device(void* const chunk_ptr) noexcept {
     assert(chunk_ptr != nullptr);
 

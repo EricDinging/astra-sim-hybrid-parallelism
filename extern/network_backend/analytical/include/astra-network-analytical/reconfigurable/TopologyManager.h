@@ -73,8 +73,9 @@ class TopologyManager {
     [[nodiscard]] const Route& get_precomputed_route(DeviceId src, DeviceId dst) const noexcept;
     [[nodiscard]] Bandwidth get_cell_bandwidth(DeviceId u, DeviceId v) const noexcept;
 
-    // Mark NPUs as failed. precomputeRoutes_DOR() routes around them. Call
-    // before reconfigure()/precomputeRoutes_DOR(); empty by default.
+    // Mark NPUs as failed; the on-demand DOR router routes around them and its
+    // route cache is cleared so the change takes effect on the next lookup.
+    // Empty by default.
     void set_failed_npus(const std::unordered_set<int>& failed) noexcept;
 
     void set_reconfig_latency(Latency latency) noexcept;
@@ -84,8 +85,6 @@ class TopologyManager {
     void set_route_cache_budget_bytes(std::size_t bytes) noexcept;
 
     void precomputeRoutes() noexcept;
-
-    void precomputeSingleRoute(DeviceId src, DeviceId dst) noexcept;
 
     /**
      * Set the logical topology dimensions for DOR routing.
@@ -110,11 +109,6 @@ class TopologyManager {
 
     void increment_callback() noexcept;
 
-    void set_cur_topo_id(int topo_id) noexcept {
-        cur_topo_id = topo_id;
-        return;
-    };
-
     int inflight_coll;
 
     /**
@@ -137,22 +131,6 @@ class TopologyManager {
      * @param chunk chunk to be transmitted
      */
     void send(std::unique_ptr<Chunk> chunk) noexcept;
-
-    /**
-     * Get the number of NPUs in the topology.
-     * NPU excludes non-NPU devices such as switches.
-     *
-     * @return number of NPUs in the topology
-     */
-    [[nodiscard]] int get_npus_count() const noexcept;
-
-    /**
-     * Get the number of devices in the topology.
-     * Device includes non-NPU devices such as switches.
-     *
-     * @return number of devices in the topology
-     */
-    [[nodiscard]] int get_devices_count() const noexcept;
 
     bool is_reconfiguring() const noexcept;
 
@@ -211,8 +189,8 @@ class TopologyManager {
     /// Whether the topology has wrap-around links (torus) or not (mesh)
     bool is_torus = false;
 
-    /// When true, precomputeRoutes_DOR() is used instead of the default BFS.
-    /// Set automatically by set_topology_dims(); can also be toggled directly.
+    /// When true, on-demand DOR routing (router_) is used instead of the
+    /// default BFS. Set automatically by set_topology_dims().
     bool use_dor = false;
 
     /// When true (bidirectional), torus DOR picks the shorter arc on each dimension.

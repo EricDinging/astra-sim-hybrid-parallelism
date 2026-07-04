@@ -295,7 +295,7 @@ int main(int argc, char* argv[]) {
         systems[npu_id] = new AstraSim::Sys(
             npu_id, workload_configuration, comm_group_configuration,
             system_configuration, mem, networks[npu_id], logical_dims,
-            queues_per_dim, injection_scale, comm_scale, rendezvous_protocol);
+            queues_per_dim, injection_scale, rendezvous_protocol);
     }
 
     // Initialize ns3 simulation.

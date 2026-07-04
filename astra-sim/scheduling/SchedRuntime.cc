@@ -24,6 +24,14 @@ namespace Scheduling {
 
 namespace {
 
+// FCFS order: smallest (arrival_time, job_id) first.
+bool fcfs_less(const JobInstance* a, const JobInstance* b) {
+    if (a->arrival_time != b->arrival_time) {
+        return a->arrival_time < b->arrival_time;
+    }
+    return a->job_id < b->job_id;
+}
+
 // Trampoline contexts: allocated on heap, freed by the trampoline.
 struct ArrivalCtx {
     SchedRuntime* runtime;
@@ -90,13 +98,7 @@ SchedContext SchedRuntime::make_sched_context(
     const JobInstance* placing) const {
     SchedContext ctx;
     std::vector<JobInstance*> q = pending_;
-    std::sort(q.begin(), q.end(),
-              [](const JobInstance* a, const JobInstance* b) {
-                  if (a->arrival_time != b->arrival_time) {
-                      return a->arrival_time < b->arrival_time;
-                  }
-                  return a->job_id < b->job_id;
-              });
+    std::sort(q.begin(), q.end(), fcfs_less);
     for (const JobInstance* j : q) {
         if (j == placing) {
             continue;
@@ -318,15 +320,9 @@ void SchedRuntime::easy_sweep() {
 
     // FCFS head of the pending set: smallest (arrival_time, job_id).
     auto fcfs_head = [this]() -> JobInstance* {
-        JobInstance* head = nullptr;
-        for (JobInstance* j : pending_) {
-            if (head == nullptr || j->arrival_time < head->arrival_time ||
-                (j->arrival_time == head->arrival_time &&
-                 j->job_id < head->job_id)) {
-                head = j;
-            }
-        }
-        return head;
+        return pending_.empty() ? nullptr
+                                : *std::min_element(pending_.begin(),
+                                                    pending_.end(), fcfs_less);
     };
 
     // Place the FCFS head repeatedly until one cannot place (the pivot),
@@ -384,13 +380,7 @@ void SchedRuntime::easy_sweep() {
         // Scan candidates in FCFS order. Take a sorted snapshot of pending_ so
         // the scan order is stable even as commit_placement erases entries.
         std::vector<JobInstance*> candidates = pending_;
-        std::sort(candidates.begin(), candidates.end(),
-                  [](const JobInstance* a, const JobInstance* b) {
-                      if (a->arrival_time != b->arrival_time) {
-                          return a->arrival_time < b->arrival_time;
-                      }
-                      return a->job_id < b->job_id;
-                  });
+        std::sort(candidates.begin(), candidates.end(), fcfs_less);
         for (JobInstance* cand : candidates) {
             if (cand == head) {
                 continue;  // never backfill the pivot itself

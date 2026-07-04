@@ -125,11 +125,16 @@ TEST(RooflineCommEstimator, ComputePlusCommFromTrace) {
     fs::remove_all(dir);
 }
 
-TEST(RooflineCommEstimator, ZeroWhenTraceMissing) {
+// A missing/unreadable trace is a hard error, not a silent zero: estimate()
+// exits(1) so a bogus est=0 can't corrupt EASY's reservation math. The
+// diagnostic goes through the spdlog logger (not the child's stderr), so we
+// assert only the exit code -- with /no/such/dir the missing-trace branch is
+// the only path that can exit(1). Empty regex matches any child output.
+TEST(RooflineCommEstimatorDeath, HardFailsWhenTraceMissing) {
     JobArrival a{/*job_id=*/0, /*arrival=*/0, /*num_ranks=*/1, {1, 1, 1}};
     JobInstance job(a, /*trace_dir=*/"/no/such/dir", /*runtime=*/nullptr);
     RooflineCommEstimator est(kPeak, kMemBw, kLinkBw);
-    EXPECT_EQ(est.estimate(job), 0ULL);
+    EXPECT_EXIT(est.estimate(job), ::testing::ExitedWithCode(1), "");
 }
 
 }  // namespace

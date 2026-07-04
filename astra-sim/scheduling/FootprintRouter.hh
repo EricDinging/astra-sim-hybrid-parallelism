@@ -26,14 +26,9 @@ class FootprintRouter {
     // consecutive ranks plus the ring closure. These are the edges the
     // collective actually sends on -- variant-independent (the fold only
     // changes which global NPU each rank maps to, via rank_map, not which ranks
-    // communicate). Map through rank_map for routes()/ocs_edges().
+    // communicate). Map through rank_map for adjacent_routes()/ocs_edges().
     static std::vector<std::pair<int, int>> ring_edges(
         const std::array<int, 3>& shape);
-
-    // 1-hop routes [src, dst] for each ring edge mapped through rank_map.
-    static std::vector<RouteRow> routes(
-        const std::vector<std::pair<int, int>>& edges,
-        const std::vector<int>& rank_map);
 
     // Deduped global OCS edges (stored u < v) among the ring edges: the ring
     // edges whose endpoints are NOT one torus hop apart, i.e. have no baseline

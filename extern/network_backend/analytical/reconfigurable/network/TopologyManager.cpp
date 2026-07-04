@@ -82,7 +82,6 @@ void TopologyManager::drain_network() noexcept {
 
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
-        device->draining = true;
         for (const auto& [id, link] : device->get_links()) {
             if (id != i && !link->is_busy()) {
                 increment_callback();

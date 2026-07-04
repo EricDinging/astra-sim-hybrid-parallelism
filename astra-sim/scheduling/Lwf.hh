@@ -22,18 +22,14 @@ namespace Scheduling {
 // the job sorts LAST under largest-first (the symmetric opposite of Swf, where
 // a zeroed product sorts first). The product fits uint64_t comfortably at this
 // fork's cluster scales (~1e13 ns * 1e3 ranks ~ 1e16 << 2^64).
-class Lwf : public AdmissionPolicy {
+class Lwf : public DurationKeyedPolicy {
   public:
-    explicit Lwf(std::unique_ptr<DurationEstimator> estimator);
-    void on_arrival(JobInstance& job) override;
+    using DurationKeyedPolicy::DurationKeyedPolicy;
     JobInstance* select_next(const std::vector<JobInstance*>& pending,
                              const ClusterView& view) const override;
     std::string name() const override {
         return "lwf";
     }
-
-  private:
-    std::unique_ptr<DurationEstimator> estimator_;
 };
 
 }  // namespace Scheduling

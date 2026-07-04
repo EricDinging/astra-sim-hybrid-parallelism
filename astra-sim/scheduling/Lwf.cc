@@ -10,13 +10,6 @@ LICENSE file in the root directory of this source tree.
 namespace AstraSim {
 namespace Scheduling {
 
-Lwf::Lwf(std::unique_ptr<DurationEstimator> estimator)
-    : estimator_(std::move(estimator)) {}
-
-void Lwf::on_arrival(JobInstance& job) {
-    job.est_duration = estimator_->estimate(job);
-}
-
 JobInstance* Lwf::select_next(const std::vector<JobInstance*>& pending,
                               const ClusterView& /*view*/) const {
     return select_max_by_key(pending, [](const JobInstance& job) {

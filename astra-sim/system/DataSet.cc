@@ -51,7 +51,3 @@ void DataSet::notify_stream_finished(StreamStat* data) {
 void DataSet::call(EventType event, CallData* data) {
     notify_stream_finished(((StreamStat*)data));
 }
-
-bool DataSet::is_finished() {
-    return finished;
-}

@@ -167,9 +167,6 @@ struct ScatterLover : public PlacementRanker {
     bool scatter_never_beats_closed() const override {
         return false;
     }
-    std::string name() const override {
-        return "scatter-lover";
-    }
 };
 }  // namespace
 

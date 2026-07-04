@@ -10,13 +10,6 @@ LICENSE file in the root directory of this source tree.
 namespace AstraSim {
 namespace Scheduling {
 
-Easy::Easy(std::unique_ptr<DurationEstimator> estimator)
-    : estimator_(std::move(estimator)) {}
-
-void Easy::on_arrival(JobInstance& job) {
-    job.est_duration = estimator_->estimate(job);
-}
-
 JobInstance* Easy::select_next(const std::vector<JobInstance*>& pending,
                                const ClusterView& /*view*/) const {
     // FCFS: smallest (arrival_time, job_id). select_min_by_key tie-breaks by

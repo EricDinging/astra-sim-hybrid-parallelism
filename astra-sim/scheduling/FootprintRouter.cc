@@ -4,6 +4,8 @@ LICENSE file in the root directory of this source tree.
 *******************************************************************************/
 #include "astra-sim/scheduling/FootprintRouter.hh"
 
+#include "astra-sim/scheduling/Common.hh"
+
 #include <algorithm>
 #include <set>
 
@@ -48,19 +50,6 @@ std::vector<std::pair<int, int>> FootprintRouter::ring_edges(
     return out;
 }
 
-std::vector<RouteRow> FootprintRouter::routes(
-    const std::vector<std::pair<int, int>>& edges,
-    const std::vector<int>& rank_map) {
-    std::vector<RouteRow> rows;
-    rows.reserve(edges.size());
-    for (const auto& e : edges) {
-        int u = rank_map[e.first];
-        int v = rank_map[e.second];
-        rows.push_back(RouteRow{u, v, {u, v}});
-    }
-    return rows;
-}
-
 std::vector<std::pair<int, int>> FootprintRouter::ocs_edges(
     const std::vector<std::pair<int, int>>& edges,
     const std::vector<int>& rank_map,
@@ -82,9 +71,7 @@ std::vector<RouteRow> FootprintRouter::adjacent_routes(
     const std::vector<int>& dims,
     const std::vector<std::pair<int, int>>& ocs_edges) {
     const int Dx = dims[0], Dy = dims[1];
-    auto id_to_coord = [&](int n) {
-        return std::array<int, 3>{n % Dx, (n / Dx) % Dy, n / (Dx * Dy)};
-    };
+    auto id_to_coord = [&](int n) { return coord_of(n, Dx, Dy); };
     const std::set<std::pair<int, int>> ocs(ocs_edges.begin(), ocs_edges.end());
     std::vector<RouteRow> rows;
     rows.reserve(edges.size());

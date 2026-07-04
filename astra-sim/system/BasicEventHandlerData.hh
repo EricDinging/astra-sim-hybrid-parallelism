@@ -13,10 +13,12 @@ namespace AstraSim {
 
 class BasicEventHandlerData : public CallData {
   public:
-    BasicEventHandlerData();
-    BasicEventHandlerData(int sys_id, EventType event);
+    BasicEventHandlerData() = default;
+    BasicEventHandlerData(int sys_id, EventType event)
+        : sys_id(sys_id),
+          event(event) {}
 
-    int sys_id;
+    int sys_id = 0;
     EventType event;
 };
 
