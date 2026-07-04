@@ -31,8 +31,10 @@ void Statistics::record_start(std::shared_ptr<Chakra::ETFeederNode> node,
                               Tick start_time) {
     const NodeId& node_id = node->id();
     const auto type = OperatorStatistics::get_operator_type(node);
-    operator_statistics[node_id] =
-        OperatorStatistics(node_id, start_time, type);
+    // insert_or_assign constructs the entry in place, skipping the
+    // default-construct-then-move-assign that operator[]= does per node.
+    operator_statistics.insert_or_assign(
+        node_id, OperatorStatistics(node_id, start_time, type));
 }
 
 void Statistics::record_end(std::shared_ptr<Chakra::ETFeederNode> node,

@@ -15,7 +15,7 @@ PacketBundle::PacketBundle(Sys* sys,
                            uint64_t size,
                            MemBus::Transmition transmition) {
     this->sys = sys;
-    this->locked_packets = locked_packets;
+    this->locked_packets = std::move(locked_packets);
     this->needs_processing = needs_processing;
     this->send_back = send_back;
     this->size = size;

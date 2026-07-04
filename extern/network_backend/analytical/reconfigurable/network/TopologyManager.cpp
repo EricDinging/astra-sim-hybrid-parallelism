@@ -12,8 +12,8 @@ using namespace NetworkAnalyticalReconfigurable;
 TopologyManager::TopologyManager(int npus_count,
                                  int devices_count,
                                  EventQueue* event_queue,
-                                 std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules,
-                                 std::map<int, std::vector<std::vector<Latency>>> latency_schedules,
+                                 std::map<int, std::vector<BandwidthRow>> bw_schedules,
+                                 std::map<int, std::vector<LatencyRow>> latency_schedules,
                                  std::vector<int> npus_per_dim,
                                  bool is_torus,
                                  bool bidi) noexcept {
@@ -36,9 +36,6 @@ TopologyManager::TopologyManager(int npus_count,
     Link::increment_callback = [this]() noexcept { this->increment_callback(); };
 
     Device::increment_callback = [this]() noexcept { this->increment_callback(); };
-
-    bandwidths.resize(devices_count, std::vector<Bandwidth>(devices_count, Bandwidth(0)));
-    latencies.resize(devices_count, std::vector<Latency>(devices_count, Latency(0)));
 
     topology_iteration = 0;
     inflight_coll = 0;
@@ -121,10 +118,10 @@ void TopologyManager::increment_callback() noexcept {
     // verbose logging is compiled out.
     if (kVerboseLogging) {
         debug_print("Drained Network, reconfiguring to TOPO ITERATION #" + std::to_string(topology_iteration));
-        for (const auto& row : bandwidths) {
+        for (const auto& row : bw_schedules.at(cur_topo_id)) {
             std::string msg;
-            for (auto bw : row) {
-                msg += std::to_string(static_cast<int>(bw)) + " ";
+            for (const auto& [id, bw] : row) {
+                msg += std::to_string(id) + ":" + std::to_string(static_cast<int>(bw)) + " ";
             }
             debug_print(msg);
         }
@@ -135,8 +132,8 @@ void TopologyManager::increment_callback() noexcept {
         if (kVerboseLogging) {
             debug_print("BW Vector for device " + std::to_string(i) + ":");
             std::string msg;
-            for (auto bw : bandwidths[i]) {
-                msg += std::to_string(static_cast<int>(bw)) + " ";
+            for (const auto& [id, bw] : bw_schedules.at(cur_topo_id)[i]) {
+                msg += std::to_string(id) + ":" + std::to_string(static_cast<int>(bw)) + " ";
             }
             debug_print(msg);
         }
@@ -144,12 +141,13 @@ void TopologyManager::increment_callback() noexcept {
         // DOR mode fetches routes on demand (router_); pass an empty route row
         // so the device reconfigures links only. BFS mode pushes the full row.
         static const std::vector<Route> kNoRoutes;
-        device->reconfigure(bandwidths[i], use_dor ? kNoRoutes : precomputed_routes[i], latencies[i], reconfig_time);
+        device->reconfigure(bw_schedules.at(cur_topo_id)[i], use_dor ? kNoRoutes : precomputed_routes[i],
+                            latency_schedules.at(cur_topo_id)[i], reconfig_time);
     }
 }
 
-bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
-                                  std::vector<std::vector<Latency>> latencies,
+bool TopologyManager::reconfigure(std::vector<BandwidthRow> bandwidths,
+                                  std::vector<LatencyRow> latencies,
                                   Latency reconfig_time,
                                   int topo_id) noexcept {
 
@@ -177,8 +175,8 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     if (kVerboseLogging) {
         for (const auto& row : bandwidths) {
             std::string msg;
-            for (auto bw : row) {
-                msg += std::to_string(static_cast<int>(bw)) + " ";
+            for (const auto& [id, bw] : row) {
+                msg += std::to_string(id) + ":" + std::to_string(static_cast<int>(bw)) + " ";
             }
             debug_print(msg);
         }
@@ -188,16 +186,9 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
     assert(latencies.size() == devices_count);
     assert(!reconfiguring);
 
-    for (const auto& row : bandwidths) {
-        assert(row.size() == devices_count);
-    }
-    for (const auto& row : latencies) {
-        assert(row.size() == devices_count);
-    }
-
-    // Update the bandwidth and latency matrices
-    this->bandwidths = bandwidths;
-    this->latencies = latencies;
+    // Register the target rows in the schedule (drives by cur_topo_id below).
+    bw_schedules[topo_id] = std::move(bandwidths);
+    latency_schedules[topo_id] = std::move(latencies);
     this->reconfig_time = reconfig_time;
 
     if (use_dor && dims_count > 0) {
@@ -207,7 +198,7 @@ bool TopologyManager::reconfigure(std::vector<std::vector<Bandwidth>> bandwidths
             router_->clear();
         }
     } else {
-        precomputeRoutes();
+        precomputeRoutes(topo_id);
     }
 
     reconfiguring = true;
@@ -231,13 +222,16 @@ void TopologyManager::set_reconfig_latency(Latency latency) noexcept {
     this->reconfig_time = latency;
 }
 
-void TopologyManager::precomputeRoutes() noexcept {
+void TopologyManager::precomputeRoutes(int topo_id) noexcept {
     // TODO: add other routing algorithms
-    // Adjacency list
+    // Adjacency list. Built from the just-registered target schedule row
+    // (bw_schedules[topo_id]), not live link bandwidths: this runs before the
+    // links are retuned to the new topology (that happens later, in
+    // increment_callback after the drain), so live links are stale/zero here.
     std::vector<std::vector<int>> adj(devices_count);
     for (int i = 0; i < devices_count; ++i) {
-        for (int j = 0; j < devices_count; ++j) {
-            if (i != j && bandwidths[i][j] > 0) {
+        for (const auto& [j, bw] : bw_schedules.at(topo_id)[i]) {
+            if (i != j && bw > 0) {
                 adj[i].push_back(j);
             }
         }
@@ -399,8 +393,6 @@ void TopologyManager::apply_job_wiring(const std::vector<std::pair<int, int>>& o
         int u = e.first;
         int v = e.second;
         assert(u >= 0 && u < devices_count && v >= 0 && v < devices_count);
-        bandwidths[u][v] = bandwidths[v][u] = link_bw;
-        latencies[u][v] = latencies[v][u] = link_lt;
         // Under sparse connectivity the OCS pair may have no link yet; create
         // it so the override route can traverse it (no-op if already linked).
         topology->connect_ocs_edge(u, v, link_bw, link_lt);
@@ -431,9 +423,21 @@ void TopologyManager::apply_job_wiring(const std::vector<std::pair<int, int>>& o
     // only the links this wiring actually changed are retuned, and the
     // per-device topology_iteration is left alone (see Device::reconfigure).
     for (int d : touched) {
+        // connect_ocs_edge already created/updated the OCS link at link_bw, so
+        // reading the device's current links back reproduces the row the old
+        // live `bandwidths[d]`/`latencies[d]` mirror used to hold.
+        BandwidthRow bw_row;
+        LatencyRow lt_row;
+        const auto dev = topology->get_device(d);
+        for (const auto& [id, link] : dev->get_links()) {
+            if (id == d) {
+                continue;
+            }
+            bw_row[id] = link->get_bandwidth();
+            lt_row[id] = link->get_latency();
+        }
         static const std::vector<Route> kNoRoutes;
-        topology->get_device(d)->reconfigure(bandwidths[d], use_dor ? kNoRoutes : precomputed_routes[d], latencies[d],
-                                             Latency(0), /*scoped=*/true);
+        dev->reconfigure(bw_row, use_dor ? kNoRoutes : precomputed_routes[d], lt_row, Latency(0), /*scoped=*/true);
     }
 
     if (std::getenv("RFOLD_WIRING_LOG") != nullptr) {
@@ -524,8 +528,6 @@ void TopologyManager::remove_job_wiring(const std::vector<std::pair<int, int>>& 
                       << ") busy or has pending chunks at teardown; leaking it" << std::endl;
             continue;
         }
-        bandwidths[u][v] = bandwidths[v][u] = Bandwidth(0);
-        latencies[u][v] = latencies[v][u] = Latency(0);
         du->disconnect(v);
         dv->disconnect(u);
     }
@@ -542,8 +544,4 @@ const Route& TopologyManager::get_precomputed_route(DeviceId src, DeviceId dst) 
         return router_->lookup(src, dst);
     }
     return precomputed_routes[src][dst];
-}
-
-Bandwidth TopologyManager::get_cell_bandwidth(DeviceId u, DeviceId v) const noexcept {
-    return bandwidths[u][v];
 }

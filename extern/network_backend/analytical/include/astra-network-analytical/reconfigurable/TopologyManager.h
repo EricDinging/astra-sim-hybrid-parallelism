@@ -14,6 +14,7 @@ LICENSE file in the root directory of this source tree.
 #include "reconfigurable/Type.h"
 #include <cstddef>
 #include <memory>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -33,8 +34,8 @@ class TopologyManager {
     TopologyManager(int npus_count,
                     int devices_count,
                     EventQueue* event_queue,
-                    std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules,
-                    std::map<int, std::vector<std::vector<Latency>>> latency_schedules,
+                    std::map<int, std::vector<BandwidthRow>> bw_schedules,
+                    std::map<int, std::vector<LatencyRow>> latency_schedules,
                     std::vector<int> npus_per_dim = {},
                     bool is_torus = false,
                     bool bidi = false) noexcept;
@@ -44,8 +45,8 @@ class TopologyManager {
     /**
      * Reconfigure the topology with new bandwidths and latencies.
      */
-    bool reconfigure(std::vector<std::vector<Bandwidth>> bandwidths,
-                     std::vector<std::vector<Latency>> latencies,
+    bool reconfigure(std::vector<BandwidthRow> bandwidths,
+                     std::vector<LatencyRow> latencies,
                      Latency reconfig_time,
                      int topo_id = 0) noexcept;
 
@@ -71,7 +72,6 @@ class TopologyManager {
 
     // Test/inspection accessors.
     [[nodiscard]] const Route& get_precomputed_route(DeviceId src, DeviceId dst) const noexcept;
-    [[nodiscard]] Bandwidth get_cell_bandwidth(DeviceId u, DeviceId v) const noexcept;
 
     // Mark NPUs as failed; the on-demand DOR router routes around them and its
     // route cache is cleared so the change takes effect on the next lookup.
@@ -84,7 +84,7 @@ class TopologyManager {
     /// Default Router::kDefaultBudgetBytes (100 GiB). No-op in BFS mode.
     void set_route_cache_budget_bytes(std::size_t bytes) noexcept;
 
-    void precomputeRoutes() noexcept;
+    void precomputeRoutes(int topo_id) noexcept;
 
     /**
      * Set the logical topology dimensions for DOR routing.
@@ -167,16 +167,10 @@ class TopologyManager {
     // replacement for the old all-pairs devices_count*(devices_count-1).
     int drain_target_ = 0;
 
-    /// bandwidth matrix
-    std::vector<std::vector<Bandwidth>> bandwidths;
-
-    /// latency matrix
-    std::vector<std::vector<Latency>> latencies;
-
     std::vector<std::vector<Route>> precomputed_routes;
 
-    std::map<int, std::vector<std::vector<Bandwidth>>> bw_schedules;
-    std::map<int, std::vector<std::vector<Latency>>> latency_schedules;
+    std::map<int, std::vector<BandwidthRow>> bw_schedules;
+    std::map<int, std::vector<LatencyRow>> latency_schedules;
 
     // --- DOR routing configuration ---
     /// Number of logical dimensions (0 if not set; DOR is disabled)

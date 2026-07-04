@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 #define __SYSTEM_HH__
 
 #include <chrono>
+#include <unordered_map>
 
 #include "astra-sim/common/AstraNetworkAPI.hh"
 #include "astra-sim/common/AstraRemoteMemoryAPI.hh"
@@ -340,9 +341,15 @@ class Sys : public Callable {
     int first_phase_streams;
     int total_running_streams;
     std::map<int, std::list<BaseStream*>> active_Streams;
-    std::map<int, std::list<int>> stream_priorities;
 
-    std::map<Tick, std::list<std::tuple<Callable*, EventType, CallData*>>>
+    // Keyed bucket store, never iterated in time order (the network backend
+    // owns the time-ordered queue), so a hash map avoids the red-black tree's
+    // O(log n) lookups and per-node allocation. NOTE: callbacks invoked from
+    // call_events() may register further events, which can rehash this map --
+    // so never hold an iterator across a callback; bind a reference to the
+    // bucket list (stable across rehash) and erase by key.
+    std::unordered_map<Tick,
+                       std::list<std::tuple<Callable*, EventType, CallData*>>>
         event_queue;
     int total_nodes;
     int dim_to_break;

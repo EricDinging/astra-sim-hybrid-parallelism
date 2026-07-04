@@ -29,9 +29,9 @@ void reschedule_callback(void* const tm_ptr) {
 
     // tm->get_device(0)->reconfigure(1, 1, 1, Latency(1000)); // reconfigure device 0
 
-    tm->reconfigure({{0, Bandwidth(20)}, {Bandwidth(20), 0}},                  // bandwidths
-                    {{Latency(10), Latency(20)}, {Latency(20), Latency(10)}},  // latencies
-                    Latency(500)                                               // reconfiguration time
+    tm->reconfigure({{{1, Bandwidth(20)}}, {{0, Bandwidth(20)}}},              // bandwidths
+                    {{{1, Latency(20)}}, {{0, Latency(20)}}},                  // latencies
+                    Latency(500)                                              // reconfiguration time
     );
 }
 struct ScheduleSendArgs {
@@ -76,12 +76,16 @@ int main() {
 
     tm.reconfigure(
         {
-            {0, 100, 0},
-            {100, 0, 100},
-            {0, 100, 0},
-        },                                           // bandwidths
-        {{10, 10, 10}, {10, 10, 10}, {10, 10, 10}},  // latencies
-        Latency(500)                                 // reconfiguration time
+            {{1, Bandwidth(100)}},
+            {{0, Bandwidth(100)}, {2, Bandwidth(100)}},
+            {{1, Bandwidth(100)}},
+        },  // bandwidths
+        {
+            {{1, Latency(10)}, {2, Latency(10)}},
+            {{0, Latency(10)}, {2, Latency(10)}},
+            {{0, Latency(10)}, {1, Latency(10)}},
+        },            // latencies
+        Latency(500)  // reconfiguration time
     );
 
     // Run All-Gather

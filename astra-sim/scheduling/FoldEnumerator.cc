@@ -399,6 +399,19 @@ void enumerate_exclusive(const std::array<int, 3>& shape,
 
 std::vector<FoldVariant> FoldEnumerator::enumerate(
     const std::array<int, 3>& shape, bool multifold) {
+    // enumerate() is a pure function of (shape, multifold); arrivals draw
+    // shapes from a small palette, so memoize the result across calls rather
+    // than rerunning the recursive fold search (grow / enumerate_exclusive
+    // plus per-variant embedding builds) every time.
+    static std::map<std::pair<std::array<int, 3>, bool>,
+                    std::vector<FoldVariant>>
+        cache;
+    const std::pair<std::array<int, 3>, bool> key{shape, multifold};
+    const auto cached = cache.find(key);
+    if (cached != cache.end()) {
+        return cached->second;
+    }
+
     std::vector<FoldVariant> variants;
     Plan id = identity_plan(shape);
     variants.push_back(build_variant(id, shape));  // identity first
@@ -420,6 +433,7 @@ std::vector<FoldVariant> FoldEnumerator::enumerate(
                    variants.size(), shape[0], shape[1], shape[2], kVariantCap);
         variants.resize(kVariantCap);
     }
+    cache.emplace(key, variants);
     return variants;
 }
 

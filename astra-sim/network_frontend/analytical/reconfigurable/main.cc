@@ -26,6 +26,7 @@ LICENSE file in the root directory of this source tree.
 #include <sstream>
 #include <string>
 #include <tuple>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -36,8 +37,8 @@ using namespace AstraSimAnalyticalReconfigurable;
 using namespace NetworkAnalytical;
 using namespace NetworkAnalyticalReconfigurable;
 
-using bw_matrix_t = std::vector<std::vector<Bandwidth>>;
-using lt_matrix_t = std::vector<std::vector<Latency>>;
+using bw_matrix_t = std::vector<NetworkAnalyticalReconfigurable::BandwidthRow>;
+using lt_matrix_t = std::vector<NetworkAnalyticalReconfigurable::LatencyRow>;
 
 namespace {
 // Applies an rfold ReconfigPlan to the backend TopologyManager: wire the OCS
@@ -87,9 +88,9 @@ static inline std::string trim(const std::string& s) {
 }
 
 template <typename T>
-std::map<int, std::vector<std::vector<T>>> parse_schedule_file(
+std::map<int, std::vector<std::unordered_map<DeviceId, T>>> parse_schedule_file(
     const std::string& filename, const std::string& tag) {
-    std::map<int, std::vector<std::vector<T>>> schedules;
+    std::map<int, std::vector<std::unordered_map<DeviceId, T>>> schedules;
     std::ifstream file(filename);
     if (!file.is_open()) {
         std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
@@ -115,7 +116,7 @@ std::map<int, std::vector<std::vector<T>>> parse_schedule_file(
                           << std::endl;
                 std::exit(1);
             }
-            std::vector<std::vector<T>> matrix;
+            std::vector<std::unordered_map<DeviceId, T>> matrix;
 
             while (std::getline(file, line)) {
                 line = trim(line);
@@ -127,9 +128,13 @@ std::map<int, std::vector<std::vector<T>>> parse_schedule_file(
                 }
                 std::istringstream ss(line);
                 T value;
-                std::vector<T> row;
+                std::unordered_map<DeviceId, T> row;
+                DeviceId col = 0;
                 while (ss >> value) {
-                    row.push_back(value);
+                    if (value != T(0)) {
+                        row[col] = value;
+                    }
+                    ++col;
                 }
                 matrix.push_back(row);
             }
@@ -139,8 +144,8 @@ std::map<int, std::vector<std::vector<T>>> parse_schedule_file(
             logger->debug("Parsed {} matrix for topology: {}", tag, topo_id);
             for (const auto& row : matrix) {
                 std::string msg;
-                for (const auto& v : row) {
-                    msg += std::to_string(v) + " ";
+                for (const auto& [col, v] : row) {
+                    msg += std::to_string(col) + ":" + std::to_string(v) + " ";
                 }
                 logger->debug("{}", msg);
             }
@@ -163,20 +168,12 @@ static void validate_bw_schedules(
         std::exit(1);
     }
     for (const auto& [topo_id, mat] : bw_schedules) {
-        const size_t N = mat.size();
         for (size_t i = 0; i < mat.size(); ++i) {
-            if (mat[i].size() != N) {
-                std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
-                          << "BW matrix not square for topo_id " << topo_id
-                          << ": row " << i << " has " << mat[i].size()
-                          << " cols, expected " << N << std::endl;
-                std::exit(1);
-            }
-            for (size_t j = 0; j < mat[i].size(); ++j) {
-                if (mat[i][j] < 0) {
+            for (const auto& [j, bw] : mat[i]) {
+                if (bw < 0) {
                     std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
                               << "Negative bandwidth in topo_id " << topo_id
-                              << " at (" << i << "," << j << "): " << mat[i][j]
+                              << " at (" << i << "," << j << "): " << bw
                               << std::endl;
                     std::exit(1);
                 }
@@ -194,7 +191,8 @@ static void validate_latency_match(
                   << " LT=" << latency_schedules.size() << std::endl;
         std::exit(1);
     }
-    for (const auto& [topo_id, bw_mat] : bw_schedules) {
+    for (const auto& kv : bw_schedules) {
+        const int topo_id = kv.first;
         auto it = latency_schedules.find(topo_id);
         if (it == latency_schedules.end()) {
             std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
@@ -202,28 +200,21 @@ static void validate_latency_match(
             std::exit(1);
         }
         const auto& lt_mat = it->second;
+        const auto& bw_mat = kv.second;
         if (lt_mat.size() != bw_mat.size()) {
             std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
-                      << "LT matrix row count mismatch for topo_id " << topo_id
-                      << ": LT=" << lt_mat.size() << " BW=" << bw_mat.size()
+                      << "BW/LT row-count mismatch in topo_id " << topo_id
+                      << ": BW=" << bw_mat.size() << " LT=" << lt_mat.size()
                       << std::endl;
             std::exit(1);
         }
         for (size_t i = 0; i < lt_mat.size(); ++i) {
-            if (lt_mat[i].size() != bw_mat[i].size()) {
-                std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
-                          << "LT matrix col count mismatch for topo_id "
-                          << topo_id << " row " << i
-                          << ": LT=" << lt_mat[i].size()
-                          << " BW=" << bw_mat[i].size() << std::endl;
-                std::exit(1);
-            }
-            for (size_t j = 0; j < lt_mat[i].size(); ++j) {
-                if (lt_mat[i][j] < 0) {
+            for (const auto& [j, lt] : lt_mat[i]) {
+                if (lt < 0) {
                     std::cerr << "[Error] (AstraSim/analytical/reconfigurable) "
                               << "Negative latency in topo_id " << topo_id
-                              << " at (" << i << "," << j
-                              << "): " << lt_mat[i][j] << std::endl;
+                              << " at (" << i << "," << j << "): " << lt
+                              << std::endl;
                     std::exit(1);
                 }
             }
@@ -304,7 +295,7 @@ int main(int argc, char* argv[]) {
         double max_bw_gbps = 0.0;
         for (const auto& [topo_id, mat] : bw_schedules) {
             for (const auto& row : mat) {
-                for (Bandwidth bw : row) {
+                for (const auto& [id, bw] : row) {
                     if (bw > max_bw_gbps) {
                         max_bw_gbps = bw;
                     }
@@ -323,23 +314,18 @@ int main(int argc, char* argv[]) {
     // modeled for OCS links.
     const double link_bw_gbps = network_parser.get_bandwidths_per_dim()[0];
 
-    std::map<int, lt_matrix_t> latency_schedules;
-    if (!latency_schedule_path.empty()) {
-        logger->debug("Parsing LT schedule from {}", latency_schedule_path);
-        latency_schedules =
-            parse_schedule_file<Latency>(latency_schedule_path, "LT");
-        validate_latency_match(bw_schedules, latency_schedules);
-    } else {
-        logger->debug(
-            "No --latency-schedule provided; synthesizing uniform latency {} "
-            "ns per topology from network.yml",
-            scalar_latency);
-        for (const auto& [topo_id, bw_mat] : bw_schedules) {
-            const size_t N = bw_mat.size();
-            latency_schedules[topo_id] =
-                lt_matrix_t(N, std::vector<Latency>(N, scalar_latency));
-        }
+    // --latency-schedule is mandatory and parsed exactly like --bw-schedule.
+    // (Previously a missing file synthesized a uniform latency matrix; that
+    // fallback is gone so latency always comes from an explicit input.)
+    if (latency_schedule_path.empty()) {
+        logger->critical(
+            "--latency-schedule is required (parsed like --bw-schedule)");
+        std::exit(1);
     }
+    logger->debug("Parsing LT schedule from {}", latency_schedule_path);
+    std::map<int, lt_matrix_t> latency_schedules =
+        parse_schedule_file<Latency>(latency_schedule_path, "LT");
+    validate_latency_match(bw_schedules, latency_schedules);
 
     std::vector<int> npus_per_dim;
     if (!npus_per_dim_str.empty()) {

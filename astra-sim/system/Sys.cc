@@ -204,8 +204,6 @@ Sys::Sys(int id,
         for (int j = 0; j < queues_per_dim[current_dim]; j++) {
             list<BaseStream*> temp;
             active_Streams[element] = temp;
-            list<int> pri;
-            stream_priorities[element] = pri;
             element++;
         }
     }
@@ -327,8 +325,6 @@ Sys::Sys(int id,
         for (int j = 0; j < queues_per_dim[current_dim]; j++) {
             list<BaseStream*> temp;
             active_Streams[element] = temp;
-            list<int> pri;
-            stream_priorities[element] = pri;
             element++;
         }
     }
@@ -690,7 +686,17 @@ void Sys::exit_sim_loop(string msg) {
 void Sys::call(EventType type, CallData* data) {}
 
 void Sys::call_events() {
-    for (auto& callable : event_queue[Sys::boostedTick()]) {
+    const Tick now = Sys::boostedTick();
+    auto it = event_queue.find(now);
+    if (it == event_queue.end()) {
+        return;
+    }
+    // Bind a reference to the bucket list: a callback may register new events
+    // and rehash event_queue, which would invalidate `it` but not this
+    // reference. Same-tick events appended during dispatch are left un-invoked
+    // and dropped by the erase below, matching the previous behavior.
+    auto& callables = it->second;
+    for (auto& callable : callables) {
         try {
             pending_events--;
             (get<0>(callable))->call(get<1>(callable), get<2>(callable));
@@ -700,10 +706,7 @@ void Sys::call_events() {
                              e.what());
         }
     }
-    if (event_queue[Sys::boostedTick()].size() > 0) {
-        event_queue[Sys::boostedTick()].clear();
-    }
-    event_queue.erase(Sys::boostedTick());
+    event_queue.erase(now);
 }
 
 void Sys::register_event(Callable* callable,
@@ -717,14 +720,13 @@ void Sys::try_register_event(Callable* callable,
                              EventType event,
                              CallData* callData,
                              Tick& delta_cycles) {
-    bool should_schedule = false;
     auto event_time = Sys::boostedTick() + delta_cycles;
-    if (event_queue.find(event_time) == event_queue.end()) {
-        list<tuple<Callable*, EventType, CallData*>> tmp;
-        event_queue[event_time] = tmp;
-        should_schedule = true;
-    }
-    event_queue[event_time].push_back(make_tuple(callable, event, callData));
+    // Single hash lookup that finds-or-creates the bucket, replacing the
+    // previous find + default-insert + re-index (three lookups) and the
+    // throwaway temporary list. A freshly inserted bucket means this is the
+    // first event at event_time, so a CallEvents wake-up must be scheduled.
+    auto [it, should_schedule] = event_queue.try_emplace(event_time);
+    it->second.push_back(make_tuple(callable, event, callData));
     if (should_schedule) {
         timespec_t tmp;
         tmp.time_res = NS;

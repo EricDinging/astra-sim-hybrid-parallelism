@@ -60,8 +60,10 @@ std::string ETFeederNode::name() const {
 }
 
 ChakraProtoMsg::NodeType ETFeederNode::type() const {
-  auto node = this->get_chakra_node();
-  return node->type();
+  if (!this->cached_type.has_value()) {
+    this->cached_type = this->get_chakra_node()->type();
+  }
+  return *this->cached_type;
 }
 
 uint64_t ETFeederNode::runtime() const {
@@ -70,7 +72,10 @@ uint64_t ETFeederNode::runtime() const {
 }
 
 bool ETFeederNode::is_cpu_op() const {
-  return this->is_cpu_op<bool>();
+  if (!this->cached_is_cpu_op.has_value()) {
+    this->cached_is_cpu_op = this->is_cpu_op<bool>();
+  }
+  return *this->cached_is_cpu_op;
 }
 
 uint64_t ETFeederNode::num_ops() const {

@@ -169,16 +169,14 @@ void Device::connect(const DeviceId id, const Bandwidth bandwidth, const Latency
     pending_chunks[id] = std::list<std::unique_ptr<Chunk>>();
 }
 
-void Device::reconfigure(const std::vector<Bandwidth>& bandwidth,
+void Device::reconfigure(const BandwidthRow& bandwidth,
                          const std::vector<Route>& routes,
-                         const std::vector<Latency>& latency,
+                         const LatencyRow& latency,
                          Latency reconfig_time,
                          bool scoped) noexcept {
-    // bandwidth/latency are full-width device-indexed rows; links are now
-    // sparse (~6 torus neighbors + OCS edges + self-loop), so we index the rows
-    // by link id rather than requiring size == links.size().
-    assert(bandwidth.size() == latency.size());
-
+    // bandwidth/latency are sparse per-device rows (absent == 0); links are
+    // sparse too (~6 torus neighbors + OCS edges + self-loop), so we look up
+    // each link id in the row rather than indexing a full-width vector.
     if (!scoped) {
         // Per-job (scoped) wiring must not bump the iteration: chunks are
         // stamped with TopologyManager's GLOBAL iteration, so a per-device
@@ -194,12 +192,16 @@ void Device::reconfigure(const std::vector<Bandwidth>& bandwidth,
             continue;
         }
 
-        assert(bandwidth[id] >= 0);
-        assert(latency[id] >= 0);
         assert(connected(id));
 
+        const auto bw_it = bandwidth.find(id);
+        const Bandwidth bw = (bw_it == bandwidth.end()) ? Bandwidth(0) : bw_it->second;
+        const auto lt_it = latency.find(id);
+        const Latency lt = (lt_it == latency.end()) ? Latency(0) : lt_it->second;
+        assert(bw >= 0 && lt >= 0);
+
         if (scoped) {
-            if (bandwidth[id] == link->get_bandwidth() && latency[id] == link->get_latency()) {
+            if (bw == link->get_bandwidth() && lt == link->get_latency()) {
                 // Link untouched by this job's wiring: leave its busy state
                 // and pending queue alone. Scheduling the unconditional +1ns
                 // free event here force-freed busy links (P0-2).
@@ -226,9 +228,9 @@ void Device::reconfigure(const std::vector<Bandwidth>& bandwidth,
         if (kVerboseLogging) {
             debug_print("Device " + std::to_string(device_id) + ": Reconfiguring link to " + std::to_string(id) +
                         ", pending chunk size: " + std::to_string(pending_chunks[id].size()) +
-                        ", new bandwidth: " + std::to_string(bandwidth[id]));
+                        ", new bandwidth: " + std::to_string(bw));
         }
-        auto free_time = link->reconfigure(bandwidth[id], latency[id], reconfig_time);
+        auto free_time = link->reconfigure(bw, lt, reconfig_time);
         // create a callback argument for the link free event
 
         LinkFreeCallbackArg* args = new LinkFreeCallbackArg{shared_from_this(), id};

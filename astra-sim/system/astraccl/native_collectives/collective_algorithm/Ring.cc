@@ -113,12 +113,12 @@ void Ring::release_packets() {
         packet->set_notifier(this);
     }
     if (NPU_to_MA == true) {
-        (new PacketBundle(stream->owner, stream, locked_packets, processed,
-                          send_back, msg_size, transmition))
+        (new PacketBundle(stream->owner, stream, std::move(locked_packets),
+                          processed, send_back, msg_size, transmition))
             ->send_to_MA();
     } else {
-        (new PacketBundle(stream->owner, stream, locked_packets, processed,
-                          send_back, msg_size, transmition))
+        (new PacketBundle(stream->owner, stream, std::move(locked_packets),
+                          processed, send_back, msg_size, transmition))
             ->send_to_NPU();
     }
     locked_packets.clear();
@@ -220,7 +220,7 @@ bool Ring::ready() {
     if (packets.size() == 0 || stream_count == 0 || free_packets == 0) {
         return false;
     }
-    MyPacket packet = packets.front();
+    const MyPacket& packet = packets.front();
     sim_request snd_req;
     snd_req.srcRank = id;
     snd_req.dstRank = packet.preferred_dest;

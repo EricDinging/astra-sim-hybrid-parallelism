@@ -6,6 +6,8 @@ LICENSE file in the root directory of this source tree.
 #ifndef __RING_HH__
 #define __RING_HH__
 
+#include <deque>
+
 #include "astra-sim/system/MemBus.hh"
 #include "astra-sim/system/MyPacket.hh"
 #include "astra-sim/system/astraccl/Algorithm.hh"
@@ -47,7 +49,10 @@ class Ring : public Algorithm {
     int remained_packets_per_message;
     int parallel_reduce;
     InjectionPolicy injection_policy;
-    std::list<MyPacket> packets;
+    // deque, not list: push_back/pop_front only, and it chunk-allocates
+    // instead of one node per packet. Element references (locked_packets holds
+    // &packets.back()) stay valid across push_back/pop_front at the ends.
+    std::deque<MyPacket> packets;
     bool toggle;
     long free_packets;
     long total_packets_sent;

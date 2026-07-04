@@ -6,6 +6,7 @@ LICENSE file in the root directory of this source tree.
 #ifndef __HALVING_DOUBLING_HH__
 #define __HALVING_DOUBLING_HH__
 
+#include <deque>
 #include <list>
 
 #include "astra-sim/system/MemBus.hh"
@@ -41,6 +42,10 @@ class HalvingDoubling : public Algorithm {
     int curr_receiver;
     int curr_sender;
     int nodes_in_ring;
+    // Cached log2(nodes_in_ring); get_non_zero_latency_packets() is called per
+    // packet-wave and previously recomputed this libm call each time. Stored as
+    // double to preserve the exact truncation of the original expressions.
+    double log2_nodes;
     int stream_count;
     int max_count;
     int remained_packets_per_max_count;
@@ -48,7 +53,10 @@ class HalvingDoubling : public Algorithm {
     int parallel_reduce;
     PacketRouting routing;
     InjectionPolicy injection_policy;
-    std::list<MyPacket> packets;
+    // deque, not list: push_back/pop_front only, and it chunk-allocates
+    // instead of one node per packet. Element references (locked_packets holds
+    // &packets.back()) stay valid across push_back/pop_front at the ends.
+    std::deque<MyPacket> packets;
     bool toggle;
     long free_packets;
     long total_packets_sent;

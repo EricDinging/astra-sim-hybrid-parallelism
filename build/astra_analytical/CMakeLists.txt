@@ -18,6 +18,20 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error")
 # Setup project
 project(AstraSim_Analytical)
 
+# Interprocedural / link-time optimization for optimized builds. Enables
+# cross-translation-unit inlining across the many small .cc files of the
+# AstraSim library and the analytical backend. Guarded by a toolchain support
+# check and skipped for Debug (LTO interacts poorly with the sanitizers used
+# there). Set before the add_subdirectory calls so all targets inherit it.
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+if(ipo_supported AND NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+    message(STATUS "IPO/LTO enabled")
+else()
+    message(STATUS "IPO/LTO not enabled: ${ipo_error}")
+endif()
+
 # Compile-time flag to enable verbose logging in the analytical network backend.
 option(ENABLE_VERBOSE_LOGS "Enable verbose logging" OFF)
 if(ENABLE_VERBOSE_LOGS)

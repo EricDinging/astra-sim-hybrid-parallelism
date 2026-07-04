@@ -1,0 +1,4 @@
+add_executable(test_ring_topology_identity test_ring_topology_identity.cc)
+target_link_libraries(test_ring_topology_identity PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_ring_topology_identity PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_ring_topology_identity)

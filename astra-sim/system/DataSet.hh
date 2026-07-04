@@ -30,7 +30,10 @@ class DataSet : public Callable, public StreamStat {
     bool active;
     Tick finish_tick;
     Tick creation_tick;
-    std::pair<Callable*, EventType>* notifier;
+    // Inline notifier (a non-null callable means "set"), replacing a
+    // heap-allocated std::pair allocated once per collective.
+    Callable* notifier_callable = nullptr;
+    EventType notifier_event{};
 };
 
 }  // namespace AstraSim

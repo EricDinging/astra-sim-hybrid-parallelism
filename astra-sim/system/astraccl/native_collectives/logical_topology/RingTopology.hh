@@ -38,7 +38,16 @@ class RingTopology : public BasicLogicalTopology {
     std::unordered_map<int, int> id_to_index;
     std::unordered_map<int, int> index_to_id;
 
-    
+    // Identity fast-path: when the ring is [0..N) with node k at index k, the
+    // id<->index maps are the identity permutation and are not stored; the two
+    // helpers derive them arithmetically. See design doc 2026-07-04.
+    bool identity_ = false;
+    int to_index(int node) {
+        return identity_ ? node : id_to_index[node];
+    }
+    int to_id(int index) {
+        return identity_ ? index : index_to_id[index];
+    }
 
     std::string name;
     int id;

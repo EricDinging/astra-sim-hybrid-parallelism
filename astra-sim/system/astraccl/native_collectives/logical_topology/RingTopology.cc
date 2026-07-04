@@ -25,14 +25,25 @@ RingTopology::RingTopology(Dimension dimension, int id, std::vector<int> NPUs)
     this->dimension = dimension;
     this->offset = -1;
     this->index_in_ring = -1;
-    for (int i = 0; i < total_nodes_in_ring; i++) {
-        id_to_index[NPUs[i]] = i;
-        index_to_id[i] = NPUs[i];
-        if (id == NPUs[i]) {
-            index_in_ring = i;
+    bool contiguous = (id >= 0 && id < total_nodes_in_ring);
+    for (int i = 0; contiguous && i < total_nodes_in_ring; i++) {
+        if (NPUs[i] != i) {
+            contiguous = false;
         }
     }
-    this->NPUs = NPUs;
+    if (contiguous) {
+        identity_ = true;
+        index_in_ring = id;  // NPUs[id]==id
+    } else {
+        for (int i = 0; i < total_nodes_in_ring; i++) {
+            id_to_index[NPUs[i]] = i;
+            index_to_id[i] = NPUs[i];
+            if (id == NPUs[i]) {
+                index_in_ring = i;
+            }
+        }
+    }
+    this->NPUs = std::move(NPUs);
 
     LoggerFactory::get_logger("system::topology::RingTopology")
         ->debug("custom ring, id: {}, dimension: {} total nodes in ring: {} "
@@ -67,6 +78,12 @@ RingTopology::RingTopology(Dimension dimension,
     this->dimension = dimension;
     this->offset = offset;
 
+    if (offset == 1 && index_in_ring == id) {
+        // Identity ring [0..total): maps derived arithmetically, skip building.
+        identity_ = true;
+        return;
+    }
+
     id_to_index[id] = index_in_ring;
     index_to_id[index_in_ring] = id;
     int tmp = id;
@@ -79,8 +96,8 @@ RingTopology::RingTopology(Dimension dimension,
 int RingTopology::get_receiver_homogeneous(int node_id,
                                            Direction direction,
                                            int offset) {
-    assert(id_to_index.find(node_id) != id_to_index.end());
-    int index = id_to_index[node_id];
+    assert(identity_ || id_to_index.count(node_id));
+    int index = to_index(node_id);
     if (direction == RingTopology::Direction::Clockwise) {
         int receiver = node_id + offset;
         if (index == total_nodes_in_ring - 1) {
@@ -97,8 +114,10 @@ int RingTopology::get_receiver_homogeneous(int node_id,
                            index_in_ring, receiver);
         }
         assert(receiver >= 0);
-        id_to_index[receiver] = index;
-        index_to_id[index] = receiver;
+        if (!identity_) {
+            id_to_index[receiver] = index;
+            index_to_id[index] = receiver;
+        }
         return receiver;
     } else {
         int receiver = node_id - offset;
@@ -116,45 +135,47 @@ int RingTopology::get_receiver_homogeneous(int node_id,
                            index_in_ring, receiver);
         }
         assert(receiver >= 0);
-        id_to_index[receiver] = index;
-        index_to_id[index] = receiver;
+        if (!identity_) {
+            id_to_index[receiver] = index;
+            index_to_id[index] = receiver;
+        }
         return receiver;
     }
 }
 
 int RingTopology::get_receiver(int node_id, Direction direction) {
-    assert(id_to_index.find(node_id) != id_to_index.end());
-    int index = id_to_index[node_id];
+    assert(identity_ || id_to_index.count(node_id));
+    int index = to_index(node_id);
     if (direction == RingTopology::Direction::Clockwise) {
         index++;
         if (index == total_nodes_in_ring) {
             index = 0;
         }
-        return index_to_id[index];
+        return to_id(index);
     } else {
         index--;
         if (index < 0) {
             index = total_nodes_in_ring - 1;
         }
-        return index_to_id[index];
+        return to_id(index);
     }
 }
 
 int RingTopology::get_sender(int node_id, Direction direction) {
-    assert(id_to_index.find(node_id) != id_to_index.end());
-    int index = id_to_index[node_id];
+    assert(identity_ || id_to_index.count(node_id));
+    int index = to_index(node_id);
     if (direction == RingTopology::Direction::Anticlockwise) {
         index++;
         if (index == total_nodes_in_ring) {
             index = 0;
         }
-        return index_to_id[index];
+        return to_id(index);
     } else {
         index--;
         if (index < 0) {
             index = total_nodes_in_ring - 1;
         }
-        return index_to_id[index];
+        return to_id(index);
     }
 }
 

@@ -20,11 +20,12 @@ DataSet::DataSet(int total_streams) {
     this->finish_tick = 0;
     this->active = true;
     this->creation_tick = Sys::boostedTick();
-    this->notifier = nullptr;
+    this->notifier_callable = nullptr;
 }
 
 void DataSet::set_notifier(Callable* callable, EventType event) {
-    notifier = new std::pair<Callable*, EventType>(callable, event);
+    notifier_callable = callable;
+    notifier_event = event;
 }
 
 void DataSet::notify_stream_finished(StreamStat* data) {
@@ -35,11 +36,10 @@ void DataSet::notify_stream_finished(StreamStat* data) {
     if (finished_streams == total_streams) {
         finished = true;
         finish_tick = Sys::boostedTick();
-        if (notifier != nullptr) {
+        if (notifier_callable != nullptr) {
             take_stream_stats_average();
-            Callable* c = notifier->first;
-            EventType ev = notifier->second;
-            delete notifier;
+            Callable* c = notifier_callable;
+            EventType ev = notifier_event;
             IntData* int_data = new IntData(my_id);
             int_data->execution_time = finish_tick - creation_tick;
             c->call(ev, int_data);

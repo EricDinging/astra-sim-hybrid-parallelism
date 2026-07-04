@@ -28,6 +28,21 @@ using json = nlohmann::json;
 typedef ChakraProtoMsg::NodeType ChakraNodeType;
 typedef ChakraProtoMsg::CollectiveCommType ChakraCollectiveCommType;
 
+namespace {
+// The "workload" logger is process-global and identical for every Workload
+// instance. Fetching it via LoggerFactory::get_logger() locks spdlog's global
+// registry and rescans the default-sink list on every call, which is wasteful
+// on the per-DAG-node hot path (this file has ~30 call sites, several hit per
+// node per event). Cache it once. LoggerFactory::init() always runs before any
+// Workload is constructed, so the default sinks are already attached at the
+// first fetch.
+const std::shared_ptr<spdlog::logger>& workload_logger() {
+    static const std::shared_ptr<spdlog::logger> logger =
+        LoggerFactory::get_logger("workload");
+    return logger;
+}
+}  // namespace
+
 Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     string workload_filename = et_filename + "." + to_string(sys->id) + ".et";
     // Check if workload filename exists
@@ -43,7 +58,7 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
             error_msg =
                 "Unknown workload file: " + workload_filename + " access error";
         }
-        LoggerFactory::get_logger("workload")->critical(error_msg);
+        workload_logger()->critical(error_msg);
         exit(EXIT_FAILURE);
     }
     auto temp_et_feeder = new ETFeeder(workload_filename);
@@ -63,7 +78,7 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     this->stats = new Statistics(this);
     this->is_finished = false;
 
-    auto logger = LoggerFactory::get_logger("workload");
+    const auto& logger = workload_logger();
     std::string comm_group_str;
     for (int comm_group_id : this->comm_group_list) {
         comm_group_str += std::to_string(comm_group_id) + " ";
@@ -84,7 +99,7 @@ Workload::Workload(Sys* sys,
     if (access(workload_filename.c_str(), R_OK) < 0) {
         std::string error_msg =
             "workload file: " + workload_filename + " not readable";
-        LoggerFactory::get_logger("workload")->critical(error_msg);
+        workload_logger()->critical(error_msg);
         std::exit(EXIT_FAILURE);
     }
     // (No comm_group_list scan here: it fed only a legacy-path debug log,
@@ -186,15 +201,15 @@ Workload::Workload(Sys* sys,
         for (const auto& [cg_id, fp] : cg_fingerprint) {
             auto ins = parent_job->cg_ordinal_fingerprint.emplace(cg_id, fp);
             if (!ins.second && ins.first->second != fp) {
-                LoggerFactory::get_logger("workload")
-                    ->critical("job {} rank {}: comm group {} ordinal sequence "
-                               "diverges "
-                               "from earlier member ranks (fingerprint {:#x} "
-                               "vs {:#x}); "
-                               "per-group ordered admission requires identical "
-                               "collective order on every member rank",
-                               parent_job->job_id, job_local_rank, cg_id, fp,
-                               ins.first->second);
+                workload_logger()->critical(
+                    "job {} rank {}: comm group {} ordinal sequence "
+                    "diverges "
+                    "from earlier member ranks (fingerprint {:#x} "
+                    "vs {:#x}); "
+                    "per-group ordered admission requires identical "
+                    "collective order on every member rank",
+                    parent_job->job_id, job_local_rank, cg_id, fp,
+                    ins.first->second);
                 std::exit(1);
             }
         }
@@ -222,29 +237,28 @@ Workload::Workload(Sys* sys,
     // Per-job comm_group.json (optional).
     std::string cg_path = parent_job->trace_dir + "/comm_group.json";
     if (access(cg_path.c_str(), R_OK) < 0) {
-        LoggerFactory::get_logger("workload")
-            ->info("no comm_group.json for job {}; relying on inline pg "
-                   "metadata or no collectives",
-                   parent_job->job_id);
+        workload_logger()->info(
+            "no comm_group.json for job {}; relying on inline pg "
+            "metadata or no collectives",
+            parent_job->job_id);
     } else {
         std::ifstream inFile(cg_path);
         if (!inFile.is_open()) {
             // access() passed but open failed: almost always fd exhaustion
             // (EMFILE), which otherwise surfaces as an opaque nlohmann
             // parse_error ("unexpected end of input").
-            LoggerFactory::get_logger("workload")
-                ->critical("job {}: cannot open {} (errno={}); out of file "
-                           "descriptors?",
-                           parent_job->job_id, cg_path, errno);
+            workload_logger()->critical(
+                "job {}: cannot open {} (errno={}); out of file "
+                "descriptors?",
+                parent_job->job_id, cg_path, errno);
             std::exit(EXIT_FAILURE);
         }
         json j;
         try {
             inFile >> j;
         } catch (const std::exception& e) {
-            LoggerFactory::get_logger("workload")
-                ->critical("job {}: cannot parse {}: {}", parent_job->job_id,
-                           cg_path, e.what());
+            workload_logger()->critical("job {}: cannot parse {}: {}",
+                                        parent_job->job_id, cg_path, e.what());
             std::exit(EXIT_FAILURE);
         }
         for (json::iterator it = j.begin(); it != j.end(); ++it) {
@@ -252,29 +266,28 @@ Workload::Workload(Sys* sys,
             try {
                 cg_id = std::stoi(it.key());
             } catch (const std::exception&) {
-                LoggerFactory::get_logger("workload")
-                    ->critical("job {}: non-numeric comm group key '{}' in {}",
-                               parent_job->job_id, it.key(), cg_path);
+                workload_logger()->critical(
+                    "job {}: non-numeric comm group key '{}' in {}",
+                    parent_job->job_id, it.key(), cg_path);
                 std::exit(EXIT_FAILURE);
             }
             std::vector<int> translated;
             for (const auto& local_rank_json : it.value()) {
                 int local_rank = local_rank_json.get<int>();
                 if (local_rank < 0 || local_rank >= parent_job->num_ranks) {
-                    LoggerFactory::get_logger("workload")
-                        ->critical("job {}: comm_group.json rank {} out of "
-                                   "range",
-                                   parent_job->job_id, local_rank);
+                    workload_logger()->critical(
+                        "job {}: comm_group.json rank {} out of "
+                        "range",
+                        parent_job->job_id, local_rank);
                     std::exit(1);
                 }
                 translated.push_back(parent_job->rank_map[local_rank]);
             }
             if (cg_id < 0 || cg_id >= kMaxCGPerJob) {
-                LoggerFactory::get_logger("workload")
-                    ->critical("job {}: comm group id {} outside [0, {}) in "
-                               "{} -- unsupported by the stream-id layout",
-                               parent_job->job_id, cg_id, kMaxCGPerJob,
-                               cg_path);
+                workload_logger()->critical(
+                    "job {}: comm group id {} outside [0, {}) in "
+                    "{} -- unsupported by the stream-id layout",
+                    parent_job->job_id, cg_id, kMaxCGPerJob, cg_path);
                 std::exit(1);
             }
             auto* cg = new CommunicatorGroup(cg_id, translated, sys,
@@ -335,17 +348,15 @@ void Workload::initialize_comm_groups(string comm_group_filename) {
     json j;
     inFile.open(comm_group_filename);
     if (!inFile.is_open()) {
-        LoggerFactory::get_logger("workload")
-            ->critical("cannot open comm group file {} (errno={})",
-                       comm_group_filename, errno);
+        workload_logger()->critical("cannot open comm group file {} (errno={})",
+                                    comm_group_filename, errno);
         exit(EXIT_FAILURE);
     }
     try {
         inFile >> j;
     } catch (const std::exception& e) {
-        LoggerFactory::get_logger("workload")
-            ->critical("cannot parse comm group file {}: {}",
-                       comm_group_filename, e.what());
+        workload_logger()->critical("cannot parse comm group file {}: {}",
+                                    comm_group_filename, e.what());
         exit(EXIT_FAILURE);
     }
 
@@ -355,9 +366,8 @@ void Workload::initialize_comm_groups(string comm_group_filename) {
         try {
             comm_group_id = std::stoi(comm_group_name);
         } catch (const std::exception&) {
-            LoggerFactory::get_logger("workload")
-                ->critical("non-numeric comm group key '{}' in {}",
-                           comm_group_name, comm_group_filename);
+            workload_logger()->critical("non-numeric comm group key '{}' in {}",
+                                        comm_group_name, comm_group_filename);
             exit(EXIT_FAILURE);
         }
 
@@ -383,9 +393,9 @@ void Workload::issue_pytorch_pg_metadata(
         return;
     }
     if (pg_info.size() < 4) {
-        LoggerFactory::get_logger("workload")
-            ->critical("rank {}: malformed pg_info '{}' in METADATA node",
-                       sys->id, pg_info);
+        workload_logger()->critical(
+            "rank {}: malformed pg_info '{}' in METADATA node", sys->id,
+            pg_info);
         std::exit(EXIT_FAILURE);
     }
     pg_info = pg_info.substr(2, pg_info.size() - 4);
@@ -426,11 +436,11 @@ void Workload::issue_pytorch_pg_metadata(
             // and leaves the collective tag window for ids > 499.
             if (parent_job != nullptr) {
                 if (pgNameInt < 0 || pgNameInt >= kMaxCGPerJob) {
-                    LoggerFactory::get_logger("workload")
-                        ->critical("job {}: pg metadata group id {} outside "
-                                   "[0, {}) -- unsupported by the stream-id "
-                                   "layout",
-                                   parent_job->job_id, pgNameInt, kMaxCGPerJob);
+                    workload_logger()->critical(
+                        "job {}: pg metadata group id {} outside "
+                        "[0, {}) -- unsupported by the stream-id "
+                        "layout",
+                        parent_job->job_id, pgNameInt, kMaxCGPerJob);
                     std::exit(1);
                 }
                 const int base =
@@ -465,14 +475,21 @@ void Workload::issue_dep_free_nodes() {
     while (rescan) {
         rescan = false;
 
-        std::set<uint64_t> dependancy_free_nodes_set;
-        for (const auto node_id :
-             dependancy_resolver.get_dependancy_free_nodes()) {
-            dependancy_free_nodes_set.insert(node_id);
+        // Ascending, deduplicated order is required for deterministic,
+        // rank-invariant issue. A sorted vector gives the same order as the
+        // previous std::set with one allocation instead of a red-black-tree
+        // node per free node, on this every-event path; membership below uses
+        // binary_search.
+        const auto& free_now = dependancy_resolver.get_dependancy_free_nodes();
+        std::vector<uint64_t> dependancy_free_nodes;
+        dependancy_free_nodes.reserve(free_now.size());
+        for (const auto node_id : free_now) {
+            dependancy_free_nodes.push_back(node_id);
         }
+        std::sort(dependancy_free_nodes.begin(), dependancy_free_nodes.end());
 
         bool success = true;
-        for (const auto node_id : dependancy_free_nodes_set) {
+        for (const auto node_id : dependancy_free_nodes) {
             std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
             // Grouped collectives must additionally be admitted in the
             // rank-invariant per-group order; see comm_admission_in_order. A
@@ -485,7 +502,7 @@ void Workload::issue_dep_free_nodes() {
                 if (success) {
                     mark_comm_admitted(node);
                 } else {
-                    auto logger = LoggerFactory::get_logger("workload");
+                    const auto& logger = workload_logger();
                     logger->warn(
                         "Workload::issue failed, sys->id={}, node->id={}, "
                         "node->name={}, node->type={}",
@@ -497,7 +514,8 @@ void Workload::issue_dep_free_nodes() {
 
         for (const auto node_id :
              dependancy_resolver.get_dependancy_free_nodes()) {
-            if (dependancy_free_nodes_set.count(node_id) == 0U) {
+            if (!std::binary_search(dependancy_free_nodes.begin(),
+                                    dependancy_free_nodes.end(), node_id)) {
                 rescan = true;
                 break;
             }
@@ -561,7 +579,7 @@ void Workload::reset_comm_admission_order() {
 
 bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     bool success = true;
-    auto logger = LoggerFactory::get_logger("workload");
+    const auto& logger = workload_logger();
 
     if (sys->trace_enabled) {
         logger->debug("issue,sys->id={}, tick={}, node->id={}, "
@@ -706,13 +724,13 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     op_stat.memory_utilization =
         (perf / operational_intensity) / sys->local_mem_bw;
     op_stat.is_memory_bound = perf < sys->peak_perf;
-    LoggerFactory::get_logger("workload")
-        ->debug("operation_intensity={}, perf={}, elapsed_time={} "
-                "compute_utilization={} memory_utilization={} tensor_size={} "
-                "num_ops={}",
-                operational_intensity, perf, elapsed_time,
-                op_stat.compute_utilization.value(),
-                op_stat.memory_utilization.value(), tensor_size, num_ops);
+    workload_logger()->debug(
+        "operation_intensity={}, perf={}, elapsed_time={} "
+        "compute_utilization={} memory_utilization={} tensor_size={} "
+        "num_ops={}",
+        operational_intensity, perf, elapsed_time,
+        op_stat.compute_utilization.value(), op_stat.memory_utilization.value(),
+        tensor_size, num_ops);
 }
 
 bool Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
@@ -735,11 +753,13 @@ bool Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 
 bool Workload::issue_coll_comm(
     shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
-    const bool has_involve_dims = node->has_attr("involve_dims");
     std::vector<bool> involved_dims;
-    if (node->has_attr("involved_dim")) {
-        const ChakraProtoMsg::AttributeProto& attr =
-            node->get_attr_msg("involved_dim");
+    // Single scan, no copy: the pointer overload both tests presence and
+    // yields the attribute by reference, replacing has_attr() + a by-value
+    // get_attr_msg() (two scans plus a full AttributeProto copy).
+    const ChakraProtoMsg::AttributeProto* involved_attr = nullptr;
+    if (node->get_attr_msg("involved_dim", &involved_attr)) {
+        const ChakraProtoMsg::AttributeProto& attr = *involved_attr;
 
         // Ensure the attribute is of type bool_list before accessing
         if (attr.has_bool_list()) {
@@ -789,19 +809,19 @@ bool Workload::issue_coll_comm(
             }
         }
         if (ordinal >= kStreamsPerCG / kMaxStreamsPerCollective) {
-            LoggerFactory::get_logger("workload")
-                ->critical("job {}: comm group {} has more than {} "
-                           "collectives per iteration -- stream-id range "
-                           "would bleed into the next comm group",
-                           (parent_job != nullptr ? parent_job->job_id : -1),
-                           cg_id, kStreamsPerCG / kMaxStreamsPerCollective);
+            workload_logger()->critical(
+                "job {}: comm group {} has more than {} "
+                "collectives per iteration -- stream-id range "
+                "would bleed into the next comm group",
+                (parent_job != nullptr ? parent_job->job_id : -1), cg_id,
+                kStreamsPerCG / kMaxStreamsPerCollective);
             std::exit(1);
         }
         comm_group->num_streams =
             comm_group->num_streams_base + ordinal * kMaxStreamsPerCollective;
     }
 
-    auto logger = LoggerFactory::get_logger("workload");
+    const auto& logger = workload_logger();
     // A pg-less collective is only meaningful in the legacy one-shot flow,
     // where every NPU in the system participates. In the scheduled flow the
     // dims-based fallback would enroll NPUs outside this job, so the
@@ -898,11 +918,11 @@ bool Workload::issue_send_comm(
     int dst_npu = static_cast<int>(dst);
     if (parent_job != nullptr) {
         if (dst_npu >= static_cast<uint32_t>(parent_job->num_ranks)) {
-            LoggerFactory::get_logger("workload")
-                ->critical("job {} rank {}: COMM_SEND node {} names peer rank "
-                           "{} outside [0, {})",
-                           parent_job->job_id, job_local_rank, node->id(),
-                           dst_npu, parent_job->num_ranks);
+            workload_logger()->critical(
+                "job {} rank {}: COMM_SEND node {} names peer rank "
+                "{} outside [0, {})",
+                parent_job->job_id, job_local_rank, node->id(), dst_npu,
+                parent_job->num_ranks);
             std::exit(EXIT_FAILURE);
         }
         dst_npu = parent_job->rank_map[dst_npu];
@@ -912,7 +932,7 @@ bool Workload::issue_send_comm(
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
 
-    auto logger = LoggerFactory::get_logger("workload");
+    const auto& logger = workload_logger();
     logger->debug("RANK: {} Issuing SEND {}-{}", this->sys->id, src, dst);
 
     sim_request snd_req;
@@ -936,11 +956,11 @@ bool Workload::issue_recv_comm(
     int src_npu = static_cast<int>(src);
     if (parent_job != nullptr) {
         if (src_npu >= static_cast<uint32_t>(parent_job->num_ranks)) {
-            LoggerFactory::get_logger("workload")
-                ->critical("job {} rank {}: COMM_RECV node {} names peer rank "
-                           "{} outside [0, {})",
-                           parent_job->job_id, job_local_rank, node->id(),
-                           src_npu, parent_job->num_ranks);
+            workload_logger()->critical(
+                "job {} rank {}: COMM_RECV node {} names peer rank "
+                "{} outside [0, {})",
+                parent_job->job_id, job_local_rank, node->id(), src_npu,
+                parent_job->num_ranks);
             std::exit(EXIT_FAILURE);
         }
         src_npu = parent_job->rank_map[src_npu];
@@ -954,7 +974,7 @@ bool Workload::issue_recv_comm(
     stats->get_operator_statistics(node->id()).comm_size = size;
     const auto tag = node->comm_tag<uint32_t>();
 
-    auto logger = LoggerFactory::get_logger("workload");
+    const auto& logger = workload_logger();
     logger->debug("RANK: {} Issuing RECV {}-{}", this->sys->id, src, dst);
 
     sim_request rcv_req;
@@ -973,7 +993,7 @@ void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const auto node_id = node->id();
     auto& dependancy_resolver = this->et_feeder->getDependancyResolver();
     dependancy_resolver.finish_node(node_id);
-    auto logger = LoggerFactory::get_logger("workload");
+    const auto& logger = workload_logger();
     logger->debug("callback,sys->id={}, tick={}, node->id={}, "
                   "node->name={}, node->type={}",
                   sys->id, Sys::boostedTick(), node->id(), node->name(),
@@ -986,7 +1006,7 @@ void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 }
 
 void Workload::call(EventType event, CallData* data) {
-    auto logger = LoggerFactory::get_logger("workload");
+    const auto& logger = workload_logger();
     if (is_finished) {
         logger->debug("Rank {}: workload already finished, ignore event {}",
                       this->sys->id, static_cast<int>(event));
@@ -1015,11 +1035,11 @@ void Workload::call(EventType event, CallData* data) {
             et_feeder->lookupNode(node_id);
 
         if (sys->trace_enabled) {
-            LoggerFactory::get_logger("workload")
-                ->debug("callback,sys->id={}, tick={}, node->id={}, "
-                        "node->name={}, node->type={}",
-                        sys->id, Sys::boostedTick(), node->id(), node->name(),
-                        static_cast<uint64_t>(node->type()));
+            workload_logger()->debug(
+                "callback,sys->id={}, tick={}, node->id={}, "
+                "node->name={}, node->type={}",
+                sys->id, Sys::boostedTick(), node->id(), node->name(),
+                static_cast<uint64_t>(node->type()));
         }
 
         hw_resource->release(node);
@@ -1059,11 +1079,11 @@ void Workload::call(EventType event, CallData* data) {
                 et_feeder->lookupNode(wlhd->node_id);
 
             if (sys->trace_enabled) {
-                LoggerFactory::get_logger("workload")
-                    ->debug("callback,sys->id={}, tick={}, node->id={}, "
-                            "node->name={}, node->type={}",
-                            sys->id, Sys::boostedTick(), node->id(),
-                            node->name(), static_cast<uint64_t>(node->type()));
+                workload_logger()->debug(
+                    "callback,sys->id={}, tick={}, node->id={}, "
+                    "node->name={}, node->type={}",
+                    sys->id, Sys::boostedTick(), node->id(), node->name(),
+                    static_cast<uint64_t>(node->type()));
             }
 
             hw_resource->release(node);
@@ -1076,9 +1096,7 @@ void Workload::call(EventType event, CallData* data) {
                 logger->debug("RANK: {} finish SEND/RECV", this->sys->id);
 
                 auto& op_stat = stats->get_operator_statistics(wlhd->node_id);
-                Tick execution_time =
-                    stats->get_operator_statistics(wlhd->node_id).end_time -
-                    stats->get_operator_statistics(wlhd->node_id).start_time;
+                Tick execution_time = op_stat.end_time - op_stat.start_time;
                 if (execution_time > 0 && op_stat.comm_size.has_value()) {
                     double bandwidth =
                         static_cast<double>(op_stat.comm_size.value()) /
@@ -1170,11 +1188,10 @@ void Workload::advance_to_next_iteration() {
     // every wrapper was erased on completion). Surface a straggler instead of
     // silently leaking it rather than asserting.
     if (!collective_comm_wrapper_map.empty()) {
-        LoggerFactory::get_logger("workload")
-            ->warn("rank {}: {} collective wrapper(s) still live at the "
-                   "boundary into iteration {}",
-                   sys->id, collective_comm_wrapper_map.size(),
-                   current_iteration_);
+        workload_logger()->warn(
+            "rank {}: {} collective wrapper(s) still live at the "
+            "boundary into iteration {}",
+            sys->id, collective_comm_wrapper_map.size(), current_iteration_);
     }
 }
 
@@ -1193,9 +1210,9 @@ void Workload::fire() {
 
 void Workload::report() {
     Tick curr_tick = Sys::boostedTick();
-    LoggerFactory::get_logger("workload")
-        ->info("sys[{}] finished, {} cycles, exposed communication {} cycles.",
-               sys->id, curr_tick, curr_tick - hw_resource->tics_gpu_ops);
+    workload_logger()->info(
+        "sys[{}] finished, {} cycles, exposed communication {} cycles.",
+        sys->id, curr_tick, curr_tick - hw_resource->tics_gpu_ops);
     stats->post_processing();
     stats->report();
     if (this->sys->track_local_mem) {
@@ -1205,7 +1222,7 @@ void Workload::report() {
             this->sys->local_mem_trace_filename);
         auto [peak_mem_usage, unit] =
             this->local_mem_usage_tracker->getPeakMemUsageFormatted();
-        auto logger = LoggerFactory::get_logger("workload");
+        const auto& logger = workload_logger();
         logger->info("sys[{}] peak memory usage: {:.2f} {}", sys->id,
                      peak_mem_usage, unit);
         this->local_mem_usage_tracker.reset();
@@ -1223,16 +1240,15 @@ CommunicatorGroup* Workload::extract_comm_group(
     try {
         comm_group_id = std::stoi(comm_group_name);
     } catch (const std::exception&) {
-        LoggerFactory::get_logger("workload")
-            ->critical("rank {} ET node {}: non-numeric pg_name '{}'", sys->id,
-                       node->id(), comm_group_name);
+        workload_logger()->critical(
+            "rank {} ET node {}: non-numeric pg_name '{}'", sys->id, node->id(),
+            comm_group_name);
         exit(EXIT_FAILURE);
     }
     if (comm_groups.find(comm_group_id) == comm_groups.end()) {
-        LoggerFactory::get_logger("workload")
-            ->critical(
-                "For rank {} ET node {}, communicator group {} not found",
-                sys->id, node->id(), comm_group_id);
+        workload_logger()->critical(
+            "For rank {} ET node {}, communicator group {} not found", sys->id,
+            node->id(), comm_group_id);
         exit(EXIT_FAILURE);
     }
     return comm_groups[comm_group_id];

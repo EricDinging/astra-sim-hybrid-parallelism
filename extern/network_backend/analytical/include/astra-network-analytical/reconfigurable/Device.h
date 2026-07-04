@@ -11,6 +11,7 @@ LICENSE file in the root directory of this source tree.
 #include <map>
 #include <memory>
 #include <queue>
+#include <unordered_map>
 
 using namespace NetworkAnalytical;
 
@@ -19,6 +20,12 @@ namespace NetworkAnalyticalReconfigurable {
 class Router;  // Forward declaration (DOR-mode on-demand routing)
 
 // class TopologyManager; // Forward declaration
+
+/// Sparse per-device bandwidth/latency row: absent key == 0. Dense N-wide
+/// vectors are ~99% zero for a torus (~6N real links), so rows are stored by
+/// link id instead.
+using BandwidthRow = std::unordered_map<DeviceId, Bandwidth>;
+using LatencyRow = std::unordered_map<DeviceId, Latency>;
 
 /**
  * Device class represents a single device in the network.
@@ -70,9 +77,8 @@ class Device : public std::enable_shared_from_this<Device> {
      */
     void connect(DeviceId id, Bandwidth bandwidth, Latency latency) noexcept;
 
-    // Rows are taken by const reference: they are full N-wide vectors and a
-    // global reconfigure calls this once per device (O(N^2) copied if taken
-    // by value).
+    // Rows are taken by const reference: they are sparse per-device maps
+    // (absent == 0) and a global reconfigure calls this once per device.
     //
     // scoped = per-job wiring (apply_job_wiring): only links whose
     // bandwidth/latency actually changed are touched, and topology_iteration
@@ -82,9 +88,9 @@ class Device : public std::enable_shared_from_this<Device> {
     // its route, P0-1; the unconditional +1ns free events force-freed busy
     // links, P0-2). Global reconfigure (scoped = false, post-drain) keeps the
     // original bump-everything behavior.
-    void reconfigure(const std::vector<Bandwidth>& bandwidths,
+    void reconfigure(const BandwidthRow& bandwidths,
                      const std::vector<Route>& routes,
-                     const std::vector<Latency>& latencies,
+                     const LatencyRow& latencies,
                      Latency reconfigTime,
                      bool scoped = false) noexcept;
 

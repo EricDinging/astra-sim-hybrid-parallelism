@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
 #include "common.h"
 #include "et_def.pb.h"
 
@@ -137,6 +138,12 @@ class ETFeederNode {
   ETFeeder& feeder;
   NodeId node_id;
   mutable std::weak_ptr<const ChakraNode> chakra_node;
+  // A node's type and is-CPU flag are immutable; the type()/is_cpu_op()
+  // accessors are hit many times per node visit (is_available, admission,
+  // issue, occupy, record_start), each otherwise re-locking the feeder's
+  // node cache. Memoize them on the node object (one per lookup).
+  mutable std::optional<ChakraProtoMsg::NodeType> cached_type;
+  mutable std::optional<bool> cached_is_cpu_op;
 
   std::shared_ptr<const ChakraNode> get_chakra_node() const;
 };
@@ -197,9 +204,11 @@ template <typename T>
 T ETFeederNode::get_attr(const std::string& attr_name, const T& default_value)
     const {
   // option 1 or 3: user provide default value or systemwise default value
-  if (this->has_attr(attr_name)) {
-    const auto attr = this->get_attr_msg(attr_name);
-    return this->get_attr<T>(attr, DEFAULT_STRICT_TYPING);
+  // Single scan via the pointer overload: avoids the previous has_attr scan
+  // plus a second scan and a by-value ChakraAttr copy in get_attr_msg.
+  const ChakraAttr* attr = nullptr;
+  if (this->get_attr_msg(attr_name, &attr)) {
+    return this->get_attr<T>(*attr, DEFAULT_STRICT_TYPING);
   }
   return default_value;
 }
@@ -207,9 +216,9 @@ T ETFeederNode::get_attr(const std::string& attr_name, const T& default_value)
 template <typename T>
 T ETFeederNode::get_attr(const std::string& attr_name) const {
   // option 2: throw complaints
-  if (this->has_attr(attr_name)) {
-    const auto attr = this->get_attr_msg(attr_name);
-    return this->get_attr<T>(attr, DEFAULT_STRICT_TYPING);
+  const ChakraAttr* attr = nullptr;
+  if (this->get_attr_msg(attr_name, &attr)) {
+    return this->get_attr<T>(*attr, DEFAULT_STRICT_TYPING);
   }
   throw std::runtime_error(
       "Attribute " + attr_name + " not found in node " +
