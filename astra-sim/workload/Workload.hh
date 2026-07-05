@@ -101,21 +101,32 @@ class Workload : public Callable {
     // static_assert in the Workload constructor), so a stream id can never
     // leave [0, COLLECTIVE) -- the tag mapping in front_end_sim_send stays a
     // no-op and ids stay non-negative at any job count. Jobs whose ids are
-    // kJobIdWindow apart reuse a range; that is safe only because concurrent
-    // jobs never share NPUs and chunk pairing is keyed by (tag, src, dst,
-    // size).
+    // kJobIdWindow apart reuse a tag range; that is always safe, independent of
+    // kJobIdWindow's value, because (a) concurrent jobs never share NPUs
+    // (exclusive placement) so their (src,dst) pairs never overlap even under a
+    // shared base, and (b) a job's NPUs are returned to the free pool only
+    // after every rank has fully drained (SchedRuntime::detach_job runs only
+    // once JobInstance::on_rank_finished sees all ranks finished, and a rank
+    // finishes only when Workload::current_iteration_drained() reports
+    // num_in_flight_gpu_comm_ops == 0 -- i.e. all collective chunks delivered).
+    // So a range-reuse twin can never collide with an in-flight chunk of its
+    // predecessor. kJobIdWindow is thus a divisor knob for the tiling, not a
+    // correctness margin, and can be as small as the tiling requires.
     static constexpr int kMaxStreamsPerCollective = 64;
     // kMaxCGPerJob caps comm groups per job; the whole-torus job is the worst
-    // case (an 8x8x8/512-NPU job emits 640 comm groups, a 16x16x16 job far
-    // more). kStreamsPerCG / kMaxStreamsPerCollective caps collectives per comm
-    // group per iteration (measured max 162 across the cluster512 shape set, at
-    // the concentrated-TP/no-pipeline shapes). Both carry ~1.6-1.9x headroom
-    // over those maxima. The three factors below multiply to exactly the
-    // COLLECTIVE tag-window width (static_assert in the constructor), so
-    // raising one requires lowering another to keep the tiling exact.
-    static constexpr int kMaxCGPerJob = 1000;
-    static constexpr int kStreamsPerCG = 20000;
-    static constexpr int kJobIdWindow = 25;
+    // case (a 16x16x16/4096-NPU job emits 4608 comm groups; an 8x8x8/512-NPU
+    // job emits 640). kStreamsPerCG / kMaxStreamsPerCollective caps collectives
+    // per comm group per iteration (measured max 162 across both the cluster512
+    // and cluster4096 shape sets, at the concentrated-TP/no-pipeline shapes).
+    // The three factors multiply to exactly the COLLECTIVE tag-window width
+    // (static_assert in the constructor), which is 2^8 * 5^9 = 500,000,000, so
+    // every factor must be a 2^a*5^b divisor and raising one forces lowering
+    // another. 8 * 5000 * 12500 is the exact tiling that clears both floors
+    // (cg cap 5000 >= 4609; collectives/cg ceiling 12500/64 = 195 >= 162) with
+    // the most kJobIdWindow the window allows.
+    static constexpr int kMaxCGPerJob = 5000;
+    static constexpr int kStreamsPerCG = 12500;
+    static constexpr int kJobIdWindow = 8;
 
   private:
     // Legacy one-shot path only (feeds a constructor debug log).
