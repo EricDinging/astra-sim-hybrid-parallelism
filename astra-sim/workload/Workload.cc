@@ -118,9 +118,14 @@ Workload::Workload(Sys* sys,
     // A Kahn traversal that always visits the smallest dependency-free node
     // id satisfies both: deterministic, identical on every member rank of a
     // CG (member ranks carry identical DAGs), and dependency-consistent.
+    this->et_feeder = new ETFeeder(workload_filename);
+    // Capture the pristine (fresh-parse) dependency graph now, before the
+    // ordinal scan below consumes it. reset_dependancy() then rewinds the
+    // resolver to this exact state after the scan -- equivalent to a fresh
+    // parse -- so we no longer build a throwaway second feeder just to scan.
+    this->et_feeder->capture_pristine_dependancy();
     {
-        auto* scan_feeder = new ETFeeder(workload_filename);
-        auto& resolver = scan_feeder->getDependancyResolver();
+        auto& resolver = this->et_feeder->getDependancyResolver();
         const auto& dep_layer = resolver.get_enabled_dependancy();
         std::priority_queue<uint64_t, std::vector<uint64_t>,
                             std::greater<uint64_t>>
@@ -150,7 +155,7 @@ Workload::Workload(Sys* sys,
         while (!ready.empty()) {
             const uint64_t node_id = ready.top();
             ready.pop();
-            auto node = scan_feeder->lookupNode(node_id);
+            auto node = this->et_feeder->lookupNode(node_id);
             if (node->type() == ChakraNodeType::COMM_COLL_NODE) {
                 std::string pg = node->pg_name<std::string>("");
                 if (!pg.empty()) {
@@ -183,7 +188,6 @@ Workload::Workload(Sys* sys,
                 }
             }
         }
-        delete scan_feeder;
         for (auto& kv : cg_to_node_ids) {
             auto& ord_map = cg_node_to_ordinal_[kv.first];
             for (size_t i = 0; i < kv.second.size(); ++i) {
@@ -216,11 +220,11 @@ Workload::Workload(Sys* sys,
         reset_comm_admission_order();
     }
 
-    this->et_feeder = new ETFeeder(workload_filename);
-    // Snapshot the sealed dependency graph so advance_to_next_iteration can
-    // rewind the resolver in memory instead of re-parsing the trace per
-    // iteration. Must happen before any node is issued.
-    this->et_feeder->capture_pristine_dependancy();
+    // The scan above fully consumed the feeder's dependency graph; rewind it to
+    // the pristine snapshot captured before the scan. This restores the exact
+    // fresh-parse resolver state (the same in-memory rewind used per training
+    // iteration by advance_to_next_iteration) without a second protobuf parse.
+    this->et_feeder->reset_dependancy();
     this->workload_filename_ = workload_filename;
     // Replay the single-iteration trace once per training iteration. Clamp to
     // >= 1 so a malformed/zero count degrades to single-iteration rather than
@@ -489,6 +493,7 @@ void Workload::issue_dep_free_nodes() {
         std::sort(dependancy_free_nodes.begin(), dependancy_free_nodes.end());
 
         bool success = true;
+        bool issued_any = false;
         for (const auto node_id : dependancy_free_nodes) {
             std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
             // Grouped collectives must additionally be admitted in the
@@ -498,6 +503,7 @@ void Workload::issue_dep_free_nodes() {
             // event), so the gate delays admission but never strands a node.
             if (hw_resource->is_available(node) &&
                 comm_admission_in_order(node)) {
+                issued_any = true;
                 success = issue(node);
                 if (success) {
                     mark_comm_admitted(node);
@@ -512,12 +518,19 @@ void Workload::issue_dep_free_nodes() {
             }
         }
 
-        for (const auto node_id :
-             dependancy_resolver.get_dependancy_free_nodes()) {
-            if (!std::binary_search(dependancy_free_nodes.begin(),
-                                    dependancy_free_nodes.end(), node_id)) {
-                rescan = true;
-                break;
+        // A new dependency-free node can only appear via a synchronous
+        // finish_node inside issue(); if nothing was issued this pass the
+        // resolver's free set is unchanged from the snapshot, so this scan
+        // would always find nothing. Skip it in that (common, fully-blocked)
+        // case -- byte-identical, since rescan would stay false anyway.
+        if (issued_any) {
+            for (const auto node_id :
+                 dependancy_resolver.get_dependancy_free_nodes()) {
+                if (!std::binary_search(dependancy_free_nodes.begin(),
+                                        dependancy_free_nodes.end(), node_id)) {
+                    rescan = true;
+                    break;
+                }
             }
         }
     }

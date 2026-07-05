@@ -50,8 +50,11 @@ class FoldEnumerator {
     // multi-factor serpentine plans (each dim's ordered factor tuple on its
     // own axes — the spare-axes rule). Deterministic; deduplicated by
     // footprint keeping the best comm class; capped at 512 variants.
-    static std::vector<FoldVariant> enumerate(const std::array<int, 3>& shape,
-                                              bool multifold = true);
+    // Returns a reference into an internal memo cache (std::map, so entries
+    // stay pointer-stable across later inserts). Callers must treat it as
+    // read-only and must not retain it beyond the current scope.
+    static const std::vector<FoldVariant>& enumerate(
+        const std::array<int, 3>& shape, bool multifold = true);
 
     // Bounded-depth search for a closed cycle of length `len` through the
     // `free` NPU ids on torus `dims`, where consecutive ranks (and the wrap)

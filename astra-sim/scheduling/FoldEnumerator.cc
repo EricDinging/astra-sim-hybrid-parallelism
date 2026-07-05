@@ -397,7 +397,7 @@ void enumerate_exclusive(const std::array<int, 3>& shape,
 
 }  // namespace
 
-std::vector<FoldVariant> FoldEnumerator::enumerate(
+const std::vector<FoldVariant>& FoldEnumerator::enumerate(
     const std::array<int, 3>& shape, bool multifold) {
     // enumerate() is a pure function of (shape, multifold); arrivals draw
     // shapes from a small palette, so memoize the result across calls rather
@@ -433,8 +433,8 @@ std::vector<FoldVariant> FoldEnumerator::enumerate(
                    variants.size(), shape[0], shape[1], shape[2], kVariantCap);
         variants.resize(kVariantCap);
     }
-    cache.emplace(key, variants);
-    return variants;
+    const auto inserted = cache.emplace(key, std::move(variants));
+    return inserted.first->second;
 }
 
 }  // namespace Scheduling

@@ -100,6 +100,12 @@ std::optional<std::vector<int>> scan_anchors(
     const std::vector<int>& dims,
     const std::unordered_set<int>& free_set) {
     std::array<int, 3> ax{0, 1, 2};
+    // One reusable candidate buffer across all anchors/rotations: most anchors
+    // fail, so avoid a per-anchor allocation and stop building ids as soon as
+    // one lands on an occupied node (mirrors ContiguousScan). Scan order and
+    // the returned candidate are unchanged.
+    std::vector<int> candidate;
+    candidate.reserve(job.num_ranks);
     do {
         std::array<int, 3> placed_dims{0, 0, 0};
         for (int j = 0; j < 3; ++j) {
@@ -119,20 +125,17 @@ std::optional<std::vector<int>> scan_anchors(
         for (int az = 0; az < axis_upper(2); ++az) {
             for (int ay = 0; ay < axis_upper(1); ++ay) {
                 for (int axx = 0; axx < axis_upper(0); ++axx) {
-                    std::vector<int> candidate;
-                    candidate.reserve(job.num_ranks);
+                    candidate.clear();
+                    bool all_free = true;
                     for (int i = 0; i < job.num_ranks; ++i) {
                         auto rc = decode_rank(i, job.shape);
                         int npu = rank_to_npu(rc[0], rc[1], rc[2],
                                               {axx, ay, az}, ax, dims);
-                        candidate.push_back(npu);
-                    }
-                    bool all_free = true;
-                    for (int n : candidate) {
-                        if (free_set.find(n) == free_set.end()) {
+                        if (free_set.find(npu) == free_set.end()) {
                             all_free = false;
                             break;
                         }
+                        candidate.push_back(npu);
                     }
                     if (all_free) {
                         return candidate;

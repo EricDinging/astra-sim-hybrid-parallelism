@@ -20,6 +20,7 @@ LICENSE file in the root directory of this source tree.
 #include <json/json.hpp>
 #include <remote_memory_backend/analytical/AnalyticalRemoteMemory.hh>
 
+#include <algorithm>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -576,7 +577,16 @@ int main(int argc, char* argv[]) {
         }
         std::cerr << "=== DRAIN DIAGNOSTIC: unresolved callback entries ===\n";
         const auto& tracker = CommonNetworkApi::get_callback_tracker();
-        for (const auto& [key, entry] : tracker.entries()) {
+        // Sort keys so this failure-mode dump stays deterministic even though
+        // the tracker is now an unordered_map (iteration order is unspecified).
+        std::vector<CallbackTracker::Key> drain_keys;
+        drain_keys.reserve(tracker.entries().size());
+        for (const auto& kv : tracker.entries()) {
+            drain_keys.push_back(kv.first);
+        }
+        std::sort(drain_keys.begin(), drain_keys.end());
+        for (const auto& key : drain_keys) {
+            const auto& entry = tracker.entries().at(key);
             const auto [tag, src, dst, size, cid] = key;
             std::cerr << "[entry] tag=" << tag << " src=" << src
                       << " dst=" << dst << " size=" << size << " cid=" << cid
