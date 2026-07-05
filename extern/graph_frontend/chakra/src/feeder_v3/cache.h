@@ -3,19 +3,21 @@
 
 #include <list>
 #include <memory>
-#include <mutex>
-#include <shared_mutex>
 #include <unordered_map>
 
 namespace Chakra {
 namespace FeederV3 {
 
+// NOTE: intentionally not thread-safe. The analytical simulator drives the
+// feeder (and the shared static node cache) from a single thread, so the
+// previous std::shared_mutex on every access was pure overhead (~1-2% of
+// self-time) and has been removed. Reintroduce locking here if a
+// multi-threaded frontend ever shares a Cache instance across threads.
 template <typename K, typename V>
 class Cache {
  public:
   Cache(size_t capacity) : capacity(capacity) {}
   void put(const K& key, const V& value) {
-    std::unique_lock lock(cache_mutex);
     if (this->cache.find(key) != this->cache.end()) {
       // hit and update
       this->lru.erase(this->cache[key].second);
@@ -37,11 +39,9 @@ class Cache {
     }
   }
   bool has(const K& key) {
-    std::shared_lock lock(cache_mutex);
     return this->cache.find(key) != this->cache.end();
   }
   std::weak_ptr<const V> get(const K& key) {
-    std::shared_lock lock(cache_mutex);
     if (this->cache.find(key) == this->cache.end()) {
       throw std::runtime_error("Key not found in cache");
     }
@@ -49,14 +49,12 @@ class Cache {
     return value;
   }
   std::shared_ptr<const V> get_locked(const K& key) {
-    std::shared_lock lock(cache_mutex);
     if (this->cache.find(key) == this->cache.end()) {
       throw std::runtime_error("Key not found in cache");
     }
     return this->cache.at(key).first;
   }
   std::weak_ptr<const V> get_or_null(const K& key) {
-    std::shared_lock lock(cache_mutex);
     if (this->cache.find(key) == this->cache.end()) {
       return std::weak_ptr<V>();
     }
@@ -64,7 +62,6 @@ class Cache {
     return value;
   }
   std::shared_ptr<const V> get_or_null_locked(const K& key) {
-    std::shared_lock lock(cache_mutex);
     if (this->cache.find(key) == this->cache.end()) {
       return std::shared_ptr<const V>();
     }
@@ -72,7 +69,6 @@ class Cache {
   }
 
   void remove(const K& key) {
-    std::unique_lock lock(cache_mutex);
     if (this->cache.find(key) == this->cache.end()) {
       throw std::runtime_error("Key not found in cache");
     }
@@ -92,7 +88,6 @@ class Cache {
       std::pair<std::shared_ptr<V>, typename std::list<K>::iterator>>
       cache;
   std::list<K> lru;
-  mutable std::shared_mutex cache_mutex;
 };
 
 } // namespace FeederV3

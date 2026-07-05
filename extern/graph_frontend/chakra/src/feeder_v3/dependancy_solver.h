@@ -2,7 +2,6 @@
 #define CHAKRA_FEEDER_V3_DEPENDANCY_SOLVER_H
 
 #include <cstdint>
-#include <shared_mutex>
 #include <unordered_map>
 #include <unordered_set>
 #include "common.h"
@@ -76,7 +75,6 @@ class _DependancyLayer {
   bool pristine_captured = false;
   bool dirty = true;
   void _helper_allocate_bucket(NodeId node_id);
-  std::shared_mutex mutex;
 };
 
 class DependancyResolver {

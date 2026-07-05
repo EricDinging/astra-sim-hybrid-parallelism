@@ -1,7 +1,5 @@
 #include "dependancy_solver.h"
 #include <iostream>
-#include <mutex>
-#include <shared_mutex>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -10,7 +8,6 @@ using namespace Chakra::FeederV3;
 void _DependancyLayer::add_node(
     const NodeId& node,
     const std::unordered_set<NodeId>& parents) {
-  std::unique_lock<std::shared_mutex> lock(this->mutex);
   this->dirty = true;
   this->_helper_allocate_bucket(node);
   for (auto& parent : parents) {
@@ -23,7 +20,6 @@ void _DependancyLayer::add_node(
 void _DependancyLayer::add_node_children(
     const NodeId& node,
     const std::unordered_set<NodeId>& children) {
-  std::unique_lock<std::shared_mutex> lock(this->mutex);
   this->dirty = true;
   this->_helper_allocate_bucket(node);
   for (auto& child : children) {
@@ -34,7 +30,6 @@ void _DependancyLayer::add_node_children(
 }
 
 void _DependancyLayer::take_node(const NodeId& node) {
-  std::unique_lock<std::shared_mutex> lock(this->mutex);
   if (this->dirty) {
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
@@ -54,7 +49,6 @@ void _DependancyLayer::take_node(const NodeId& node) {
 }
 
 void _DependancyLayer::finish_node(const NodeId& node) {
-  std::unique_lock<std::shared_mutex> lock(this->mutex);
   if (this->dirty) {
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
@@ -80,7 +74,6 @@ void _DependancyLayer::finish_node(const NodeId& node) {
 }
 
 void _DependancyLayer::push_back_node(const NodeId& node) {
-  std::unique_lock<std::shared_mutex> lock(this->mutex);
   if (this->dirty) {
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
@@ -93,7 +86,6 @@ void _DependancyLayer::push_back_node(const NodeId& node) {
 }
 
 void _DependancyLayer::resolve_dependancy_free_nodes() {
-  std::unique_lock<std::shared_mutex> lock(this->mutex);
   if ((!this->dependancy_free_nodes.empty()) || (!this->ongoing_nodes.empty()))
     throw std::runtime_error(
         "resolve_dependancy_free_nodes after initialization is not supported yet!");
@@ -110,7 +102,6 @@ void _DependancyLayer::resolve_dependancy_free_nodes() {
 }
 
 void _DependancyLayer::capture_pristine() {
-  std::unique_lock<std::shared_mutex> lock(this->mutex);
   if (this->dirty) {
     throw std::runtime_error(
         "capture_pristine requires a sealed layer (call resolve_dependancy_free_nodes first)");
@@ -124,7 +115,6 @@ void _DependancyLayer::capture_pristine() {
 }
 
 void _DependancyLayer::reset() {
-  std::unique_lock<std::shared_mutex> lock(this->mutex);
   if (!this->pristine_captured) {
     throw std::runtime_error("reset without a prior capture_pristine");
   }
