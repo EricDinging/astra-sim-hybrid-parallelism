@@ -105,8 +105,16 @@ class Workload : public Callable {
     // jobs never share NPUs and chunk pairing is keyed by (tag, src, dst,
     // size).
     static constexpr int kMaxStreamsPerCollective = 64;
-    static constexpr int kMaxCGPerJob = 500;
-    static constexpr int kStreamsPerCG = 40000;
+    // kMaxCGPerJob caps comm groups per job; the whole-torus job is the worst
+    // case (an 8x8x8/512-NPU job emits 640 comm groups, a 16x16x16 job far
+    // more). kStreamsPerCG / kMaxStreamsPerCollective caps collectives per comm
+    // group per iteration (measured max 162 across the cluster512 shape set, at
+    // the concentrated-TP/no-pipeline shapes). Both carry ~1.6-1.9x headroom
+    // over those maxima. The three factors below multiply to exactly the
+    // COLLECTIVE tag-window width (static_assert in the constructor), so
+    // raising one requires lowering another to keep the tiling exact.
+    static constexpr int kMaxCGPerJob = 1000;
+    static constexpr int kStreamsPerCG = 20000;
     static constexpr int kJobIdWindow = 25;
 
   private:
