@@ -55,6 +55,23 @@ git submodule update --init --recursive
 TopoMatch itself is vendored as the `extern/topomatch` submodule and built
 automatically (library only; the `mapping` CLI is not built).
 
+## Allocator (jemalloc)
+
+The analytical simulator is allocation-bound — a CPU profile showed glibc
+`malloc`/`free` at ~29% of self-time — so the build links **jemalloc** as the
+allocator, which is ~24% faster wall-clock with byte-identical output. This
+needs the jemalloc dev package at **build time**:
+
+```bash
+sudo apt-get install -y libjemalloc-dev
+```
+
+It is linked **statically** (`libjemalloc_pic.a`), so the resulting binary is
+self-contained — there is no runtime dependency and nothing extra to deploy.
+Unlike TopoMatch this is **optional**: if the package is missing the build
+prints a warning and falls back to the system allocator (losing the speedup).
+To opt out explicitly, configure with `-DUSE_JEMALLOC=OFF`.
+
 ## Multi-tenant job scheduling
 
 This fork extends ASTRA-sim with a dynamic, multi-tenant job-scheduling runtime

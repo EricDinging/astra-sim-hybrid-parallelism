@@ -27,7 +27,8 @@ RUN apt -y update && apt -y upgrade && apt -y install \
     openmpi-bin openmpi-doc libopenmpi-dev \
     python3 python3-pip python3-venv \
     graphviz parallel \
-    libhwloc-dev libscotch-dev pkg-config
+    libhwloc-dev libscotch-dev pkg-config \
+    libjemalloc-dev
 
 ## Create Python venv: Required for Python 3.10
 RUN python3 -m venv /opt/venv/astra-sim
