@@ -149,12 +149,17 @@ def test_clean_removes_experiments_keeps_prereqs():
         assert os.path.isdir(os.path.join(root, "tracelib"))
 
 
-def _mkconfigs(root: str, npus: int = 4096) -> str:
-    """A minimal configs/network.yml for the npus_count consistency check."""
+def _mkconfigs(
+    root: str, npus: int = 4096, bw: float = 50.0, lt: float = 1000.0
+) -> str:
+    """A minimal configs/network.yml: npus_count sync + schedule-build source."""
     os.makedirs(os.path.join(root, "configs"), exist_ok=True)
     p = os.path.join(root, "configs", "network.yml")
     with open(p, "w") as f:
-        f.write(f"topology: [ FullyConnected ]\nnpus_count: [ {npus} ]\n")
+        f.write(
+            f"topology: [ FullyConnected ]\nnpus_count: [ {npus} ]\n"
+            f"bandwidth: [ {bw} ]  # GB/s\nlatency: [ {lt} ]  # ns\n"
+        )
     return p
 
 
@@ -170,6 +175,25 @@ def test_sync_network_yml_follows_cluster_json():
         assert os.path.getmtime(p) == before
 
 
+def test_build_schedules_from_yml_values():
+    with tempfile.TemporaryDirectory() as root:
+        _mkconfigs(root, bw=25.0, lt=700.0)
+        bw = os.path.join(root, "configs", "bandwidth_schedule.txt")
+        lt = os.path.join(root, "configs", "latency_schedule.txt")
+        sweep.build_schedules(root, (2, 2, 4))  # nothing prebuilt -> build
+        rows = open(bw).readlines()
+        assert rows[0] == "BW 0\n" and rows[-1] == "END\n"
+        assert len(rows) == 16 + 2 and len(rows[1].split()) == 16
+        assert set(rows[1].split()) == {"0", "25"}  # per-link bw from the yml
+        assert set(open(lt).readlines()[1].split()) == {"0", "700"}
+        before = os.path.getmtime(bw)
+        sweep.build_schedules(root, (2, 2, 4))  # matches yml + dims -> skipped
+        assert os.path.getmtime(bw) == before
+        _mkconfigs(root, bw=40.0, lt=700.0)  # yml bw changed -> rebuilt
+        sweep.build_schedules(root, (2, 2, 4))
+        assert set(open(bw).readlines()[1].split()) == {"0", "40"}
+
+
 def test_prereq_builds_tracelib_and_skips_existing_svc():
     traced, measured = [], []
     real_traces, real_svc = sweep.gen_traces.main, sweep.svc
@@ -177,13 +201,18 @@ def test_prereq_builds_tracelib_and_skips_existing_svc():
     sweep.svc = lambda root: measured.append(root)
     try:
         with tempfile.TemporaryDirectory() as root:
-            _mkroot(root)
+            # small dims: prereq (re)generates real NxN schedule matrices
+            _mkroot(root, dims=(2, 2, 2))
             net_yml = _mkconfigs(root, npus=512)
             sweep.prereq(root=root)  # no svc table yet -> measures
-            # the user's dims answer is synced into network.yml
-            assert "npus_count: [ 4096 ]" in open(net_yml).read()
+            # the user's dims answer is synced into network.yml...
+            assert "npus_count: [ 8 ]" in open(net_yml).read()
+            # ...and the BW/LT schedule matrices are built to match
+            bw = os.path.join(root, "configs", "bandwidth_schedule.txt")
+            row = open(bw).readlines()[1].split()
+            assert len(row) == 8 and set(row) == {"0", "50"}
             assert traced[0][traced[0].index("--out") + 1].endswith("tracelib")
-            assert traced[0][traced[0].index("--cluster-dims") + 1] == "16x16x16"
+            assert traced[0][traced[0].index("--cluster-dims") + 1] == "2x2x2"
             assert measured == [root]
             table = os.path.join(root, "service_times.csv")
             with open(table, "w") as f:

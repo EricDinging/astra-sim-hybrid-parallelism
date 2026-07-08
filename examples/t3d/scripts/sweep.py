@@ -29,6 +29,7 @@ import time
 
 import cluster
 import gen_arrivals
+import gen_matrices
 import gen_traces
 import launcher
 import measure_svc
@@ -113,6 +114,40 @@ def sync_network_yml(root: str, cap: int) -> None:
     raise SystemExit(f"no npus_count line in {p}")
 
 
+def _yml_scalar(path: str, key: str) -> float:
+    """The single value of a `key: [ v ]` line in network.yml."""
+    with open(path) as f:
+        for ln in f:
+            if ln.startswith(f"{key}:"):
+                return float(ln.split("[", 1)[1].split("]")[0].strip())
+    raise SystemExit(f"no {key} line in {path}")
+
+
+def build_schedules(root: str, dims: tuple[int, int, int]) -> None:
+    """(Re)build the BW/LT schedule matrices in configs/ from the cluster
+    dims and network.yml's per-link bandwidth/latency. The matrices are
+    generated artifacts, never checked in: a torus is fully determined by
+    dims plus one bw/lt value. A build is skipped only when the existing
+    file already matches both."""
+    cap = cluster.capacity(dims)
+    yml = os.path.join(root, "configs", "network.yml")
+    for tag, name, key in (
+        ("BW", "bandwidth_schedule.txt", "bandwidth"),
+        ("LT", "latency_schedule.txt", "latency"),
+    ):
+        v = _yml_scalar(yml, key)
+        value = int(v) if v == int(v) else v
+        p = os.path.join(root, "configs", name)
+        if os.path.isfile(p):
+            with open(p) as f:
+                f.readline()  # "<tag> 0" block header
+                row = f.readline().split()
+            if len(row) == cap and {float(x) for x in row} == {0.0, float(value)}:
+                continue
+        gen_matrices.write_matrix(p, tag, cap, *dims, value)
+        print(f"built {p}: {cluster.fmt(dims)} torus, per-link {tag}={value}")
+
+
 def prereq(root: str = ROOT, jobs: str | None = None) -> None:
     """Build the shared prerequisites for every experiment: the Chakra
     tracelib (idempotent/resumable -- already-built shapes are skipped) and
@@ -122,6 +157,7 @@ def prereq(root: str = ROOT, jobs: str | None = None) -> None:
     dims = cluster.load(root)
     shapes.init(dims)
     sync_network_yml(root, cluster.capacity(dims))
+    build_schedules(root, dims)
     rc = gen_traces.main(
         ["--out", os.path.join(root, "tracelib"), "--cluster-dims", cluster.fmt(dims)]
         + (["--jobs", jobs] if jobs else [])
@@ -222,7 +258,6 @@ def launch(exps: list[str], root: str = ROOT) -> None:
         cells_by_exp[exp] = cs
 
     cap = cluster.capacity(cluster.load(root))
-    sync_network_yml(root, cap)  # heal any drift before configs ship to workers
     ws = launcher.workspace(cap)
     host_slots = launcher.probe_all(
         launcher.parse_workers(os.path.join(root, "workers.txt")),
