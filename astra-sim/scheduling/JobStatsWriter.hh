@@ -41,7 +41,8 @@ class JobStatsWriter {
     // every run directory has a uniform artifact set.
     void emit_failed_nodes(const std::vector<int>& failed_npus);
 
-    // Appends one row per completed job to <output_dir>/jct.csv and flushes,
+    // Appends one row per completed job to <output_dir>/progress.csv and
+    // flushes,
     // so per-job JCTs are readable while the simulation is still running.
     // Rows are in completion order (not job_id order).
     void stream_jct_row(const JobInstance& job);

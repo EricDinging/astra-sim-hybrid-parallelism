@@ -233,8 +233,8 @@ def poll(host: str, root: str) -> dict[tuple[str, str], tuple[int, str]]:
 
 def collect_host(host: str, root: str, exp: str) -> None:
     """Pull a worker's results for one experiment back into the local
-    runs/<exp>/ combo folders (works mid-run too: jct.csv/occupancy.csv are
-    streamed). Only result files come back -- csv/summary/sim.done/run.err;
+    runs/<exp>/ combo folders (works mid-run too: progress.csv/occupancy.csv are
+    streamed). Only result files come back -- csv/sim.done/run.err;
     the verbose rotating logs (log.log*, err.log*, jct.log*, up to ~100 MB
     per combo at full trace length) stay on the worker for on-demand
     debugging, and arrivals / the shared jobs symlink dirs never move."""
@@ -248,7 +248,6 @@ def collect_host(host: str, root: str, exp: str) -> None:
         "--exclude=arrivals.csv",
         "--include=*/",
         "--include=*.csv",
-        "--include=summary.txt",
         "--include=sim.done",
         "--include=run.err",
         "--include=failed_nodes.log",

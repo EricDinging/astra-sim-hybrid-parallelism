@@ -54,11 +54,11 @@ JobStatsWriter::JobStatsWriter(std::string output_dir)
 
 void JobStatsWriter::stream_jct_row(const JobInstance& job) {
     if (!jct_out_.is_open()) {
-        std::string path = output_dir_ + "/jct.csv";
+        std::string path = output_dir_ + "/progress.csv";
         jct_out_.open(path);
         if (!jct_out_.is_open()) {
             LoggerFactory::get_logger("scheduling")
-                ->critical("cannot open jct.csv for writing: {}", path);
+                ->critical("cannot open progress.csv for writing: {}", path);
             std::exit(1);
         }
         jct_out_ << "job_id,num_ranks,shape,completed_time_ns,queue_wait_ns,"

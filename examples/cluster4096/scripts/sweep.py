@@ -289,7 +289,7 @@ def monitor(exps: list[str], hosts: list[str], root: str = ROOT) -> None:
 def collect(exp: str, root: str = ROOT) -> None:
     """Pull the experiment's results from its remote workers into the local
     combo folders (per assignments.csv) and summarize completion. Safe to run
-    mid-sweep: jct.csv/occupancy.csv are streamed, so partial results land."""
+    mid-sweep: progress.csv/occupancy.csv are streamed, so partial results land."""
     apath = os.path.join(root, "runs", exp, "assignments.csv")
     if not os.path.isfile(apath):
         raise SystemExit(f"{apath} not found -- launch first")

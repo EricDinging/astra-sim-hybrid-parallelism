@@ -47,7 +47,7 @@ For quick dev tests use short traces: `N_JOBS=20 ./reproduce.py gen <exp>`.
   experiments; a job's iteration count lives in `arrivals.csv`, not the trace.
 - `runs/<experiment>/<admission>-<placement>-load<L>/` — one flat folder per
   combo (6 placements × 20 loads, ρ = 0.05…1.00) holding its `arrivals.csv`
-  and all results: streaming `jct.csv` + `occupancy.csv`, `jobs.csv`,
+  and all results: streaming `progress.csv` + `occupancy.csv`, `jobs.csv`,
   `summary.txt`, `sim.done`.
 
 ## Experiments
@@ -84,6 +84,6 @@ the plan in `runs/<exp>/assignments.csv`. Per host it rsyncs the bundle
 (binary, exact-ABI libs, configs, scripts, assigned arrivals, tracelib —
 first sync is the slow one) to `/workspace/cluster4096` and starts a detached
 runner that works through its queue. Sims write results (including
-per-job-flushed `jct.csv` and per-event `occupancy.csv`) straight into their
+per-job-flushed `progress.csv` and per-event `occupancy.csv`) straight into their
 combo folder. Relaunch is safe: finished combos are skipped, stale twins are
 killed.

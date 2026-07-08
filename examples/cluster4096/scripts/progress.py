@@ -3,8 +3,10 @@
 
 Reads <workspace>/runs/queue.list (the runner's queue) and prints one line
 per combo: "<experiment> <combo> <completed_jobs> <rc|->", where
-completed_jobs counts the streamed jct.csv rows and rc comes from sim.done
-(- while still running). Dependency-free stdlib; runs unchanged on workers.
+completed_jobs counts the streamed progress.csv rows (falling back to the
+old jct.csv name for runs started before the rename) and rc comes from
+sim.done (- while still running). Dependency-free stdlib; runs unchanged on
+workers.
 """
 
 from __future__ import annotations
@@ -24,11 +26,14 @@ def main() -> int:
                 continue
             exp, combo = line.split()
             d = os.path.join(w, "runs", exp, combo)
-            try:
-                with open(os.path.join(d, "jct.csv")) as jf:
-                    n = max(0, sum(1 for _ in jf) - 1)
-            except OSError:
-                n = 0
+            n = 0
+            for name in ("progress.csv", "jct.csv"):
+                try:
+                    with open(os.path.join(d, name)) as jf:
+                        n = max(0, sum(1 for _ in jf) - 1)
+                    break
+                except OSError:
+                    pass
             try:
                 rc = open(os.path.join(d, "sim.done")).read().strip()
             except OSError:

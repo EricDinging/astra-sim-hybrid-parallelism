@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run one combo's simulation: run_combo.py <workspace> <experiment> <combo>.
 
-All outputs (jct.csv, occupancy.csv, jobs.csv, summary.txt, logs) land in the
+All outputs (progress.csv, occupancy.csv, jobs.csv, summary.txt, logs) land in the
 combo folder <workspace>/runs/<experiment>/<combo>/. Invoked by the per-host
 runner (xargs -P <slots>) on a remote worker (workspace =
 /workspace/cluster4096) or locally (workspace = the example dir).
