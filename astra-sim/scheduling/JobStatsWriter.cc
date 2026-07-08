@@ -52,6 +52,43 @@ Tick percentile(std::vector<Tick> v, double p) {
 JobStatsWriter::JobStatsWriter(std::string output_dir)
     : output_dir_(std::move(output_dir)) {}
 
+void JobStatsWriter::stream_jct_row(const JobInstance& job) {
+    if (!jct_out_.is_open()) {
+        std::string path = output_dir_ + "/jct.csv";
+        jct_out_.open(path);
+        if (!jct_out_.is_open()) {
+            LoggerFactory::get_logger("scheduling")
+                ->critical("cannot open jct.csv for writing: {}", path);
+            std::exit(1);
+        }
+        jct_out_ << "job_id,num_ranks,shape,completed_time_ns,queue_wait_ns,"
+                    "jct_ns\n";
+    }
+    jct_out_ << job.job_id << "," << job.num_ranks << ","
+             << shape_str(job.shape) << "," << *job.completed_time << ","
+             << (job.execution_time.value() - job.arrival_time) << ","
+             << (job.completed_time.value() - job.arrival_time) << "\n"
+             << std::flush;
+}
+
+void JobStatsWriter::stream_occupancy_row(Tick tick,
+                                          int busy_npus,
+                                          int total_npus) {
+    if (!occ_out_.is_open()) {
+        std::string path = output_dir_ + "/occupancy.csv";
+        occ_out_.open(path);
+        if (!occ_out_.is_open()) {
+            LoggerFactory::get_logger("scheduling")
+                ->critical("cannot open occupancy.csv for writing: {}", path);
+            std::exit(1);
+        }
+        occ_out_ << "tick_ns,busy_npus,util_frac\n";
+    }
+    occ_out_ << tick << "," << busy_npus << ","
+             << (static_cast<double>(busy_npus) / total_npus) << "\n"
+             << std::flush;
+}
+
 void JobStatsWriter::emit_jobs_csv(const JobRegistry& registry) {
     std::string path = output_dir_ + "/jobs.csv";
     std::ofstream out(path);

@@ -6,12 +6,16 @@ LICENSE file in the root directory of this source tree.
 #ifndef __ASTRASIM_SCHEDULING_JOBSTATSWRITER_HH__
 #define __ASTRASIM_SCHEDULING_JOBSTATSWRITER_HH__
 
+#include "astra-sim/common/Common.hh"
+
+#include <fstream>
 #include <string>
 #include <vector>
 
 namespace AstraSim {
 namespace Scheduling {
 
+class JobInstance;
 class JobRegistry;
 
 class JobStatsWriter {
@@ -37,8 +41,20 @@ class JobStatsWriter {
     // every run directory has a uniform artifact set.
     void emit_failed_nodes(const std::vector<int>& failed_npus);
 
+    // Appends one row per completed job to <output_dir>/jct.csv and flushes,
+    // so per-job JCTs are readable while the simulation is still running.
+    // Rows are in completion order (not job_id order).
+    void stream_jct_row(const JobInstance& job);
+
+    // Appends the post-change cluster occupancy to <output_dir>/occupancy.csv
+    // and flushes: one row per placement/completion event. Several events can
+    // share a tick; the last row at a tick is the settled occupancy.
+    void stream_occupancy_row(Tick tick, int busy_npus, int total_npus);
+
   private:
     std::string output_dir_;
+    std::ofstream jct_out_;  // lazily opened by stream_jct_row
+    std::ofstream occ_out_;  // lazily opened by stream_occupancy_row
 };
 
 }  // namespace Scheduling

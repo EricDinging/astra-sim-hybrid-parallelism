@@ -178,6 +178,9 @@ void SchedRuntime::place_job(JobInstance* job, const std::vector<int>& npus) {
 
     logger->info("job {} PLACED on {} npus at tick {}", job->job_id,
                  job->num_ranks, static_cast<uint64_t>(*job->execution_time));
+    writer_->stream_occupancy_row(*job->execution_time,
+                                  static_cast<int>(busy_npus_.size()),
+                                  static_cast<int>(all_sys_.size()));
 }
 
 void SchedRuntime::post_detach(JobInstance* job) {
@@ -199,6 +202,10 @@ void SchedRuntime::detach_job(JobInstance* job) {
     logger->info("job {} COMPLETED at tick {} (jct={} ns)", job->job_id,
                  static_cast<uint64_t>(*job->completed_time),
                  static_cast<uint64_t>(job->jct()));
+    writer_->stream_jct_row(*job);
+    writer_->stream_occupancy_row(*job->completed_time,
+                                  static_cast<int>(busy_npus_.size()),
+                                  static_cast<int>(all_sys_.size()));
 
     // Release this job's per-rank Workloads now that it has finished. Each
     // Workload owns an ETFeeder (full-size node index_map + an open trace fd),
