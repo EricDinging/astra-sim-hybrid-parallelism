@@ -20,7 +20,7 @@ def _touch_trace(traces, model, shape):
     open(os.path.join(sd, "chakra_trace.0.et"), "w").close()
 
 
-def test_write_single_job_dir_4col_and_symlink():
+def test_write_single_job_dir_5col_and_symlink():
     with tempfile.TemporaryDirectory() as d:
         traces = os.path.join(d, "lib")
         _touch_trace(traces, "bw", (2, 2, 2))
@@ -30,8 +30,14 @@ def test_write_single_job_dir_4col_and_symlink():
         assert size == 8
         with open(os.path.join(work, "arrivals.csv"), newline="") as f:
             rows = list(csv.reader(f))
-        assert rows[0] == ["job_id", "arrival_time_ns", "num_ranks", "shape"]
-        assert rows[1] == ["0", "0", "8", "2x2x2"]
+        assert rows[0] == [
+            "job_id",
+            "arrival_time_ns",
+            "num_ranks",
+            "shape",
+            "num_iterations",
+        ]
+        assert rows[1] == ["0", "0", "8", "2x2x2", "1"]
         link = os.path.join(work, "jobs", "0")
         assert os.path.islink(link)
         assert os.path.basename(os.path.realpath(link)) == "2x2x2"

@@ -19,6 +19,7 @@ import argparse
 import concurrent.futures
 import csv
 import os
+import resource
 import shutil
 import subprocess
 import tempfile
@@ -63,8 +64,12 @@ def write_single_job_dir(
     size = shape[0] * shape[1] * shape[2]
     with open(os.path.join(work_dir, "arrivals.csv"), "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["job_id", "arrival_time_ns", "num_ranks", "shape"])
-        w.writerow([0, 0, size, shapes.fmt_shape(shape)])
+        # num_iterations=1: the binary replays each job's trace num_iterations
+        # times, so a single iteration yields svc_per_iter directly.
+        w.writerow(
+            ["job_id", "arrival_time_ns", "num_ranks", "shape", "num_iterations"]
+        )
+        w.writerow([0, 0, size, shapes.fmt_shape(shape), 1])
     jobs_dir = os.path.join(work_dir, "jobs")
     os.makedirs(jobs_dir, exist_ok=True)
     link = os.path.join(jobs_dir, "0")
@@ -112,7 +117,9 @@ def run_one(
         except subprocess.TimeoutExpired:
             return (shape, size, None, f"sim timeout after {SIM_TIMEOUT_S}s")
         if r.returncode != 0:
-            return (shape, size, None, f"sim failed: {r.stderr.strip()[-200:]}")
+            # the binary logs fatal errors to stdout (spdlog), not stderr
+            err = (r.stderr.strip() or r.stdout.strip())[-200:]
+            return (shape, size, None, f"sim failed: {err}")
         jobs_csv = os.path.join(out, "jobs.csv")
         if not os.path.isfile(jobs_csv):
             return (shape, size, None, "no jobs.csv produced")
@@ -154,6 +161,15 @@ def main(argv: list[str] | None = None) -> int:
         "--only", default=None, help="comma-separated shapes to restrict to"
     )
     args = ap.parse_args(argv)
+
+    # Each sim opens one .et per rank, so the biggest shape (4096 ranks) blows
+    # through the usual 1024 soft fd cap. Raise it for us and the child sims.
+    need = 4096 + 256
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft < need:
+        if hard < need:
+            ap.error(f"open-files hard limit {hard} < {need}; raise ulimit -Hn")
+        resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
     only = args.only.split(",") if args.only else None
     todo = legal_shapes_with_traces(args.model, args.traces, only)

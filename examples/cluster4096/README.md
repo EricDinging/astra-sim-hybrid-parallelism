@@ -2,13 +2,18 @@
 
 Sweep scripts, configs, and results for the **4096-node cluster** experiments —
 a 16×16×16 3-D torus. Everything is driven from a single top-level
-`reproduce.sh` that dispatches to helpers in `scripts/`; re-running a phase
+`reproduce.py` that dispatches to helpers in `scripts/`; re-running a phase
 reproduces that artifact deterministically.
 
 ## Layout
 
-- `reproduce.sh` — top-level driver. Run a phase, e.g. `./reproduce.sh traces`.
-- `scripts/` — helper libraries called by `reproduce.sh`:
+- `reproduce.py` — top-level driver. Run it bare for an interactive experiment
+  picker (option 0 = cleanup all results), or run a phase:
+  `./reproduce.py prereq`, `./reproduce.py gen <experiment|all>`,
+  `./reproduce.py clean` (later: `launch`, `collect`, `post`).
+- `scripts/` — helper libraries called by `reproduce.py`:
+  - `sweep.py` — the experiment table (6 load-sweep experiments) and one
+    function per harness phase.
   - `shapes.py` — the authority on legal job shapes (pure, importable).
   - `gen_traces.py` — builds the Chakra trace library via stage.
   - `measure_svc.py` — measures the isolated single-iteration service time of
@@ -19,10 +24,21 @@ reproduces that artifact deterministically.
   consumed by the binary.
 - `tests/` — self-running unit tests for the `scripts/` helpers. Run any one
   directly, e.g. `python3 tests/test_shapes.py` (no pytest required).
-- `tracelib/` — generated Chakra traces (gitignored; never committed).
+- `tracelib/` — generated Chakra traces (gitignored; never committed). Shared
+  by every experiment: one trace per legal shape; a job's iteration count
+  lives in its experiment's `arrivals.csv`, not in the trace.
+- `runs/<experiment>/` — per-experiment sweep data (gitignored), one flattened
+  folder per combo, `<admission>-<placement>-load<L>/` (6 placements ×
+  20 loads, ρ = 0.05…1.00 step 0.05). `gen` puts each combo's
+  `arrivals.csv` + `trace_config.txt` (n=100000, seed=0) directly in its
+  folder; later phases drop the result csv files next to them.
 
-Later phases (calibration wiring, sweep run, analysis) will be added as
-additional helpers and `reproduce.sh` phases.
+The workflow is `prereq` → `gen` → (`launch` → `collect` → `post`).
+`./reproduce.py clean` removes everything under `runs/<experiment>/` but keeps
+the prerequisites (`tracelib/`, `service_times.csv`) — they are
+experiment-independent and expensive to rebuild. Later phases (`launch`,
+`collect`, `post`) will be added as additional functions in
+`scripts/sweep.py`.
 
 ## Prerequisites
 
@@ -42,10 +58,26 @@ DOCKER_BUILDKIT=1 docker build -t astra:latest .
 Override the docker command (e.g. rootless) and image via environment:
 `DOCKER="docker"` and `STAGE_IMAGE=my-astra:tag`.
 
+## Prerequisite step: `./reproduce.py prereq`
+
+Before generating or running any experiment, build the two shared,
+experiment-independent prerequisites with one command:
+
+```bash
+./reproduce.py prereq
+```
+
+It (1) builds the Chakra trace library under `tracelib/` (idempotent /
+resumable — already-built shapes are skipped) and (2) measures each shape's
+isolated service time into `service_times.csv` (skipped when the file exists;
+delete it to force a re-measure — it needs the built reconfigurable binary,
+see below). `./reproduce.py clean` never touches either. The two sub-steps
+are described next.
+
 ## Trace generation
 
-`./reproduce.sh traces` builds one Chakra execution trace per **legal job
-shape** for the bandwidth-bound model, under `tracelib/bw/<AxBxC>/`. A shape is
+The tracelib half of `prereq` builds one Chakra execution trace per **legal
+job shape** for the bandwidth-bound model, under `tracelib/bw/<AxBxC>/`. A shape is
 an ordered `A×B×C` where each dimension is independently **1 or an even integer
 ≤ 16** and `A·B·C ≤ 4096` (the torus capacity) — **729** shapes in total. Inside
 each shape folder are the per-rank `chakra_trace.<rank>.et` files (one per rank,
@@ -60,7 +92,7 @@ Useful flags (call the helper directly):
 
 ```bash
 # Build everything (≈729 shapes — large; tens of GB of .et files):
-./reproduce.sh traces
+./reproduce.py prereq
 
 # Plumbing test: build just 2x2x2 and verify the .et appears:
 python3 scripts/gen_traces.py --smoke
@@ -83,6 +115,8 @@ target offered load.
 
 ### Step 1 — measure service times → `service_times.csv`
 
+The service-time half of `./reproduce.py prereq` (a wrapper over
+`measure_svc.py` with the default paths below) generates the table.
 `measure_svc.py` runs every shape's trace **alone** on the idle 16³ torus and
 records its single-iteration JCT as that shape's `svc_per_iter_ns`. This needs
 the built reconfigurable binary

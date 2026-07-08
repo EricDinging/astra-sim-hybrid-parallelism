@@ -134,6 +134,27 @@ def test_build_job_sequence_deterministic():
     assert a == b
 
 
+def test_build_job_sequence_uniform_size_dist():
+    pareto = gen_arrivals.build_job_sequence(random.Random(7), 500, "bw", 0.5)
+    uniform = gen_arrivals.build_job_sequence(
+        random.Random(7), 500, "bw", 0.5, size_dist="uniform"
+    )
+    for size, shape, _iters in uniform:
+        assert shapes.is_legal("bw", *shape)
+        assert shape[0] * shape[1] * shape[2] == size
+    # Uniform-over-index puts far more mass on large sizes than Pareto a=0.5.
+    mean = lambda js: sum(s for s, _, _ in js) / len(js)  # noqa: E731
+    assert mean(uniform) > 2 * mean(pareto)
+
+
+def test_build_job_sequence_dims_restriction():
+    jobs = gen_arrivals.build_job_sequence(
+        random.Random(7), 200, "bw", 0.5, dims=frozenset({1, 4, 8})
+    )
+    for _size, shape, _iters in jobs:
+        assert all(d in (1, 4, 8) for d in shape)
+
+
 def test_load_service_times_roundtrip():
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "svc.csv")

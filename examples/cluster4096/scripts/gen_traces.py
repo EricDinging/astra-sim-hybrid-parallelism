@@ -46,7 +46,7 @@ run_one() {
     od="/work/${MODEL}/${a}x${b}x${c}"
     mkdir -p "$od"
     python3 main.py --output_dir "$od" --output_name chakra_trace \
-        --dp "$a" --tp "$b" --pp "$c" ${BW_PARAMS} > "$od/gen.log" 2>&1
+        --dp "$a" --tp "$b" --pp "$c" ${BW_PARAMS} > /dev/null
     # stage names the communicator-group file after --output_name
     # ("chakra_trace.json"); the simulator loads it per job as "comm_group.json".
     # Rename so the trace dir is directly consumable. Fail loudly (set -e) if

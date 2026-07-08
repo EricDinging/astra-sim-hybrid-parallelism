@@ -71,21 +71,48 @@ import shapes
 CAPACITY: int = 4096  # 16 * 16 * 16 torus capacity
 
 
+def legal_shapes(
+    model: str,
+    size_min: int | None = None,
+    size_max: int | None = None,
+    dims: frozenset[int] | None = None,
+) -> list[tuple[int, int, int]]:
+    """Legal shapes for the model, in all_legal_shapes order (sorted by
+    (size, shape)), optionally restricted to shapes whose size is in
+    [size_min, size_max] and whose every dimension is in `dims`.
+
+    `dims` models trace-characteristic experiments that carve a sub-lattice out
+    of the geometric legal set (e.g. dims={1,4,8} = block-aligned shapes). It
+    never adds shapes outside the tracelib, so the existing trace library is
+    reused verbatim."""
+    out: list[tuple[int, int, int]] = []
+    for s in shapes.all_legal_shapes(model):
+        if dims is not None and not all(d in dims for d in s):
+            continue
+        size = s[0] * s[1] * s[2]
+        if size_min is not None and size < size_min:
+            continue
+        if size_max is not None and size > size_max:
+            continue
+        out.append(s)
+    if not out:
+        raise ValueError(
+            "no legal shapes in the requested [size_min, size_max]/dims range"
+        )
+    return out
+
+
 def legal_sizes(
     model: str,
     size_min: int | None = None,
     size_max: int | None = None,
+    dims: frozenset[int] | None = None,
 ) -> list[int]:
     """Distinct legal job sizes (rank counts), sorted ascending, optionally
-    trimmed to [size_min, size_max]."""
-    sizes = sorted({a * b * c for (a, b, c) in shapes.all_legal_shapes(model)})
-    if size_min is not None:
-        sizes = [s for s in sizes if s >= size_min]
-    if size_max is not None:
-        sizes = [s for s in sizes if s <= size_max]
-    if not sizes:
-        raise ValueError("no legal sizes in the requested [size_min, size_max] range")
-    return sizes
+    trimmed to [size_min, size_max] and restricted to shapes over `dims`."""
+    return sorted(
+        {a * b * c for (a, b, c) in legal_shapes(model, size_min, size_max, dims)}
+    )
 
 
 def sample_size_index(rng: random.Random, m: int, alpha: float) -> int:
@@ -146,17 +173,34 @@ def build_job_sequence(
     max_iters: int = 20,
     iter_median: float = 1.3,
     iter_sigma: float = 1.2,
+    size_dist: str = "pareto",
+    dims: frozenset[int] | None = None,
 ) -> list[tuple[int, tuple[int, int, int], int]]:
-    """Draw n jobs as (size, shape, num_iterations). Size ~ truncated Pareto
-    over the sorted size index; shape ~ uniform among shapes of that size;
-    duration ~ clamped log-normal over [1, max_iters] (sample_duration, params
-    iter_median / iter_sigma)."""
-    sizes = legal_sizes(model, size_min, size_max)
+    """Draw n jobs as (size, shape, num_iterations).
+
+    Size is drawn over the sorted DISTINCT-SIZE INDEX: `size_dist="pareto"`
+    (truncated Pareto, small-size-favoring, exponent alpha) or "uniform" (each
+    distinct legal size equally likely). Shape ~ uniform among the legal shapes
+    of that size (restricted to `dims` when given). Duration ~ clamped log-normal
+    over [1, max_iters] (sample_duration, params iter_median / iter_sigma).
+
+    Both index draws consume exactly one rng call, and shapes-of-size are taken
+    in all_legal_shapes order, so the default (pareto, dims=None) path is
+    byte-identical to the original two-line sampler."""
+    allowed = legal_shapes(model, size_min, size_max, dims)
+    sizes = sorted({a * b * c for (a, b, c) in allowed})
     m = len(sizes)
+    by_size: dict[int, list[tuple[int, int, int]]] = {}
+    for s in allowed:
+        by_size.setdefault(s[0] * s[1] * s[2], []).append(s)
     jobs: list[tuple[int, tuple[int, int, int], int]] = []
     for _ in range(n):
-        size = sizes[sample_size_index(rng, m, alpha)]
-        shape = rng.choice(shapes.shapes_for_size(model, size))
+        if size_dist == "uniform":
+            idx = rng.randrange(m)
+        else:
+            idx = sample_size_index(rng, m, alpha)
+        size = sizes[idx]
+        shape = rng.choice(by_size[size])
         jobs.append(
             (size, shape, sample_duration(rng, max_iters, iter_median, iter_sigma))
         )
@@ -283,6 +327,18 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--alpha", type=float, default=0.5, help="size-Pareto exponent")
     ap.add_argument(
+        "--size-dist",
+        choices=("pareto", "uniform"),
+        default="pareto",
+        help="size distribution over the distinct-size index (uniform ignores --alpha)",
+    )
+    ap.add_argument(
+        "--dims",
+        default=None,
+        help="restrict shapes to those whose every dimension is in this comma "
+        "list, e.g. '1,4,8' for block-aligned shapes (default: all legal dims)",
+    )
+    ap.add_argument(
         "--max-iters",
         type=int,
         default=20,
@@ -311,6 +367,8 @@ def main(argv: list[str] | None = None) -> int:
     if (args.svc is None) == (args.uniform_svc_ns is None):
         ap.error("exactly one of --svc or --uniform-svc-ns is required")
 
+    dims = frozenset(int(x) for x in args.dims.split(",")) if args.dims else None
+
     rng = random.Random(args.seed)
     jobs = build_job_sequence(
         rng,
@@ -322,6 +380,8 @@ def main(argv: list[str] | None = None) -> int:
         args.max_iters,
         args.iter_median,
         args.iter_sigma,
+        args.size_dist,
+        dims,
     )
     svc_table = load_service_times(args.svc) if args.svc else None
     svc_of = make_svc_fn(svc_table, args.uniform_svc_ns)

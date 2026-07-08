@@ -1,5 +1,5 @@
 # Generated trace library (per-rank Chakra ET files + stage metadata). Never
-# committed -- regenerate with ./reproduce.sh traces.
+# committed -- regenerate with ./reproduce.py prereq.
 /tracelib/
 *.et
 
@@ -13,3 +13,6 @@
 __pycache__/
 *.pyc
 .ruff_cache/
+
+# Simulation worker servers.
+workers.txt
