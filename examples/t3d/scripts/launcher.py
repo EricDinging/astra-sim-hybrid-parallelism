@@ -208,10 +208,14 @@ def start_runner(
     disconnect (setsid); a rerun replaces any previous runner."""
     w = root if host == LOCAL else ws
     queue = "\n".join(f"{exp} {combo}" for exp, combo in cells) + "\n"
+    # The & must background ONE fully-redirected command: with
+    # "cd {w} && setsid ... &" the & grabs the whole && list, and that
+    # backgrounded subshell keeps sshd's stdout/stderr pipes open while it
+    # waits for the runner -- ssh then blocks until TimeoutExpired.
     runner = (
-        f"cd {w} && setsid bash -c "
-        f"'xargs -P {slots} -L1 python3 scripts/run_combo.py {w} < runs/queue.list' "
-        f"</dev/null >runs/runner.log 2>&1 &"
+        f"setsid bash -c 'cd {w} && exec xargs -P {slots} -L1 "
+        f"python3 scripts/run_combo.py {w} < runs/queue.list' "
+        f"</dev/null >{w}/runs/runner.log 2>&1 &"
     )
     if host == LOCAL:
         with open(os.path.join(w, "runs", "queue.list"), "w") as f:

@@ -11,8 +11,10 @@ Usage:
                                   stage) + measured service_times.csv (both skipped
                                   if present)
   ./reproduce.py gen [exp|all]    arrival-trace generation for one experiment (or all)
-  ./reproduce.py launch [exp|all]     (not implemented yet)
-  ./reproduce.py collect [exp|all]    (not implemented yet)
+  ./reproduce.py launch [exp|all]     deploy to workers, start runners, monitor
+  ./reproduce.py monitor [exp|all]    re-attach to a running sweep's progress
+                                  (blocks, polls hourly; POLL_SECS overrides)
+  ./reproduce.py collect [exp|all]    pull results back from the workers
   ./reproduce.py post [exp|all]       (not implemented yet)
   ./reproduce.py clean            remove all results (runs/<exp>; prerequisites are kept)
 
@@ -47,7 +49,7 @@ def raise_fd_limit() -> None:
         resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
 
-PHASES = ["prereq", "gen", "launch", "collect", "post", "clean"]
+PHASES = ["prereq", "gen", "launch", "monitor", "collect", "post", "clean"]
 CLEANUP = "cleanup all results"
 
 
@@ -125,6 +127,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.phase == "launch":
         # experiments are planned jointly so a host never oversubscribes
         sweep.launch(exps if choice == "all" else [choice])
+        return 0
+    if args.phase == "monitor":
+        sweep.monitor(
+            exps if choice == "all" else [choice],
+            sweep.launcher.parse_workers(os.path.join(sweep.ROOT, "workers.txt")),
+        )
         return 0
 
     phase_fn = {
