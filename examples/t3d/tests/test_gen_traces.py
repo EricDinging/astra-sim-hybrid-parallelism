@@ -9,6 +9,9 @@ sys.path.insert(
 )
 
 import gen_traces  # noqa: E402
+import shapes  # noqa: E402
+
+shapes.init((16, 16, 16))
 
 
 def _touch(path):

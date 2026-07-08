@@ -1,4 +1,4 @@
-"""Sweep harness for the cluster4096 load-sweep experiments.
+"""Sweep harness for the t3d load-sweep experiments.
 
 One module per concern is overkill here; this file holds the experiment
 table plus one function per phase, called from ../reproduce.py:
@@ -27,6 +27,7 @@ import shutil
 import tempfile
 import time
 
+import cluster
 import gen_arrivals
 import gen_traces
 import launcher
@@ -34,7 +35,7 @@ import measure_svc
 import shapes
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.dirname(HERE)  # examples/cluster4096
+ROOT = os.path.dirname(HERE)  # examples/t3d
 REPO = os.path.dirname(os.path.dirname(ROOT))
 ASTRA_SIM_BIN = os.path.join(
     REPO,
@@ -53,20 +54,31 @@ SEED = 0
 LOADS = [f"{i / 100:.2f}" for i in range(5, 101, 5)]  # 0.05 .. 1.00, step 0.05
 PLACEMENTS = ["firstfit", "rfold", "sfc", "l1clustering", "topomatch", "random"]
 
-# experiment -> gen_arrivals trace-characteristic flags. The admission policy
-# is the experiment-name prefix (easy/swf/fifo); it only matters at launch
-# time, so the three *-pareto2048-* experiments generate identical
-# (seed-pinned) arrivals.
-EXPERIMENTS: dict[str, list[str]] = {
-    "easy-pareto2048-load-sweep": ["--alpha", "0.5", "--size-max", "2048"],
-    "easy-pareto1024-load-sweep": ["--alpha", "0.5", "--size-max", "1024"],
-    "easy-pareto512-load-sweep": ["--alpha", "0.5", "--size-max", "512"],
-    "easy-uniform2048-load-sweep": ["--size-dist", "uniform", "--size-max", "2048"],
-    "swf-pareto2048-load-sweep": ["--alpha", "0.5", "--size-max", "2048"],
-    "fifo-pareto2048-load-sweep": ["--alpha", "0.5", "--size-max", "2048"],
-    "swf-pareto512-load-sweep": ["--alpha", "0.5", "--size-max", "512"],
-    "fifo-pareto512-load-sweep": ["--alpha", "0.5", "--size-max", "512"],
-}
+
+def experiments(root: str = ROOT) -> dict[str, list[str]]:
+    """experiment -> gen_arrivals trace-characteristic flags, derived from
+    the cluster capacity (cluster.json): pareto sweeps with max job size at
+    half and quarter capacity for each admission policy, plus a uniform-size
+    variant at quarter. The admission policy is the experiment-name prefix
+    (easy/swf/fifo); it only matters at launch time, so the three
+    *-pareto<half>-* experiments generate identical (seed-pinned) arrivals."""
+    cap = cluster.capacity(cluster.load(root))
+    half, quarter = str(cap // 2), str(cap // 4)
+    pareto = ["--alpha", "0.5", "--size-max"]
+    return {
+        f"easy-pareto{half}-load-sweep": [*pareto, half],
+        f"easy-pareto{quarter}-load-sweep": [*pareto, quarter],
+        f"easy-uniform{quarter}-load-sweep": [
+            "--size-dist",
+            "uniform",
+            "--size-max",
+            quarter,
+        ],
+        f"swf-pareto{half}-load-sweep": [*pareto, half],
+        f"fifo-pareto{half}-load-sweep": [*pareto, half],
+        f"swf-pareto{quarter}-load-sweep": [*pareto, quarter],
+        f"fifo-pareto{quarter}-load-sweep": [*pareto, quarter],
+    }
 
 
 def combos(exp: str) -> list[tuple[str, str]]:
@@ -80,13 +92,39 @@ def combos(exp: str) -> list[tuple[str, str]]:
     ]
 
 
+def sync_network_yml(root: str, cap: int) -> None:
+    """Keep configs/network.yml's npus_count in lockstep with cluster.json
+    (the user's prereq answer is the source of truth) -- the binary reads the
+    topology size from the yml, so the two must never drift."""
+    p = os.path.join(root, "configs", "network.yml")
+    if not os.path.isfile(p):
+        raise SystemExit(f"{p} not found -- broken example checkout?")
+    with open(p) as f:
+        lines = f.readlines()
+    for i, ln in enumerate(lines):
+        if ln.startswith("npus_count:"):
+            new = f"npus_count: [ {cap} ]\n"
+            if ln != new:
+                lines[i] = new
+                with open(p, "w") as f:
+                    f.writelines(lines)
+                print(f"updated {p}: npus_count -> {cap}")
+            return
+    raise SystemExit(f"no npus_count line in {p}")
+
+
 def prereq(root: str = ROOT, jobs: str | None = None) -> None:
     """Build the shared prerequisites for every experiment: the Chakra
     tracelib (idempotent/resumable -- already-built shapes are skipped) and
     the measured service_times.csv (skipped when present; delete it to force
-    a re-measure). Neither is touched by clean()."""
+    a re-measure). Neither is touched by clean(). Requires cluster.json
+    (./reproduce.py prereq prompts for it)."""
+    dims = cluster.load(root)
+    shapes.init(dims)
+    sync_network_yml(root, cluster.capacity(dims))
     rc = gen_traces.main(
-        ["--out", os.path.join(root, "tracelib")] + (["--jobs", jobs] if jobs else [])
+        ["--out", os.path.join(root, "tracelib"), "--cluster-dims", cluster.fmt(dims)]
+        + (["--jobs", jobs] if jobs else [])
     )
     if rc:
         raise SystemExit(rc)
@@ -118,6 +156,8 @@ def svc(root: str = ROOT) -> None:
             ASTRA_SIM_BIN,
             "--out",
             os.path.join(root, "service_times.csv"),
+            "--cluster-dims",
+            cluster.fmt(cluster.load(root)),
         ]
     )
     if rc:
@@ -134,7 +174,8 @@ def gen(exp: str, root: str = ROOT) -> None:
         raise SystemExit(
             f"{svc_table} not found -- generate it with ./reproduce.py prereq"
         )
-    flags = EXPERIMENTS[exp]
+    dims_flag = ["--cluster-dims", cluster.fmt(cluster.load(root))]
+    flags = experiments(root)[exp]
     for combo, load in combos(exp):
         out = os.path.join(root, "runs", exp, combo)
         if os.path.isfile(os.path.join(out, "arrivals.csv")):
@@ -152,6 +193,7 @@ def gen(exp: str, root: str = ROOT) -> None:
                 str(SEED),
                 "--svc",
                 svc_table,
+                *dims_flag,
                 *flags,
                 "--out",
                 out,
@@ -179,8 +221,12 @@ def launch(exps: list[str], root: str = ROOT) -> None:
                 )
         cells_by_exp[exp] = cs
 
+    cap = cluster.capacity(cluster.load(root))
+    sync_network_yml(root, cap)  # heal any drift before configs ship to workers
+    ws = launcher.workspace(cap)
     host_slots = launcher.probe_all(
-        launcher.parse_workers(os.path.join(root, "workers.txt"))
+        launcher.parse_workers(os.path.join(root, "workers.txt")),
+        launcher.mem_per_run_gb(cap),
     )
     if launcher.LOCAL not in host_slots and not os.path.isfile(ASTRA_SIM_BIN):
         raise SystemExit(f"binary not found: {ASTRA_SIM_BIN} (run build.sh first)")
@@ -203,7 +249,7 @@ def launch(exps: list[str], root: str = ROOT) -> None:
             os.path.join(root, "runs", exp, "assignments.csv"), per_exp[exp]
         )
 
-    stage = tempfile.mkdtemp(prefix="cluster4096_deploy_")
+    stage = tempfile.mkdtemp(prefix=f"cluster{cap}_deploy_")
 
     def deploy_and_start(host: str) -> None:
         cells = per_host[host]
@@ -214,9 +260,10 @@ def launch(exps: list[str], root: str = ROOT) -> None:
             ASTRA_SIM_BIN,
             stage,
             [f"runs/{e}/{c}/arrivals.csv" for e, c, _ in cells],
+            ws,
         )
         launcher.start_runner(
-            host, root, [(e, c) for e, c, _ in cells], host_slots[host]
+            host, root, [(e, c) for e, c, _ in cells], host_slots[host], ws
         )
 
     with concurrent.futures.ThreadPoolExecutor(len(host_slots)) as ex:
@@ -270,10 +317,11 @@ def _trace_len(exp: str, root: str) -> int:
 def monitor(exps: list[str], hosts: list[str], root: str = ROOT) -> None:
     """Block until every launched combo has a sim.done, polling all workers
     every POLL_SECS and printing per-experiment progress tables."""
+    ws = launcher.workspace(cluster.capacity(cluster.load(root)))
     while True:
         cells: dict[tuple[str, str], tuple[int, str]] = {}
         with concurrent.futures.ThreadPoolExecutor(max(1, len(hosts))) as ex:
-            for snap in ex.map(lambda h: launcher.poll(h, root), hosts):
+            for snap in ex.map(lambda h: launcher.poll(h, root, ws), hosts):
                 cells.update(snap)
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"\n=== progress @ {now} ===")
@@ -296,9 +344,12 @@ def collect(exp: str, root: str = ROOT) -> None:
     if not os.path.isfile(apath):
         raise SystemExit(f"{apath} not found -- launch first")
     rows = launcher.read_assignments(apath)
+    ws = launcher.workspace(cluster.capacity(cluster.load(root)))
     remote_hosts = sorted({h for _, _, h in rows if h != launcher.LOCAL})
     with concurrent.futures.ThreadPoolExecutor(max(1, len(remote_hosts))) as ex:
-        for _ in ex.map(lambda h: launcher.collect_host(h, root, exp), remote_hosts):
+        for _ in ex.map(
+            lambda h: launcher.collect_host(h, root, exp, ws), remote_hosts
+        ):
             pass
 
     done = failed = running = 0
@@ -327,7 +378,7 @@ def clean(root: str = ROOT) -> None:
     """Remove all results: every experiment's runs/<exp> folder. The
     prerequisites (tracelib, service_times.csv) are kept -- they are
     experiment-independent and expensive to rebuild."""
-    for exp in EXPERIMENTS:
+    for exp in experiments(root):
         d = os.path.join(root, "runs", exp)
         if os.path.isdir(d):
             shutil.rmtree(d)

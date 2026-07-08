@@ -1,4 +1,4 @@
-"""stage-in-docker trace driver for cluster4096.
+"""stage-in-docker trace driver for t3d.
 
 Runs stage inside the ``astra:latest`` Docker image to produce Chakra
 execution traces for every requested job shape.
@@ -21,6 +21,7 @@ import os
 import shlex
 import subprocess
 
+import cluster
 import shapes
 
 # ---------------------------------------------------------------------------
@@ -199,7 +200,7 @@ def main(argv: list[str] | None = None) -> int:
     import argparse
 
     ap = argparse.ArgumentParser(
-        description="Build Chakra traces for cluster4096 job shapes via stage-in-docker."
+        description="Build Chakra traces for t3d job shapes via stage-in-docker."
     )
     ap.add_argument(
         "--out", default=default_out(), help="output root (default: tracelib/)"
@@ -222,8 +223,18 @@ def main(argv: list[str] | None = None) -> int:
         default=os.environ.get("DOCKER", "sudo docker"),
         help="Docker command (default: 'sudo docker' or $DOCKER)",
     )
+    ap.add_argument(
+        "--cluster-dims",
+        default=None,
+        help="torus dims AxBxC (default: cluster.json in the example root)",
+    )
     args = ap.parse_args(argv)
 
+    shapes.init(
+        cluster.parse_dims(args.cluster_dims)
+        if args.cluster_dims
+        else cluster.load(cluster.default_root())
+    )
     docker_argv = shlex.split(args.docker)
     out_dir = os.path.abspath(args.out)
     requested = select_shapes(args.model, args.only, args.smoke)

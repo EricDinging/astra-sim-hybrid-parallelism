@@ -11,9 +11,15 @@ sys.path.insert(
     ),
 )
 
+import cluster
 import gen_arrivals
 import shapes
 import sweep
+
+
+def _mkroot(d: str, dims: tuple[int, int, int] = (16, 16, 16)) -> str:
+    cluster.save(d, dims)
+    return d
 
 
 def test_loads_grid():
@@ -23,27 +29,49 @@ def test_loads_grid():
 
 
 def test_experiment_table():
-    assert len(sweep.EXPERIMENTS) == 8
-    for exp, flags in sweep.EXPERIMENTS.items():
-        assert exp.endswith("-load-sweep")
-        # the size embedded in the name matches the --size-max flag
-        dist = exp.split("-")[1]  # e.g. "pareto2048" / "uniform2048"
-        size = dist.removeprefix("pareto").removeprefix("uniform")
-        assert flags[flags.index("--size-max") + 1] == size
-        # max job size is scaled to half the 4096-node cluster
-        assert int(size) <= 2048
-        # pareto experiments pin alpha=0.5; the uniform one has no alpha
-        if "uniform" in exp:
-            assert "--size-dist" in flags
-        else:
-            assert flags[flags.index("--alpha") + 1] == "0.5"
+    with tempfile.TemporaryDirectory() as root:
+        exps = sweep.experiments(_mkroot(root))
+        assert len(exps) == 7
+        for exp, flags in exps.items():
+            assert exp.endswith("-load-sweep")
+            # the size embedded in the name matches the --size-max flag
+            dist = exp.split("-")[1]  # e.g. "pareto2048" / "uniform2048"
+            size = dist.removeprefix("pareto").removeprefix("uniform")
+            assert flags[flags.index("--size-max") + 1] == size
+            # max job size tiers are half and quarter of the 4096 capacity
+            assert int(size) in (2048, 1024)
+            # pareto experiments pin alpha=0.5; the uniform one has no alpha
+            if "uniform" in exp:
+                assert "--size-dist" in flags
+            else:
+                assert flags[flags.index("--alpha") + 1] == "0.5"
+
+
+def test_experiments_scale_with_cluster_dims():
+    with tempfile.TemporaryDirectory() as root:
+        exps = sweep.experiments(_mkroot(root, (8, 8, 8)))
+        assert "easy-pareto256-load-sweep" in exps
+        assert "easy-pareto128-load-sweep" in exps
+        assert "easy-uniform128-load-sweep" in exps
+        assert exps["easy-pareto256-load-sweep"][-1] == "256"
+
+
+def test_experiments_require_cluster_json():
+    with tempfile.TemporaryDirectory() as root:
+        try:
+            sweep.experiments(root)
+            raise AssertionError("expected SystemExit")
+        except SystemExit as e:
+            assert "prereq" in str(e)
 
 
 def test_admission_variants_share_trace_flags():
-    for family, count in [("pareto2048", 3), ("pareto512", 3)]:
-        exps = [e for e in sweep.EXPERIMENTS if family in e]
-        assert len(exps) == count
-        assert len({tuple(sweep.EXPERIMENTS[e]) for e in exps}) == 1
+    with tempfile.TemporaryDirectory() as root:
+        table = sweep.experiments(_mkroot(root))
+        for family, count in [("pareto2048", 3), ("pareto1024", 3)]:
+            exps = [e for e in table if family in e]
+            assert len(exps) == count
+            assert len({tuple(table[e]) for e in exps}) == 1
 
 
 def test_combos_naming_and_count():
@@ -72,8 +100,9 @@ def test_gen_generates_each_combo_then_skips():
     gen_arrivals.main = _fake_gen(calls)
     try:
         with tempfile.TemporaryDirectory() as root:
+            _mkroot(root)
             open(os.path.join(root, "service_times.csv"), "w").close()
-            exp = "easy-uniform2048-load-sweep"
+            exp = "easy-uniform1024-load-sweep"
             sweep.gen(exp, root=root)
             assert len(calls) == len(sweep.PLACEMENTS) * len(sweep.LOADS)
             rhos = {a[a.index("--rho") + 1] for a in calls}
@@ -81,6 +110,7 @@ def test_gen_generates_each_combo_then_skips():
             for a in calls:
                 assert a[a.index("--n") + 1] == str(sweep.N_JOBS)
                 assert a[a.index("--seed") + 1] == str(sweep.SEED)
+                assert a[a.index("--cluster-dims") + 1] == "16x16x16"
                 assert "--size-dist" in a and "uniform" in a
                 out = a[a.index("--out") + 1]
                 assert os.path.basename(os.path.dirname(out)) == exp
@@ -102,7 +132,8 @@ def test_gen_requires_service_times():
 
 def test_clean_removes_experiments_keeps_prereqs():
     with tempfile.TemporaryDirectory() as root:
-        exp = next(iter(sweep.EXPERIMENTS))
+        _mkroot(root)
+        exp = next(iter(sweep.experiments(root)))
         cell = os.path.join(root, "runs", exp, "easy-firstfit-load0.05")
         os.makedirs(cell)
         open(os.path.join(cell, "arrivals.csv"), "w").close()
@@ -118,6 +149,27 @@ def test_clean_removes_experiments_keeps_prereqs():
         assert os.path.isdir(os.path.join(root, "tracelib"))
 
 
+def _mkconfigs(root: str, npus: int = 4096) -> str:
+    """A minimal configs/network.yml for the npus_count consistency check."""
+    os.makedirs(os.path.join(root, "configs"), exist_ok=True)
+    p = os.path.join(root, "configs", "network.yml")
+    with open(p, "w") as f:
+        f.write(f"topology: [ FullyConnected ]\nnpus_count: [ {npus} ]\n")
+    return p
+
+
+def test_sync_network_yml_follows_cluster_json():
+    with tempfile.TemporaryDirectory() as root:
+        p = _mkconfigs(root, npus=512)
+        sweep.sync_network_yml(root, 4096)
+        content = open(p).read()
+        assert "npus_count: [ 4096 ]" in content
+        assert "topology: [ FullyConnected ]" in content  # other lines untouched
+        before = os.path.getmtime(p)
+        sweep.sync_network_yml(root, 4096)  # already in sync -> no rewrite
+        assert os.path.getmtime(p) == before
+
+
 def test_prereq_builds_tracelib_and_skips_existing_svc():
     traced, measured = [], []
     real_traces, real_svc = sweep.gen_traces.main, sweep.svc
@@ -125,8 +177,13 @@ def test_prereq_builds_tracelib_and_skips_existing_svc():
     sweep.svc = lambda root: measured.append(root)
     try:
         with tempfile.TemporaryDirectory() as root:
+            _mkroot(root)
+            net_yml = _mkconfigs(root, npus=512)
             sweep.prereq(root=root)  # no svc table yet -> measures
+            # the user's dims answer is synced into network.yml
+            assert "npus_count: [ 4096 ]" in open(net_yml).read()
             assert traced[0][traced[0].index("--out") + 1].endswith("tracelib")
+            assert traced[0][traced[0].index("--cluster-dims") + 1] == "16x16x16"
             assert measured == [root]
             table = os.path.join(root, "service_times.csv")
             with open(table, "w") as f:
@@ -163,7 +220,7 @@ def test_progress_table_cells():
 
 
 def test_trace_len_counts_arrivals_rows():
-    exp = "easy-uniform2048-load-sweep"
+    exp = "easy-uniform1024-load-sweep"
     with tempfile.TemporaryDirectory() as root:
         combo, _ = sweep.combos(exp)[0]
         d = os.path.join(root, "runs", exp, combo)

@@ -1,4 +1,5 @@
-"""Arrival-process trace generator for cluster4096 (16x16x16 torus, 4096 NPUs).
+"""Arrival-process trace generator for the load-sweep experiments. The torus
+dims come from cluster.json (or --cluster-dims).
 
 Produces a runnable arrivals.csv whose offered load matches a target.
 
@@ -9,7 +10,7 @@ calibrate.py):
 
     rho = W / (C * T)
 
-  C = 4096 NPUs (cluster capacity)
+  C = cluster capacity in NPUs (product of the torus dims)
   T = arrival span (ns)
   W = sum_i  num_ranks_i * svc_per_iter(shape_i) * N_i     (NPU*ns)
 
@@ -66,9 +67,8 @@ import os
 import random
 from collections.abc import Callable
 
+import cluster
 import shapes
-
-CAPACITY: int = 4096  # 16 * 16 * 16 torus capacity
 
 
 def legal_shapes(
@@ -248,7 +248,7 @@ def mean_ia_ns(
     work: float,
     rho: float,
     n_jobs: int,
-    capacity: int = CAPACITY,
+    capacity: int,
 ) -> float:
     """Invert target offered load rho = W / (C * T) to a mean inter-arrival
     time, with T approximated as (n_jobs - 1) * mean_ia."""
@@ -313,7 +313,7 @@ def write_outputs(
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="cluster4096 arrival-process generator")
+    ap = argparse.ArgumentParser(description="t3d arrival-process generator")
     ap.add_argument("--rho", type=float, required=True, help="target offered load")
     ap.add_argument("--out", required=True, help="output cell directory")
     ap.add_argument("--n", type=int, default=500, help="number of jobs")
@@ -362,11 +362,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--traces", default=None, help="trace library root for jobs/ symlinks"
     )
+    ap.add_argument(
+        "--cluster-dims",
+        default=None,
+        help="torus dims AxBxC (default: cluster.json in the example root)",
+    )
     args = ap.parse_args(argv)
 
     if (args.svc is None) == (args.uniform_svc_ns is None):
         ap.error("exactly one of --svc or --uniform-svc-ns is required")
 
+    cluster_dims = (
+        cluster.parse_dims(args.cluster_dims)
+        if args.cluster_dims
+        else cluster.load(cluster.default_root())
+    )
+    shapes.init(cluster_dims)
     dims = frozenset(int(x) for x in args.dims.split(",")) if args.dims else None
 
     rng = random.Random(args.seed)
@@ -386,7 +397,7 @@ def main(argv: list[str] | None = None) -> int:
     svc_table = load_service_times(args.svc) if args.svc else None
     svc_of = make_svc_fn(svc_table, args.uniform_svc_ns)
     work = compute_work(jobs, svc_of)
-    mean_ia = mean_ia_ns(work, args.rho, args.n)
+    mean_ia = mean_ia_ns(work, args.rho, args.n, cluster.capacity(cluster_dims))
     times = draw_arrivals(rng, args.n, mean_ia)
     write_outputs(args.out, jobs, times, args, work, mean_ia, args.model, args.traces)
     return 0

@@ -13,6 +13,9 @@ sys.path.insert(
 import gen_arrivals  # noqa: E402
 import shapes  # noqa: E402
 
+shapes.init((16, 16, 16))
+DIMS_FLAG = ["--cluster-dims", "16x16x16"]
+
 
 def test_legal_sizes_sorted_distinct_and_bounded():
     sizes = gen_arrivals.legal_sizes("bw")
@@ -199,18 +202,20 @@ def test_compute_work_matches_hand_calc():
 
 def test_mean_ia_scales_inversely_with_rho():
     w = 1.0e9
-    ia_full = gen_arrivals.mean_ia_ns(w, 0.5, 101)
-    ia_half = gen_arrivals.mean_ia_ns(w, 1.0, 101)
+    ia_full = gen_arrivals.mean_ia_ns(w, 0.5, 101, 4096)
+    ia_half = gen_arrivals.mean_ia_ns(w, 1.0, 101, 4096)
     assert abs(ia_full - 2 * ia_half) < 1e-6
     # Explicit formula check: W / (C * rho * (n-1)).
-    assert abs(ia_full - w / (gen_arrivals.CAPACITY * 0.5 * 100)) < 1e-6
+    assert abs(ia_full - w / (4096 * 0.5 * 100)) < 1e-6
+    # Capacity halves => same offered work needs twice the arrival spacing...
+    assert abs(gen_arrivals.mean_ia_ns(w, 0.5, 101, 2048) - 2 * ia_full) < 1e-6
 
 
 def test_mean_ia_rejects_bad_args():
     for bad in [
-        lambda: gen_arrivals.mean_ia_ns(1.0, 0.0, 10),
-        lambda: gen_arrivals.mean_ia_ns(1.0, -0.1, 10),
-        lambda: gen_arrivals.mean_ia_ns(1.0, 0.5, 1),
+        lambda: gen_arrivals.mean_ia_ns(1.0, 0.0, 10, 4096),
+        lambda: gen_arrivals.mean_ia_ns(1.0, -0.1, 10, 4096),
+        lambda: gen_arrivals.mean_ia_ns(1.0, 0.5, 1, 4096),
     ]:
         try:
             bad()
@@ -256,6 +261,7 @@ def test_main_uniform_writes_valid_trace():
                 "1",
                 "--out",
                 out,
+                *DIMS_FLAG,
             ]
         )
         assert rc == 0
@@ -293,6 +299,7 @@ def test_main_uniform_work_matches_config():
                 "2",
                 "--out",
                 out,
+                *DIMS_FLAG,
             ]
         )
         rows = _read_arrivals(os.path.join(out, "arrivals.csv"))
@@ -322,6 +329,7 @@ def test_main_deterministic_bytes():
             "500",
             "--seed",
             "9",
+            *DIMS_FLAG,
             "--out",
         ]
         gen_arrivals.main(argv + [a])
@@ -336,7 +344,9 @@ def test_main_deterministic_bytes():
 def test_main_requires_a_service_source():
     with tempfile.TemporaryDirectory() as d:
         try:
-            gen_arrivals.main(["--rho", "0.5", "--out", os.path.join(d, "x")])
+            gen_arrivals.main(
+                ["--rho", "0.5", "--out", os.path.join(d, "x"), *DIMS_FLAG]
+            )
         except SystemExit as e:
             assert e.code != 0
             return
@@ -370,6 +380,7 @@ def test_main_creates_jobs_symlinks_with_traces():
                 out,
                 "--traces",
                 traces,
+                *DIMS_FLAG,
             ]
         )
         assert rc == 0

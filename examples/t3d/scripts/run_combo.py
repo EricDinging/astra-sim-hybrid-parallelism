@@ -4,7 +4,7 @@
 All outputs (progress.csv, occupancy.csv, jobs.csv, summary.txt, logs) land in the
 combo folder <workspace>/runs/<experiment>/<combo>/. Invoked by the per-host
 runner (xargs -P <slots>) on a remote worker (workspace =
-/workspace/cluster4096) or locally (workspace = the example dir).
+/workspace/cluster<capacity>) or locally (workspace = the example dir).
 
 Idempotent: skips a combo whose sim.done says rc=0, and kills a stale twin of
 itself (a sim logging to the same combo folder) before starting, so a
@@ -15,16 +15,28 @@ runs unchanged on any worker.
 from __future__ import annotations
 
 import fcntl
+import json
 import os
 import resource
 import subprocess
 import sys
 
 
+def npus_per_dim(w: str) -> str:
+    """The torus dims from the workspace's cluster.json (deployed alongside
+    configs/), as the binary's --npus-per-dim value."""
+    p = os.path.join(w, "cluster.json")
+    try:
+        with open(p) as f:
+            return ",".join(str(d) for d in json.load(f)["dims"])
+    except (OSError, KeyError, ValueError) as e:
+        raise SystemExit(f"{p} missing or invalid ({e}) -- redeploy/run prereq")
+
+
 def find_binary(w: str) -> str:
     for p in (
         os.path.join(w, "bin", "AstraSim_Analytical_Reconfigurable"),
-        # local mode: workspace is examples/cluster4096, binary in the repo tree
+        # local mode: workspace is examples/t3d, binary in the repo tree
         os.path.join(
             w,
             "..",
@@ -115,7 +127,7 @@ def main() -> int:
         print(f"FAIL {exp}/{combo}: make_jobs")
         return 1
 
-    # one open .et fd per occupied NPU; the biggest shape needs 4096
+    # one open .et fd per occupied NPU; the biggest shape needs the full torus
     _soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
     env = dict(os.environ)
@@ -138,7 +150,7 @@ def main() -> int:
                 "--comm-scale=1.0",
                 "--injection-scale=1.0",
                 "--rendezvous-protocol=false",
-                "--npus-per-dim=16,16,16",
+                f"--npus-per-dim={npus_per_dim(w)}",
                 f"--job-arrival-file={combo_dir}/arrivals.csv",
                 f"--jobs-dir={jobs}",
                 f"--placement-policy={pol}",

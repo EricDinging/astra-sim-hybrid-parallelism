@@ -33,10 +33,21 @@ def test_parse_workers_lines():
 
 
 def test_slot_count_bounds():
-    assert launcher.slot_count(64, 251) == 10  # 251 // 24, cpu bound not hit
-    assert launcher.slot_count(8, 1024) == 6  # cpu bound: 8 - 2
-    assert launcher.slot_count(64, 12) == 0  # not enough mem for one sim
-    assert launcher.slot_count(1, 100) == 0  # no cpu headroom
+    assert launcher.slot_count(64, 251, 24) == 10  # 251 // 24, cpu bound not hit
+    assert launcher.slot_count(8, 1024, 24) == 6  # cpu bound: 8 - 2
+    assert launcher.slot_count(64, 12, 24) == 0  # not enough mem for one sim
+    assert launcher.slot_count(1, 100, 24) == 0  # no cpu headroom
+
+
+def test_mem_per_run_scales_with_capacity():
+    assert launcher.mem_per_run_gb(4096) == 24  # the measured envelope
+    assert launcher.mem_per_run_gb(2048) == 12
+    assert launcher.mem_per_run_gb(512) == 4  # workload-dominated floor
+
+
+def test_workspace_is_capacity_keyed():
+    assert launcher.workspace(4096) == "/workspace/cluster4096"
+    assert launcher.workspace(512) == "/workspace/cluster512"
 
 
 def test_probe_local():

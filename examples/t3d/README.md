@@ -1,8 +1,12 @@
-# cluster4096
+# t3d
 
-Sweep harness, configs, and results for the **4096-node cluster** experiments
-(16×16×16 3-D torus). Everything is driven from `reproduce.py`; every
-artifact (traces, service times, results) is reproducible from source.
+Sweep harness, configs, and results for the **3-D torus cluster**
+experiments. The cluster dims (e.g. 16×16×16 = 4096 nodes) are asked once by
+`./reproduce.py prereq` and saved to `cluster.json`; everything geometric —
+legal job shapes, experiment max-job sizes, `--npus-per-dim`, the network
+size in `configs/network.yml`, the launcher's memory envelope — derives from
+it. Everything is driven from `reproduce.py`; every artifact (traces,
+service times, results) is reproducible from source.
 
 ## Quick start
 
@@ -18,7 +22,8 @@ docker buildx build -t astra:latest .
 # 3. Build the simulator binary
 build/astra_analytical/build.sh
 
-# 4. Prerequisites: Chakra tracelib (~11 GB) + measured service_times.csv
+# 4. Prerequisites: cluster dims (prompted once -> cluster.json), then
+#    Chakra tracelib (~11 GB at 16x16x16) + measured service_times.csv
 ./reproduce.py prereq
 
 # 5. Generate arrival traces (or run ./reproduce.py bare for a picker)
@@ -78,11 +83,13 @@ combos that already have arrivals. Full knob reference: docstring of
 ## Launching (`./reproduce.py launch`)
 
 Probes each worker (cpu count + available memory; a host runs at most
-`min(cpus − 2, mem / 24 GB)` concurrent sims), packs all requested
+`min(cpus − 2, mem / envelope)` concurrent sims, where the per-sim envelope
+scales with cluster capacity — 24 GB at 4096 NPUs), packs all requested
 experiments' combos jointly onto the fleet highest-load-first, and records
 the plan in `runs/<exp>/assignments.csv`. Per host it rsyncs the bundle
-(binary, exact-ABI libs, configs, scripts, assigned arrivals, tracelib —
-first sync is the slow one) to `/workspace/cluster4096` and starts a detached
+(binary, exact-ABI libs, cluster.json, configs, scripts, assigned arrivals,
+tracelib — first sync is the slow one) to `/workspace/cluster<capacity>`
+(e.g. `/workspace/cluster4096`) and starts a detached
 runner that works through its queue. Sims write results (including
 per-job-flushed `progress.csv` and per-event `occupancy.csv`) straight into their
 combo folder. Relaunch is safe: finished combos are skipped, stale twins are

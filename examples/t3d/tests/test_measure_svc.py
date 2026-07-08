@@ -13,6 +13,8 @@ sys.path.insert(
 import measure_svc  # noqa: E402
 import shapes  # noqa: E402
 
+shapes.init((16, 16, 16))
+
 
 def _touch_trace(traces, model, shape):
     sd = os.path.join(traces, model, shapes.fmt_shape(shape))

@@ -9,11 +9,37 @@ sys.path.insert(
 
 import shapes  # noqa: E402
 
+shapes.init((16, 16, 16))
+
 
 def test_dim_domain_is_one_or_even_le_16():
     assert shapes.DIM_DOMAIN == (1, 2, 4, 6, 8, 10, 12, 14, 16)
     for d in shapes.DIM_DOMAIN:
         assert d == 1 or (d % 2 == 0 and d <= 16)
+
+
+def test_init_derives_domain_from_cluster_dims():
+    try:
+        shapes.init((8, 8, 8))
+        assert shapes.DIM_DOMAIN == (1, 2, 4, 6, 8)
+        assert shapes.MAX_SIZE == 512
+        # 5 x 5 x 5 ordered triples, all <= 512.
+        assert len(shapes.all_legal_shapes("bw")) == 125
+    finally:
+        shapes.init((16, 16, 16))
+
+
+def test_uninitialized_raises():
+    domain, size = shapes.DIM_DOMAIN, shapes.MAX_SIZE
+    try:
+        shapes.DIM_DOMAIN, shapes.MAX_SIZE = (), 0
+        try:
+            shapes.is_legal("bw", 2, 2, 2)
+            raise AssertionError("expected RuntimeError")
+        except RuntimeError:
+            pass
+    finally:
+        shapes.DIM_DOMAIN, shapes.MAX_SIZE = domain, size
 
 
 def test_candidate_count_is_729():

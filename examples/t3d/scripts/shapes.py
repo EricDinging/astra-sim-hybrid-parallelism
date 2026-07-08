@@ -1,11 +1,14 @@
-"""Legal job-shape library for the cluster4096 (16x16x16 torus) trace generator.
+"""Legal job-shape library for the load-sweep trace generator.
+
+The shape universe is derived from the cluster dims (cluster.json) at
+runtime: call init(dims) before using any query function.
 
 WHY THE LEGAL SET IS PURELY GEOMETRIC
 -------------------------------------
 A job shape is an ordered triple A x B x C, mapped to stage parallelism dims as
-A=dp, B=tp, C=pp. Each dimension is independently 1 or an even integer <= 16,
-and the size A*B*C must be <= 4096 (the 16x16x16 torus capacity; automatically
-satisfied since each dim <= 16).
+A=dp, B=tp, C=pp. Each dimension is independently 1 or an even integer <= the
+longest torus axis, and the size A*B*C must be <= the torus capacity
+(automatically satisfied on a cubic torus).
 
 Empirically verified on 2026-06-25 by running stage (main.py inside the
 astra:latest image) over the bw model (head=32, kvhead=8): stage accepts EVERY
@@ -22,12 +25,25 @@ geometry alone, and this module is its single authority.
 
 from __future__ import annotations
 
-DIM_DOMAIN: tuple[int, ...] = (1, 2, 4, 6, 8, 10, 12, 14, 16)
-MAX_SIZE: int = 4096  # 16 * 16 * 16 torus capacity
+DIM_DOMAIN: tuple[int, ...] = ()  # set by init()
+MAX_SIZE: int = 0  # set by init()
 MODELS: tuple[str, ...] = ("bw",)
 
 
+def init(dims: tuple[int, int, int]) -> None:
+    """Derive the shape universe from the cluster dims (cluster.json).
+    Must be called before any query function."""
+    # ponytail: the dim domain uses the longest axis, which assumes a
+    # (near-)cubic torus; switch to per-axis domains if we ever run
+    # strongly asymmetric clusters
+    global DIM_DOMAIN, MAX_SIZE
+    DIM_DOMAIN = (1, *range(2, max(dims) + 1, 2))
+    MAX_SIZE = dims[0] * dims[1] * dims[2]
+
+
 def _check_model(model: str) -> None:
+    if not DIM_DOMAIN:
+        raise RuntimeError("shapes.init(dims) not called (load cluster.json first)")
     if model not in MODELS:
         raise ValueError(f"unknown model {model!r}; known models: {MODELS}")
 
@@ -79,12 +95,24 @@ def parse_shape(text: str) -> tuple[int, int, int]:
 def main(argv: list[str] | None = None) -> int:
     import argparse
 
-    ap = argparse.ArgumentParser(description="cluster4096 legal-shape utility")
+    import cluster
+
+    ap = argparse.ArgumentParser(description="legal-shape utility")
     sub = ap.add_subparsers(dest="cmd", required=True)
     p_list = sub.add_parser("list", help="print all legal shapes for a model")
     p_list.add_argument("model", choices=MODELS)
+    p_list.add_argument(
+        "--cluster-dims",
+        default=None,
+        help="torus dims AxBxC (default: cluster.json in the example root)",
+    )
     args = ap.parse_args(argv)
 
+    init(
+        cluster.parse_dims(args.cluster_dims)
+        if args.cluster_dims
+        else cluster.load(cluster.default_root())
+    )
     if args.cmd == "list":
         for shape in all_legal_shapes(args.model):
             print(fmt_shape(shape))

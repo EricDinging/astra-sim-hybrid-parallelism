@@ -1,11 +1,12 @@
-"""Measure isolated single-iteration service time per legal shape for cluster4096.
+"""Measure isolated single-iteration service time per legal shape.
 
-For each legal shape that has a Chakra trace, run it ALONE on the idle 16x16x16
-torus through the reconfigurable analytical binary (fifo admission, firstfit
+For each legal shape that has a Chakra trace, run it ALONE on the idle torus
+(dims from cluster.json or --cluster-dims) through the reconfigurable
+analytical binary (fifo admission, firstfit
 placement) and record the single job's JCT as svc_per_iter. Writes
 service_times.csv (shape,size,svc_per_iter_ns), consumed by gen_arrivals.py.
 
-This is the single-model cluster4096 analogue of
+This is the single-model t3d analogue of
 traces-for-16x16x16/scripts/calibrate.py `measure`.
 
     python3 measure_svc.py --traces <lib> --out service_times.csv \
@@ -24,6 +25,7 @@ import shutil
 import subprocess
 import tempfile
 
+import cluster
 import shapes
 
 SIM_TIMEOUT_S: int = 1200
@@ -85,6 +87,7 @@ def run_one(
     model: str,
     cfg: str,
     astra_sim: str,
+    npus: str,
 ) -> tuple[tuple[int, int, int], int, int | None, str | None]:
     """Run one isolated job. Returns (shape, size, svc_per_iter_ns, error)."""
     d = tempfile.mkdtemp(prefix="svc_")
@@ -104,7 +107,7 @@ def run_one(
             "--comm-scale=1.0",
             "--injection-scale=1.0",
             "--rendezvous-protocol=false",
-            "--npus-per-dim=16,16,16",
+            f"--npus-per-dim={npus}",
             f"--job-arrival-file={os.path.join(d, 'arrivals.csv')}",
             f"--jobs-dir={os.path.join(d, 'jobs')}",
             "--placement-policy=firstfit",
@@ -148,23 +151,33 @@ def write_table(
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        description="cluster4096 per-shape service-time measurer"
-    )
+    ap = argparse.ArgumentParser(description="per-shape service-time measurer")
     ap.add_argument("--traces", required=True, help="Chakra trace library root")
     ap.add_argument("--out", required=True, help="service_times.csv output path")
-    ap.add_argument("--cfg", required=True, help="cluster4096 configs dir")
+    ap.add_argument("--cfg", required=True, help="configs dir")
     ap.add_argument("--astra-sim", required=True, help="reconfigurable binary path")
     ap.add_argument("--model", default="bw", choices=shapes.MODELS)
     ap.add_argument("--jobs", type=int, default=max(1, (os.cpu_count() or 2) - 2))
     ap.add_argument(
         "--only", default=None, help="comma-separated shapes to restrict to"
     )
+    ap.add_argument(
+        "--cluster-dims",
+        default=None,
+        help="torus dims AxBxC (default: cluster.json in the example root)",
+    )
     args = ap.parse_args(argv)
 
-    # Each sim opens one .et per rank, so the biggest shape (4096 ranks) blows
-    # through the usual 1024 soft fd cap. Raise it for us and the child sims.
-    need = 4096 + 256
+    dims = (
+        cluster.parse_dims(args.cluster_dims)
+        if args.cluster_dims
+        else cluster.load(cluster.default_root())
+    )
+    shapes.init(dims)
+
+    # Each sim opens one .et per rank, so the biggest shape (= the full torus)
+    # blows through the usual 1024 soft fd cap. Raise it for us and the sims.
+    need = cluster.capacity(dims) + 256
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     if soft < need:
         if hard < need:
@@ -180,8 +193,9 @@ def main(argv: list[str] | None = None) -> int:
     results: list[tuple[tuple[int, int, int], int, int]] = []
     failures: list[str] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
+        npus = cluster.npus_arg(dims)
         futs = {
-            ex.submit(run_one, s, args.traces, args.model, cfg, args.astra_sim): s
+            ex.submit(run_one, s, args.traces, args.model, cfg, args.astra_sim, npus): s
             for s in todo
         }
         for fut in concurrent.futures.as_completed(futs):

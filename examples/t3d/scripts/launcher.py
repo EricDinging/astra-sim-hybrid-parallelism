@@ -15,8 +15,9 @@ import csv
 import os
 import subprocess
 
+import cluster
+
 LOCAL = "local"
-MEM_PER_RUN_GB = 24  # envelope of a high-load 4096-NPU 100k-job sim
 PROBE_CMD = "nproc; awk '/MemAvailable/{print $2}' /proc/meminfo"
 SSH_OPTS = [
     "-o",
@@ -55,13 +56,26 @@ def probe(host: str) -> tuple[int, int]:
     return int(cpus_s), int(mem_kb_s) // (1024 * 1024)
 
 
-def slot_count(cpus: int, mem_gb: int) -> int:
+def mem_per_run_gb(capacity: int) -> int:
+    """Per-sim memory envelope for slot packing.
+    ponytail: linear scale from the measured 24 GB high-load envelope at
+    4096 NPUs with a 4 GB workload-dominated floor; remeasure if a cluster's
+    footprint diverges"""
+    return max(4, 24 * capacity // 4096)
+
+
+def workspace(capacity: int) -> str:
+    """Remote workspace dir; capacity-keyed so clusters never share state."""
+    return f"/workspace/cluster{capacity}"
+
+
+def slot_count(cpus: int, mem_gb: int, mem_per_run: int) -> int:
     """Concurrent sims a host can take: cpu-bound minus headroom, and
-    memory-bound at MEM_PER_RUN_GB per sim."""
-    return max(0, min(cpus - 2, mem_gb // MEM_PER_RUN_GB))
+    memory-bound at mem_per_run GB per sim."""
+    return max(0, min(cpus - 2, mem_gb // mem_per_run))
 
 
-def probe_all(workers: list[str]) -> dict[str, int]:
+def probe_all(workers: list[str], mem_per_run: int) -> dict[str, int]:
     """host -> slots for every usable worker ([] probes the local machine).
     Hosts that fail the probe or have zero slots are dropped with a warning;
     all hosts unusable is an error."""
@@ -73,7 +87,7 @@ def probe_all(workers: list[str]) -> dict[str, int]:
         except (RuntimeError, subprocess.TimeoutExpired, ValueError) as e:
             print(f"WARN dropping {h}: {e}")
             continue
-        n = slot_count(cpus, mem_gb)
+        n = slot_count(cpus, mem_gb, mem_per_run)
         if n == 0:
             print(f"WARN dropping {h}: 0 slots ({cpus} cpus, {mem_gb} GB avail)")
             continue
@@ -105,7 +119,6 @@ def plan_assignments(
     return rows
 
 
-WORKSPACE = "/workspace/cluster4096"
 BUNDLED_LIBS = ("libprotobuf", "libscotch-", "libscotcherr-", "libhwloc")
 
 
@@ -147,17 +160,20 @@ def deploy(
     binary: str,
     stage_dir: str,
     arrivals_files: list[str],
+    ws: str,
 ) -> None:
-    """Provision WORKSPACE on a remote worker: binary + lib bundle + configs
-    + scripts + tracelib + the assigned combos' arrivals (paths relative to
-    root). Idempotent -- rsync only moves what changed; the 11 GB tracelib is
-    slow the first time only. LOCAL needs no deploy (runs use root)."""
+    """Provision the workspace `ws` on a remote worker: binary + lib bundle
+    + cluster.json + configs + scripts + tracelib + the assigned combos'
+    arrivals (paths relative to root). Idempotent -- rsync only moves what
+    changed; the 11 GB tracelib is slow the first time only. LOCAL needs no
+    deploy (runs use root)."""
     if host == LOCAL:
         return
-    w = WORKSPACE
+    w = ws
     _ssh(host, f"mkdir -p {w}/bin {w}/lib {w}/configs {w}/scripts {w}/runs")
     _rsync(host, [binary], f"{w}/bin/")
     _rsync(host, [lib_bundle(binary, stage_dir) + "/"], f"{w}/lib/")
+    _rsync(host, [cluster.path(root)], f"{w}/")
     _rsync(host, [os.path.join(root, "configs") + "/"], f"{w}/configs/")
     _rsync(host, [os.path.join(root, "scripts") + "/"], f"{w}/scripts/")
     _rsync(host, [os.path.join(root, "tracelib") + "/"], f"{w}/tracelib/")
@@ -185,11 +201,12 @@ def start_runner(
     root: str,
     cells: list[tuple[str, str]],
     slots: int,
+    ws: str,
 ) -> None:
     """Start the detached per-host runner: xargs feeds (experiment, combo)
     lines to run_combo.sh, at most `slots` concurrently. Survives SSH
     disconnect (setsid); a rerun replaces any previous runner."""
-    w = root if host == LOCAL else WORKSPACE
+    w = root if host == LOCAL else ws
     queue = "\n".join(f"{exp} {combo}" for exp, combo in cells) + "\n"
     runner = (
         f"cd {w} && setsid bash -c "
@@ -208,10 +225,10 @@ def start_runner(
     print(f"runner started on {host}: {len(cells)} combos, {slots} slots")
 
 
-def poll(host: str, root: str) -> dict[tuple[str, str], tuple[int, str]]:
+def poll(host: str, root: str, ws: str) -> dict[tuple[str, str], tuple[int, str]]:
     """One progress snapshot of a worker's whole queue:
     (exp, combo) -> (completed_jobs, rc-string or '-')."""
-    w = root if host == LOCAL else WORKSPACE
+    w = root if host == LOCAL else ws
     script = os.path.join(w, "scripts", "progress.py")
     if host == LOCAL:
         r = subprocess.run(
@@ -231,7 +248,7 @@ def poll(host: str, root: str) -> dict[tuple[str, str], tuple[int, str]]:
     return snap
 
 
-def collect_host(host: str, root: str, exp: str) -> None:
+def collect_host(host: str, root: str, exp: str, ws: str) -> None:
     """Pull a worker's results for one experiment back into the local
     runs/<exp>/ combo folders (works mid-run too: progress.csv/occupancy.csv are
     streamed). Only result files come back -- csv/sim.done/run.err;
@@ -255,7 +272,7 @@ def collect_host(host: str, root: str, exp: str) -> None:
         "--prune-empty-dirs",
         "-e",
         f"ssh {' '.join(SSH_OPTS)}",
-        f"{host}:{WORKSPACE}/runs/{exp}/",
+        f"{host}:{ws}/runs/{exp}/",
         os.path.join(root, "runs", exp) + "/",
     ]
     r = subprocess.run(cmd, capture_output=True, text=True)
