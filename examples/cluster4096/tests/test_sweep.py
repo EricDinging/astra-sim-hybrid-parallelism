@@ -137,6 +137,37 @@ def test_prereq_builds_tracelib_and_skips_existing_svc():
         sweep.gen_traces.main, sweep.svc = real_traces, real_svc
 
 
+def test_progress_table_cells():
+    exp = "swf-pareto512-load-sweep"
+    cells = {
+        "swf-firstfit-load0.05": (20, "rc=0"),
+        "swf-firstfit-load0.10": (7, "-"),
+        "swf-rfold-load0.05": (3, "rc=137"),
+    }
+    tbl = sweep.progress_table(exp, cells, 20)
+    lines = tbl.splitlines()
+    assert lines[0].startswith(exp)
+    assert len(lines) == 2 + len(sweep.PLACEMENTS)
+    ff = next(ln for ln in lines if ln.strip().startswith("firstfit"))
+    assert "✓" in ff and " 7" in ff
+    rf = next(ln for ln in lines if ln.strip().startswith("rfold"))
+    assert "✗137" in rf
+    # combos with no snapshot yet show 0
+    assert lines[-1].strip().startswith("random") and lines[-1].rstrip().endswith("0")
+
+
+def test_trace_len_counts_arrivals_rows():
+    exp = "easy-uniform512-load-sweep"
+    with tempfile.TemporaryDirectory() as root:
+        combo, _ = sweep.combos(exp)[0]
+        d = os.path.join(root, "runs", exp, combo)
+        os.makedirs(d)
+        with open(os.path.join(d, "arrivals.csv"), "w") as f:
+            f.write("job_id,arrival_time_ns\n0,0\n1,5\n")
+        assert sweep._trace_len(exp, root) == 2
+        assert sweep._trace_len(exp, "/nonexistent") == sweep.N_JOBS
+
+
 if __name__ == "__main__":
     fns = [
         v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)

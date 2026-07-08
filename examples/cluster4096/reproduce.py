@@ -89,20 +89,24 @@ def main(argv: list[str] | None = None) -> int:
         confirmed_clean()
         return 0
 
-    phase_fn = {
-        None: sweep.gen,  # bare ./reproduce.py: trace generation
-        "gen": sweep.gen,
-        "launch": sweep.launch,
-        "collect": sweep.collect,
-        "post": sweep.postprocess,
-    }[args.phase]
-
     choice = args.experiment or pick_experiment()
     if choice == CLEANUP:
         confirmed_clean()
         return 0
     if choice != "all" and choice not in sweep.EXPERIMENTS:
         ap.error(f"unknown experiment: {choice}")
+
+    if args.phase == "launch":
+        # experiments are planned jointly so a host never oversubscribes
+        sweep.launch(list(sweep.EXPERIMENTS) if choice == "all" else [choice])
+        return 0
+
+    phase_fn = {
+        None: sweep.gen,  # bare ./reproduce.py: trace generation
+        "gen": sweep.gen,
+        "collect": sweep.collect,
+        "post": sweep.postprocess,
+    }[args.phase]
     for_each(choice, phase_fn)
     return 0
 

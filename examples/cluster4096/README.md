@@ -1,181 +1,89 @@
 # cluster4096
 
-Sweep scripts, configs, and results for the **4096-node cluster** experiments —
-a 16×16×16 3-D torus. Everything is driven from a single top-level
-`reproduce.py` that dispatches to helpers in `scripts/`; re-running a phase
-reproduces that artifact deterministically.
+Sweep harness, configs, and results for the **4096-node cluster** experiments
+(16×16×16 3-D torus). Everything is driven from `reproduce.py`; every
+artifact (traces, service times, results) is reproducible from source.
+
+## Quick start
+
+```bash
+# 1. Install packages (Ubuntu): simulator build deps + Docker >= 23 for the
+#    stage trace generator
+sudo apt-get install cmake g++ libprotobuf-dev protobuf-compiler \
+    libscotch-dev libhwloc-dev libjemalloc-dev libboost-dev rsync docker-buildx-plugin
+
+# 2. Build the stage Docker image (from the REPO ROOT; needs network)
+docker buildx build -t astra:latest .
+
+# 3. Build the simulator binary
+build/astra_analytical/build.sh
+
+# 4. Prerequisites: Chakra tracelib (~11 GB) + measured service_times.csv
+./reproduce.py prereq
+
+# 5. Generate arrival traces (or run ./reproduce.py bare for a picker)
+./reproduce.py gen <experiment|all>
+
+# 6. List your servers (user@host per line; empty/missing file = run locally),
+#    then launch
+echo you@server1.example.org >> workers.txt
+./reproduce.py launch <experiment|all>
+```
+
+For quick dev tests use short traces: `N_JOBS=20 ./reproduce.py gen <exp>`.
+`./reproduce.py clean` removes all results (keeps the prerequisites).
 
 ## Layout
 
-- `reproduce.py` — top-level driver. Run it bare for an interactive experiment
-  picker (option 0 = cleanup all results), or run a phase:
-  `./reproduce.py prereq`, `./reproduce.py gen <experiment|all>`,
-  `./reproduce.py clean` (later: `launch`, `collect`, `post`).
-- `scripts/` — helper libraries called by `reproduce.py`:
-  - `sweep.py` — the experiment table (6 load-sweep experiments) and one
-    function per harness phase.
-  - `shapes.py` — the authority on legal job shapes (pure, importable).
-  - `gen_traces.py` — builds the Chakra trace library via stage.
-  - `measure_svc.py` — measures the isolated single-iteration service time of
-    each shape → `service_times.csv`.
-  - `gen_arrivals.py` — generates an arrival-process trace (`arrivals.csv`) for
-    a target offered load.
-- `configs/` — 16³-torus simulator configs (system, network, BW/LT schedules)
-  consumed by the binary.
-- `tests/` — self-running unit tests for the `scripts/` helpers. Run any one
-  directly, e.g. `python3 tests/test_shapes.py` (no pytest required).
-- `tracelib/` — generated Chakra traces (gitignored; never committed). Shared
-  by every experiment: one trace per legal shape; a job's iteration count
-  lives in its experiment's `arrivals.csv`, not in the trace.
-- `runs/<experiment>/` — per-experiment sweep data (gitignored), one flattened
-  folder per combo, `<admission>-<placement>-load<L>/` (6 placements ×
-  20 loads, ρ = 0.05…1.00 step 0.05). `gen` puts each combo's
-  `arrivals.csv` + `trace_config.txt` (n=100000, seed=0) directly in its
-  folder; later phases drop the result csv files next to them.
+- `reproduce.py` — driver. Bare run = interactive picker (option 0 = cleanup).
+  Phases: `prereq`, `gen`, `launch`, `clean` (soon: `collect`, `post`).
+- `scripts/` — the libraries behind the phases: `sweep.py` (experiment table +
+  phase functions), `launcher.py` (worker probe/packing/deploy),
+  `run_combo.py` (one sim on a worker), `shapes.py`, `gen_traces.py`,
+  `measure_svc.py`, `gen_arrivals.py`, `make_jobs.py`.
+- `configs/` — 16³-torus simulator configs.
+- `tests/` — self-running tests, e.g. `python3 tests/test_sweep.py`.
+- `tracelib/` — Chakra traces, one per legal shape (gitignored). Shared by all
+  experiments; a job's iteration count lives in `arrivals.csv`, not the trace.
+- `runs/<experiment>/<admission>-<placement>-load<L>/` — one flat folder per
+  combo (6 placements × 20 loads, ρ = 0.05…1.00) holding its `arrivals.csv`
+  and all results: streaming `jct.csv` + `occupancy.csv`, `jobs.csv`,
+  `summary.txt`, `sim.done`.
 
-The workflow is `prereq` → `gen` → (`launch` → `collect` → `post`).
-`./reproduce.py clean` removes everything under `runs/<experiment>/` but keeps
-the prerequisites (`tracelib/`, `service_times.csv`) — they are
-experiment-independent and expensive to rebuild. Later phases (`launch`,
-`collect`, `post`) will be added as additional functions in
-`scripts/sweep.py`.
+## Experiments
 
-## Prerequisites
+Six load sweeps over Poisson arrivals, n=100000 jobs, seed 0: admission
+(easy/swf/fifo) × job-size distribution (Pareto α=0.5 capped at 512/256/128,
+or uniform capped at 512). See `EXPERIMENTS` in `scripts/sweep.py`.
 
-**Docker is required.** The `stage` toolchain that emits Chakra traces runs
-only inside the `astra:latest` image. Build it once from the **repo root**. The
-build clones `astra-sim/stage` internally (network access needed, no build args)
-and requires Docker BuildKit/buildx — bundled with Docker >= 23.0; on older
-installs add the plugin (`sudo apt-get install docker-buildx-plugin`) or use the
-`DOCKER_BUILDKIT=1` fallback:
+## Prerequisites (`./reproduce.py prereq`)
 
-```bash
-docker buildx build -t astra:latest .
-# or, without the buildx plugin:
-DOCKER_BUILDKIT=1 docker build -t astra:latest .
-```
+Builds the tracelib via stage-in-Docker (one trace per legal `A×B×C` shape:
+dims 1 or even ≤ 16, ≤ 4096 ranks — 729 shapes; resumable, built shapes are
+skipped) and measures each shape's isolated single-iteration JCT into
+`service_times.csv` (skipped when present; delete it to re-measure).
+`clean` never touches either. Env: `STAGE_IMAGE` (default `astra:latest`),
+`DOCKER` (default `sudo docker`), `JOBS` (parallelism, default nproc−2).
 
-Override the docker command (e.g. rootless) and image via environment:
-`DOCKER="docker"` and `STAGE_IMAGE=my-astra:tag`.
+## Trace generation (`./reproduce.py gen`)
 
-## Prerequisite step: `./reproduce.py prereq`
+For each combo, draws the job stream (sizes from the experiment's
+distribution, shapes uniform per size, durations clamped log-normal) and lays
+a Poisson arrival process calibrated to the combo's offered load ρ via the
+measured service times, into `runs/<exp>/<combo>/arrivals.csv`. Deterministic
+(seed-pinned): all placements at one load get identical arrivals. Skips
+combos that already have arrivals. Full knob reference: docstring of
+`scripts/gen_arrivals.py`.
 
-Before generating or running any experiment, build the two shared,
-experiment-independent prerequisites with one command:
+## Launching (`./reproduce.py launch`)
 
-```bash
-./reproduce.py prereq
-```
-
-It (1) builds the Chakra trace library under `tracelib/` (idempotent /
-resumable — already-built shapes are skipped) and (2) measures each shape's
-isolated service time into `service_times.csv` (skipped when the file exists;
-delete it to force a re-measure — it needs the built reconfigurable binary,
-see below). `./reproduce.py clean` never touches either. The two sub-steps
-are described next.
-
-## Trace generation
-
-The tracelib half of `prereq` builds one Chakra execution trace per **legal
-job shape** for the bandwidth-bound model, under `tracelib/bw/<AxBxC>/`. A shape is
-an ordered `A×B×C` where each dimension is independently **1 or an even integer
-≤ 16** and `A·B·C ≤ 4096` (the torus capacity) — **729** shapes in total. Inside
-each shape folder are the per-rank `chakra_trace.<rank>.et` files (one per rank,
-`A·B·C` of them) plus a `chakra_trace.json`.
-
-The build is **deterministic** (re-running yields the same traces for a fixed
-`stage` version / image) and **idempotent / resumable** (shapes already built
-are skipped). It runs `stage` in one batched container, fanning shapes out
-across cores; parallelism is bounded by `JOBS` (default `nproc-2`).
-
-Useful flags (call the helper directly):
-
-```bash
-# Build everything (≈729 shapes — large; tens of GB of .et files):
-./reproduce.py prereq
-
-# Plumbing test: build just 2x2x2 and verify the .et appears:
-python3 scripts/gen_traces.py --smoke
-
-# Build a specific subset:
-python3 scripts/gen_traces.py --only 2x4x8,16x16x16
-
-# List the legal shapes without building:
-python3 scripts/shapes.py list bw
-```
-
-Output is gitignored wholesale — only the scripts are committed, so the traces
-are reproduced from source rather than stored in git.
-
-## Arrival-process traces
-
-Once the trace library exists, you build an **arrival trace** (`arrivals.csv`) in
-two steps: measure each shape's service time, then sample a job stream at a
-target offered load.
-
-### Step 1 — measure service times → `service_times.csv`
-
-The service-time half of `./reproduce.py prereq` (a wrapper over
-`measure_svc.py` with the default paths below) generates the table.
-`measure_svc.py` runs every shape's trace **alone** on the idle 16³ torus and
-records its single-iteration JCT as that shape's `svc_per_iter_ns`. This needs
-the built reconfigurable binary
-(`build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable`; see the
-repo `CLAUDE.md` for `build.sh`) and the trace library from above.
-
-```bash
-python3 scripts/measure_svc.py \
-    --traces tracelib \
-    --cfg configs \
-    --astra-sim ../../build/astra_analytical/build/bin/AstraSim_Analytical_Reconfigurable \
-    --out service_times.csv
-# restrict to a subset while testing:
-python3 scripts/measure_svc.py --traces tracelib --cfg configs \
-    --astra-sim <binary> --out svc_small.csv --only 2x2x2,4x4x4
-```
-
-Output `service_times.csv` has columns `shape,size,svc_per_iter_ns`, one row per
-measured shape (`--jobs` bounds parallel sims, default `nproc-2`).
-
-### Step 2 — generate an arrival trace → `arrivals.csv`
-
-`gen_arrivals.py` draws a job stream and lays a **Poisson** arrival process
-calibrated to a target offered load `ρ` (`--rho`). Each job's size is drawn from
-a truncated Pareto over the legal sizes; its shape is uniform among shapes of
-that size; its duration `num_iterations` is a clamped log-normal over
-`[1, max-iters]` (heavy-tailed: most jobs 1–2 iterations, a thin tail to the
-cap). Offered load is `ρ = W / (C·T)` with `W = Σ num_ranks·svc_per_iter·N`,
-`C = 4096`; the script inverts `ρ` to a mean inter-arrival time. (See the module
-docstring in `gen_arrivals.py` for the full load model.)
-
-```bash
-# 500-job trace at 80% offered load, using the measured table:
-python3 scripts/gen_arrivals.py \
-    --rho 0.8 --n 500 \
-    --svc service_times.csv \
-    --traces tracelib \
-    --seed 0 \
-    --out runs/load80
-
-# Dev/smoke without a measured table — substitute one constant svc for all shapes:
-python3 scripts/gen_arrivals.py --rho 0.5 --n 50 --uniform-svc-ns 1000 --out /tmp/cell
-```
-
-Exactly one of `--svc <table>` or `--uniform-svc-ns <ns>` is required. Useful
-flags: `--alpha` (size-Pareto exponent, default `0.5`; lower = heavier
-large-job tail), `--max-iters` (duration cap, default `20`), `--iter-median`
-(log-normal duration median, default `1.3`; pins mass at 1–2 iters),
-`--iter-sigma` (duration tail heaviness, default `1.2`; larger = heavier tail,
-costlier sims), `--size-min`/`--size-max` (restrict drawn sizes), `--seed`
-(reproducible), `--traces` (also create `jobs/<id>` symlinks into the library so
-the trace is directly runnable by the simulator).
-
-The output directory contains:
-
-- `arrivals.csv` — `job_id,arrival_time_ns,num_ranks,shape,num_iterations`.
-- `trace_config.txt` — the full argument dump plus the realized `W` and
-  `mean_ia_ns` for provenance.
-- `jobs/<id>` — symlinks to each job's trace dir (only when `--traces` is given).
-
-Runs are **deterministic**: the same `--seed` (and inputs) reproduces the same
-`arrivals.csv` byte-for-byte.
+Probes each worker (cpu count + available memory; a host runs at most
+`min(cpus − 2, mem / 24 GB)` concurrent sims), packs all requested
+experiments' combos jointly onto the fleet highest-load-first, and records
+the plan in `runs/<exp>/assignments.csv`. Per host it rsyncs the bundle
+(binary, exact-ABI libs, configs, scripts, assigned arrivals, tracelib —
+first sync is the slow one) to `/workspace/cluster4096` and starts a detached
+runner that works through its queue. Sims write results (including
+per-job-flushed `jct.csv` and per-event `occupancy.csv`) straight into their
+combo folder. Relaunch is safe: finished combos are skipped, stale twins are
+killed.
