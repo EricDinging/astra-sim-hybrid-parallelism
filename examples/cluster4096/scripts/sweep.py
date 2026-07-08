@@ -55,13 +55,15 @@ PLACEMENTS = ["firstfit", "rfold", "sfc", "l1clustering", "topomatch", "random"]
 
 # experiment -> gen_arrivals trace-characteristic flags. The admission policy
 # is the experiment-name prefix (easy/swf/fifo); it only matters at launch
-# time, so the three *-pareto512-* experiments generate identical
+# time, so the three *-pareto2048-* experiments generate identical
 # (seed-pinned) arrivals.
 EXPERIMENTS: dict[str, list[str]] = {
+    "easy-pareto2048-load-sweep": ["--alpha", "0.5", "--size-max", "2048"],
+    "easy-pareto1024-load-sweep": ["--alpha", "0.5", "--size-max", "1024"],
     "easy-pareto512-load-sweep": ["--alpha", "0.5", "--size-max", "512"],
-    "easy-pareto256-load-sweep": ["--alpha", "0.5", "--size-max", "256"],
-    "easy-pareto128-load-sweep": ["--alpha", "0.5", "--size-max", "128"],
-    "easy-uniform512-load-sweep": ["--size-dist", "uniform", "--size-max", "512"],
+    "easy-uniform2048-load-sweep": ["--size-dist", "uniform", "--size-max", "2048"],
+    "swf-pareto2048-load-sweep": ["--alpha", "0.5", "--size-max", "2048"],
+    "fifo-pareto2048-load-sweep": ["--alpha", "0.5", "--size-max", "2048"],
     "swf-pareto512-load-sweep": ["--alpha", "0.5", "--size-max", "512"],
     "fifo-pareto512-load-sweep": ["--alpha", "0.5", "--size-max", "512"],
 }

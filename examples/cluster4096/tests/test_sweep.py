@@ -23,10 +23,15 @@ def test_loads_grid():
 
 
 def test_experiment_table():
-    assert len(sweep.EXPERIMENTS) == 6
+    assert len(sweep.EXPERIMENTS) == 8
     for exp, flags in sweep.EXPERIMENTS.items():
         assert exp.endswith("-load-sweep")
-        assert "--size-max" in flags
+        # the size embedded in the name matches the --size-max flag
+        dist = exp.split("-")[1]  # e.g. "pareto2048" / "uniform2048"
+        size = dist.removeprefix("pareto").removeprefix("uniform")
+        assert flags[flags.index("--size-max") + 1] == size
+        # max job size is scaled to half the 4096-node cluster
+        assert int(size) <= 2048
         # pareto experiments pin alpha=0.5; the uniform one has no alpha
         if "uniform" in exp:
             assert "--size-dist" in flags
@@ -35,13 +40,14 @@ def test_experiment_table():
 
 
 def test_admission_variants_share_trace_flags():
-    p512 = [e for e in sweep.EXPERIMENTS if "pareto512" in e]
-    assert len(p512) == 3
-    assert len({tuple(sweep.EXPERIMENTS[e]) for e in p512}) == 1
+    for family, count in [("pareto2048", 3), ("pareto512", 3)]:
+        exps = [e for e in sweep.EXPERIMENTS if family in e]
+        assert len(exps) == count
+        assert len({tuple(sweep.EXPERIMENTS[e]) for e in exps}) == 1
 
 
 def test_combos_naming_and_count():
-    cells = sweep.combos("swf-pareto512-load-sweep")
+    cells = sweep.combos("swf-pareto2048-load-sweep")
     assert len(cells) == len(sweep.PLACEMENTS) * len(sweep.LOADS)
     assert ("swf-firstfit-load0.05", "0.05") in cells
     assert ("swf-random-load1.00", "1.00") in cells
@@ -67,7 +73,7 @@ def test_gen_generates_each_combo_then_skips():
     try:
         with tempfile.TemporaryDirectory() as root:
             open(os.path.join(root, "service_times.csv"), "w").close()
-            exp = "easy-uniform512-load-sweep"
+            exp = "easy-uniform2048-load-sweep"
             sweep.gen(exp, root=root)
             assert len(calls) == len(sweep.PLACEMENTS) * len(sweep.LOADS)
             rhos = {a[a.index("--rho") + 1] for a in calls}
@@ -138,7 +144,7 @@ def test_prereq_builds_tracelib_and_skips_existing_svc():
 
 
 def test_progress_table_cells():
-    exp = "swf-pareto512-load-sweep"
+    exp = "swf-pareto2048-load-sweep"
     cells = {
         "swf-firstfit-load0.05": (20, "rc=0"),
         "swf-firstfit-load0.10": (7, "-"),
@@ -157,7 +163,7 @@ def test_progress_table_cells():
 
 
 def test_trace_len_counts_arrivals_rows():
-    exp = "easy-uniform512-load-sweep"
+    exp = "easy-uniform2048-load-sweep"
     with tempfile.TemporaryDirectory() as root:
         combo, _ = sweep.combos(exp)[0]
         d = os.path.join(root, "runs", exp, combo)
