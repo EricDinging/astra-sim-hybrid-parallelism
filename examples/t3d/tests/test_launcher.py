@@ -33,16 +33,18 @@ def test_parse_workers_lines():
 
 
 def test_slot_count_bounds():
-    assert launcher.slot_count(64, 251, 24) == 10  # 251 // 24, cpu bound not hit
-    assert launcher.slot_count(8, 1024, 24) == 6  # cpu bound: 8 - 2
-    assert launcher.slot_count(64, 12, 24) == 0  # not enough mem for one sim
-    assert launcher.slot_count(1, 100, 24) == 0  # no cpu headroom
+    # rs630-like: 40 cpus, 256 GB -> 85% budget = 217 GB / 3 = 72, cpu-bound
+    assert launcher.slot_count(40, 256, 3) == 38
+    assert launcher.slot_count(64, 251, 24) == 8  # 251*0.85 // 24, mem-bound
+    assert launcher.slot_count(64, 2, 3) == 0  # not enough mem for one sim
+    assert launcher.slot_count(1, 100, 3) == 0  # no cpu headroom
 
 
-def test_mem_per_run_scales_with_capacity():
-    assert launcher.mem_per_run_gb(4096) == 24  # the measured envelope
+def test_mem_per_run_flat_at_512_legacy_elsewhere():
+    assert launcher.mem_per_run_gb(512) == 3  # measured fleet-average mix
+    assert launcher.mem_per_run_gb(4096) == 24  # legacy envelope
     assert launcher.mem_per_run_gb(2048) == 12
-    assert launcher.mem_per_run_gb(512) == 4  # workload-dominated floor
+    assert launcher.mem_per_run_gb(256) == 4  # floor
 
 
 def test_workspace_is_capacity_keyed():

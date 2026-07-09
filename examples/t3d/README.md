@@ -87,12 +87,12 @@ combos that already have arrivals. Full knob reference: docstring of
 
 ## Launching (`./reproduce.py launch`)
 
-Probes each worker (cpu count + available memory; a host runs at most
-`min(cpus − 2, mem / envelope)` concurrent sims, where the per-sim envelope
-scales with cluster capacity — 24 GB at 4096 NPUs), packs all requested
-experiments' combos jointly onto the fleet highest-load-first, and records
-the plan in `runs/<exp>/assignments.csv`. Per host it rsyncs the bundle
-(binary, exact-ABI libs, cluster.json, configs, scripts, assigned arrivals,
+Probes each worker for cpu count and available memory: a host runs at most
+`min(cpus − 2, 85% of mem / envelope)` concurrent sims, with a measured
+per-sim envelope of 3 GB at 8x8x8 (24 GB at 4096 NPUs). All requested
+experiments' combos are packed jointly onto the fleet highest-load-first,
+and the plan recorded in `runs/<exp>/assignments.csv`. Per host it rsyncs the bundle (binary,
+exact-ABI libs, cluster.json, configs, scripts, assigned arrivals,
 tracelib — first sync is the slow one) to `/workspace/cluster<capacity>`
 (e.g. `/workspace/cluster4096`) and starts a detached
 runner that works through its queue. Sims write results (including

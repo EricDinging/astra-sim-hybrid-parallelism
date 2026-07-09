@@ -56,11 +56,18 @@ def probe(host: str) -> tuple[int, int]:
     return int(cpus_s), int(mem_kb_s) // (1024 * 1024)
 
 
+# Target fill fraction of a host's available memory.
+MEM_TARGET_PCT = 85
+
+
 def mem_per_run_gb(capacity: int) -> int:
-    """Per-sim memory envelope for slot packing.
-    ponytail: linear scale from the measured 24 GB high-load envelope at
-    4096 NPUs with a 4 GB workload-dominated floor; remeasure if a cluster's
-    footprint diverges"""
+    """Per-sim memory envelope for slot packing. ponytail: 3 GB flat at
+    8x8x8 -- an average over the fleet-measured mix (stable cells <=1 GB,
+    supercritical high-load scatter cells ~10 GB); rs630-class hosts go
+    cpu-bound before this average overfills them. Other capacities keep the
+    legacy envelope (24 GB at 4096 NPUs, linear, 4 GB floor)."""
+    if capacity == 512:
+        return 3
     return max(4, 24 * capacity // 4096)
 
 
@@ -71,8 +78,9 @@ def workspace(capacity: int) -> str:
 
 def slot_count(cpus: int, mem_gb: int, mem_per_run: int) -> int:
     """Concurrent sims a host can take: cpu-bound minus headroom, and
-    memory-bound at mem_per_run GB per sim."""
-    return max(0, min(cpus - 2, mem_gb // mem_per_run))
+    memory-bound at mem_per_run GB per sim against MEM_TARGET_PCT of the
+    available memory."""
+    return max(0, min(cpus - 2, mem_gb * MEM_TARGET_PCT // 100 // mem_per_run))
 
 
 def probe_all(workers: list[str], mem_per_run: int) -> dict[str, int]:
@@ -204,8 +212,10 @@ def start_runner(
     ws: str,
 ) -> None:
     """Start the detached per-host runner: xargs feeds (experiment, combo)
-    lines to run_combo.sh, at most `slots` concurrently. Survives SSH
-    disconnect (setsid); a rerun replaces any previous runner."""
+    lines to run_combo.py, at most `slots` concurrently. Survives SSH
+    disconnect (setsid); a rerun replaces any previous runner (and removes
+    stale per-class queue-*.list files from the tiered-packing era so
+    progress.py doesn't double-report)."""
     w = root if host == LOCAL else ws
     queue = "\n".join(f"{exp} {combo}" for exp, combo in cells) + "\n"
     # The & must background ONE fully-redirected command: with
@@ -217,14 +227,15 @@ def start_runner(
         f"python3 scripts/run_combo.py {w} < runs/queue.list' "
         f"</dev/null >{w}/runs/runner.log 2>&1 &"
     )
+    cleanup = _KILL_OLD.format(w=w) + f"; rm -f {w}/runs/queue-*.list"
     if host == LOCAL:
         with open(os.path.join(w, "runs", "queue.list"), "w") as f:
             f.write(queue)
-        subprocess.run(["bash", "-c", _KILL_OLD.format(w=w)], check=False)
+        subprocess.run(["bash", "-c", cleanup], check=False)
         subprocess.run(["bash", "-c", runner], check=True)
     else:
         _ssh(host, f"cat > {w}/runs/queue.list <<'EOF'\n{queue}EOF")
-        _ssh(host, _KILL_OLD.format(w=w), check=False)
+        _ssh(host, cleanup, check=False)
         _ssh(host, runner)
     print(f"runner started on {host}: {len(cells)} combos, {slots} slots")
 
