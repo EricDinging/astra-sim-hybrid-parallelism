@@ -178,8 +178,8 @@ def test_sync_network_yml_follows_cluster_json():
 def test_build_schedules_from_yml_values():
     with tempfile.TemporaryDirectory() as root:
         _mkconfigs(root, bw=25.0, lt=700.0)
-        bw = os.path.join(root, "configs", "bandwidth_schedule.txt")
-        lt = os.path.join(root, "configs", "latency_schedule.txt")
+        bw = os.path.join(root, "configs", "bandwidth_schedule_torus.txt")
+        lt = os.path.join(root, "configs", "latency_schedule_torus.txt")
         sweep.build_schedules(root, (2, 2, 4))  # nothing prebuilt -> build
         rows = open(bw).readlines()
         assert rows[0] == "BW 0\n" and rows[-1] == "END\n"
@@ -192,6 +192,37 @@ def test_build_schedules_from_yml_values():
         _mkconfigs(root, bw=40.0, lt=700.0)  # yml bw changed -> rebuilt
         sweep.build_schedules(root, (2, 2, 4))
         assert set(open(bw).readlines()[1].split()) == {"0", "40"}
+
+
+def test_build_schedules_fullmesh_for_ideal():
+    with tempfile.TemporaryDirectory() as root:
+        _mkconfigs(root, bw=25.0, lt=700.0)
+        sweep.build_schedules(root, (2, 2, 4))
+        mesh_bw = os.path.join(root, "configs", "bandwidth_schedule_fullmesh.txt")
+        rows = open(mesh_bw).readlines()
+        assert rows[0] == "BW 0\n" and len(rows) == 16 + 2
+        # every off-diagonal cell nonzero (the binary's --fullmesh validation)
+        for i, r in enumerate(rows[1:-1]):
+            vals = r.split()
+            assert vals[i] == "0" and vals.count("0") == 1
+            assert set(vals) == {"0", "25"}
+        before = os.path.getmtime(mesh_bw)
+        sweep.build_schedules(root, (2, 2, 4))  # unchanged -> skipped
+        assert os.path.getmtime(mesh_bw) == before
+        # a torus matrix in the fullmesh slot is detected and rebuilt
+        import gen_matrices
+
+        gen_matrices.write_matrix(mesh_bw, "BW", 16, 2, 2, 4, 25, "torus")
+        sweep.build_schedules(root, (2, 2, 4))
+        assert open(mesh_bw).readlines()[1].split().count("0") == 1
+
+
+def test_run_combo_policy_settings():
+    import run_combo
+
+    assert run_combo.policy_settings("sfc") == ("sfc", "torus", [])
+    assert run_combo.policy_settings("firstfit") == ("firstfit", "torus", [])
+    assert run_combo.policy_settings("ideal") == ("sfc", "fullmesh", ["--fullmesh"])
 
 
 def test_prereq_builds_tracelib_and_skips_existing_svc():
@@ -208,9 +239,11 @@ def test_prereq_builds_tracelib_and_skips_existing_svc():
             # the user's dims answer is synced into network.yml...
             assert "npus_count: [ 8 ]" in open(net_yml).read()
             # ...and the BW/LT schedule matrices are built to match
-            bw = os.path.join(root, "configs", "bandwidth_schedule.txt")
+            bw = os.path.join(root, "configs", "bandwidth_schedule_torus.txt")
             row = open(bw).readlines()[1].split()
             assert len(row) == 8 and set(row) == {"0", "50"}
+            mesh_bw = os.path.join(root, "configs", "bandwidth_schedule_fullmesh.txt")
+            assert os.path.isfile(mesh_bw)
             assert traced[0][traced[0].index("--out") + 1].endswith("tracelib")
             assert traced[0][traced[0].index("--cluster-dims") + 1] == "2x2x2"
             assert measured == [root]
@@ -244,8 +277,8 @@ def test_progress_table_cells():
     assert "✓" in ff and " 7" in ff
     rf = next(ln for ln in lines if ln.strip().startswith("rfold"))
     assert "✗137" in rf
-    # combos with no snapshot yet show 0
-    assert lines[-1].strip().startswith("random") and lines[-1].rstrip().endswith("0")
+    # combos with no snapshot yet show 0; ideal is the last placement row
+    assert lines[-1].strip().startswith("ideal") and lines[-1].rstrip().endswith("0")
 
 
 def test_trace_len_counts_arrivals_rows():

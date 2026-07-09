@@ -131,6 +131,16 @@ void CmdLineParser::define_options() noexcept {
         "only). Mapping-aware policies (folding/rfold) still override this for "
         "their own ring edges. Default false (unidirectional).",
         cxxopts::value<bool>()->default_value("false"))(
+        "fullmesh",
+        "Treat the network as a fully connected mesh (reconfigurable backend "
+        "only). The BW/latency matrices are still read and must be a "
+        "single-topology schedule (topo 0) with every off-diagonal BW cell "
+        "nonzero (validated at startup, then compressed and freed); routing "
+        "is the direct 1-hop path (== BFS shortest path on a complete graph) "
+        "and links are created lazily on first traffic. --npus-per-dim still "
+        "defines the logical grid for placement policies. Incompatible with "
+        "--bidi, --failure-prob > 0, and --placement-policy=rfold.",
+        cxxopts::value<bool>()->default_value("false"))(
         "route-cache-budget-gb",
         "DOR route-cache memory ceiling in GiB (reconfigurable backend with "
         "--npus-per-dim only). DOR routes are computed on demand and cached up "

@@ -99,6 +99,16 @@ def build_jobs_dir(w: str, exp: str, combo_dir: str, load: str) -> str:
     return jobs
 
 
+def policy_settings(pol: str) -> tuple[str, str, list[str]]:
+    """(placement-policy, schedule-file topology suffix, extra flags) for a
+    combo's placement. `ideal` is sfc on a fully connected mesh: same arrivals
+    and jobs, but the *_schedule_fullmesh.txt matrices and the binary's
+    --fullmesh direct routing."""
+    if pol == "ideal":
+        return "sfc", "fullmesh", ["--fullmesh"]
+    return pol, "torus", []
+
+
 def main() -> int:
     w, exp, combo = os.path.abspath(sys.argv[1]), sys.argv[2], sys.argv[3]
     combo_dir = os.path.join(w, "runs", exp, combo)
@@ -136,6 +146,7 @@ def main() -> int:
     )
 
     cfg = os.path.join(w, "configs")
+    placement, topo, extra = policy_settings(pol)
     with open(os.path.join(combo_dir, "run.err"), "w") as err:
         rc = subprocess.run(
             [
@@ -143,8 +154,8 @@ def main() -> int:
                 f"--system-configuration={cfg}/system.json",
                 f"--remote-memory-configuration={cfg}/remote_memory.json",
                 f"--network-configuration={cfg}/network.yml",
-                f"--bw-schedule={cfg}/bandwidth_schedule.txt",
-                f"--latency-schedule={cfg}/latency_schedule.txt",
+                f"--bw-schedule={cfg}/bandwidth_schedule_{topo}.txt",
+                f"--latency-schedule={cfg}/latency_schedule_{topo}.txt",
                 f"--logging-folder={combo_dir}",
                 "--num-queues-per-dim=1",
                 "--comm-scale=1.0",
@@ -153,8 +164,9 @@ def main() -> int:
                 f"--npus-per-dim={npus_per_dim(w)}",
                 f"--job-arrival-file={combo_dir}/arrivals.csv",
                 f"--jobs-dir={jobs}",
-                f"--placement-policy={pol}",
+                f"--placement-policy={placement}",
                 f"--admission-policy={adm}",
+                *extra,
             ],
             stdout=subprocess.DEVNULL,
             stderr=err,

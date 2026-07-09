@@ -16,7 +16,8 @@ TopologyManager::TopologyManager(int npus_count,
                                  std::map<int, std::vector<LatencyRow>> latency_schedules,
                                  std::vector<int> npus_per_dim,
                                  bool is_torus,
-                                 bool bidi) noexcept {
+                                 bool bidi,
+                                 bool fullmesh) noexcept {
     this->npus_count = npus_count;
     this->devices_count = devices_count;
     this->event_queue = event_queue;
@@ -41,7 +42,11 @@ TopologyManager::TopologyManager(int npus_count,
     inflight_coll = 0;
     reconfig_time = Latency(0);
 
-    if (!npus_per_dim.empty()) {
+    if (fullmesh) {
+        // Fully connected mesh: direct 1-hop routes, lazy link creation.
+        // npus_per_dim (if any) is a scheduler-side notion and is ignored here.
+        set_fullmesh();
+    } else if (!npus_per_dim.empty()) {
         // Baseline DOR arc selection is unidirectional (+1 arc per axis) by
         // default; pass bidi=true to pick the shorter arc per dimension.
         // Mapping-aware placement policies (folding/rfold) install their own
@@ -191,12 +196,10 @@ bool TopologyManager::reconfigure(std::vector<BandwidthRow> bandwidths,
     latency_schedules[topo_id] = std::move(latencies);
     this->reconfig_time = reconfig_time;
 
-    if (use_dor && dims_count > 0) {
-        // DOR is computed on demand; a full reconfigure == rebuild-to-pure-DOR,
-        // i.e. drop overrides + cached routes.
-        if (router_ != nullptr) {
-            router_->clear();
-        }
+    if (router_ != nullptr) {
+        // On-demand routing (DOR or fullmesh): a full reconfigure ==
+        // rebuild-to-pure-computed-routes, i.e. drop overrides + cached routes.
+        router_->clear();
     } else {
         precomputeRoutes(topo_id);
     }
@@ -323,6 +326,101 @@ void TopologyManager::set_topology_dims(const std::vector<int>& npus_per_dim, bo
     topology->connect_torus_neighbors(this->npus_per_dim, this->is_torus);
 }
 
+void TopologyManager::set_fullmesh() noexcept {
+    // Single topology only: the compressed schedule below frees the parsed
+    // matrices, so there is nothing left to reconfigure to mid-run.
+    if (bw_schedules.size() != 1 || bw_schedules.begin()->first != 0) {
+        std::cerr << "[Error] --fullmesh supports exactly one topology (topo 0); got " << bw_schedules.size()
+                  << " BW blocks" << std::endl;
+        std::exit(1);
+    }
+    const auto& mat = bw_schedules.at(0);
+    const auto& lt_mat = latency_schedules.at(0);
+    if (static_cast<int>(mat.size()) != devices_count) {
+        std::cerr << "[Error] --fullmesh: BW matrix has " << mat.size() << " rows, expected " << devices_count
+                  << std::endl;
+        std::exit(1);
+    }
+    assert(static_cast<int>(lt_mat.size()) == devices_count);
+
+    // Validate every off-diagonal BW cell is nonzero: the direct-route Router
+    // below is BFS-correct only on a complete graph (shortest path ==
+    // [src, dst]). The same pass detects uniformity for the compressed store.
+    const auto lt_of = [](const LatencyRow& row, DeviceId id) noexcept {
+        const auto it = row.find(id);
+        return it == row.end() ? Latency(0) : it->second;
+    };
+    mesh_bw_uniform_ = true;
+    mesh_lt_uniform_ = true;
+    mesh_uniform_bw_ = mat[0].count(1) != 0U ? mat[0].at(1) : Bandwidth(0);
+    mesh_uniform_lt_ = lt_of(lt_mat[0], 1);
+    for (int i = 0; i < devices_count; ++i) {
+        for (int j = 0; j < devices_count; ++j) {
+            if (i == j) {
+                continue;
+            }
+            const auto it = mat[i].find(j);
+            if (it == mat[i].end() || it->second <= Bandwidth(0)) {
+                std::cerr << "[Error] --fullmesh: BW matrix cell (" << i << ", " << j
+                          << ") is zero or missing; the input is not a full mesh" << std::endl;
+                std::exit(1);
+            }
+            mesh_bw_uniform_ = mesh_bw_uniform_ && it->second == mesh_uniform_bw_;
+            mesh_lt_uniform_ = mesh_lt_uniform_ && lt_of(lt_mat[i], j) == mesh_uniform_lt_;
+        }
+    }
+    if (!mesh_bw_uniform_) {
+        mesh_bw_.assign(devices_count, std::vector<Bandwidth>(devices_count, Bandwidth(0)));
+        for (int i = 0; i < devices_count; ++i) {
+            for (const auto& [j, bw] : mat[i]) {
+                mesh_bw_[i][j] = bw;
+            }
+        }
+    }
+    if (!mesh_lt_uniform_) {
+        mesh_lt_.assign(devices_count, std::vector<Latency>(devices_count, Latency(0)));
+        for (int i = 0; i < devices_count; ++i) {
+            for (const auto& [j, lt] : lt_mat[i]) {
+                mesh_lt_[i][j] = lt;
+            }
+        }
+    }
+
+    // The compressed store above is all ensure_mesh_link() needs; free the
+    // parsed sparse-map matrices (O(N^2) map nodes -- the dominant fullmesh
+    // footprint) and leave empty placeholder rows so the initial
+    // reconfigure(0) -> increment_callback flow runs unchanged. Empty rows
+    // are exact there: no non-self links exist before first traffic, and
+    // Device::reconfigure only touches existing links.
+    bw_schedules.clear();
+    latency_schedules.clear();
+    bw_schedules[0] = std::vector<BandwidthRow>(devices_count);
+    latency_schedules[0] = std::vector<LatencyRow>(devices_count);
+
+    fullmesh_ = true;
+    use_dor = true;  // on-demand routing; never build the eager N^2 route tables
+
+    router_ = std::make_unique<Router>(topology, std::vector<int>{}, /*is_torus=*/false, /*bidi=*/false, devices_count,
+                                       &failed_npus, route_cache_budget_bytes_, /*fullmesh=*/true);
+    for (int i = 0; i < devices_count; ++i) {
+        topology->get_device(i)->set_router(router_.get());
+    }
+    // No links are created here: a full mesh has N^2 directed links but a
+    // job's ring edges touch only a handful of pairs, so links materialize on
+    // first traffic (ensure_mesh_link).
+}
+
+void TopologyManager::ensure_mesh_link(DeviceId src, DeviceId dest) noexcept {
+    if (src == dest || topology->get_device(src)->connected(dest)) {
+        return;
+    }
+    const Bandwidth bw_fwd = mesh_bw_uniform_ ? mesh_uniform_bw_ : mesh_bw_[src][dest];
+    const Bandwidth bw_rev = mesh_bw_uniform_ ? mesh_uniform_bw_ : mesh_bw_[dest][src];
+    const Latency lt_fwd = mesh_lt_uniform_ ? mesh_uniform_lt_ : mesh_lt_[src][dest];
+    const Latency lt_rev = mesh_lt_uniform_ ? mesh_uniform_lt_ : mesh_lt_[dest][src];
+    topology->connect_mesh_edge(src, dest, bw_fwd, lt_fwd, bw_rev, lt_rev);
+}
+
 void TopologyManager::set_failed_npus(const std::unordered_set<int>& failed) noexcept {
     failed_npus = failed;
     // DOR routes around failed NPUs; drop any cached pre-failure routes.
@@ -350,7 +448,10 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
 
     if (chunk->get_topology_iteration() == -1) {
         DeviceId dest = chunk->next_device()->get_id();
-        // DOR mode: fetch on demand; BFS mode: index the eager table.
+        if (fullmesh_) {
+            ensure_mesh_link(src, dest);
+        }
+        // DOR/fullmesh mode: fetch on demand; BFS mode: index the eager table.
         const Route& r = (router_ != nullptr) ? router_->lookup(src, dest) : precomputed_routes[src][dest];
         chunk->update_route(r, topology_iteration);
     }

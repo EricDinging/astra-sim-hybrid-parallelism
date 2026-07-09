@@ -38,7 +38,8 @@ class TopologyManager {
                     std::map<int, std::vector<LatencyRow>> latency_schedules,
                     std::vector<int> npus_per_dim = {},
                     bool is_torus = false,
-                    bool bidi = false) noexcept;
+                    bool bidi = false,
+                    bool fullmesh = false) noexcept;
 
     std::shared_ptr<Device> get_device(const DeviceId deviceId) noexcept;
 
@@ -100,6 +101,18 @@ class TopologyManager {
      *                       proceeds in the id-increasing (+1) direction.
      */
     void set_topology_dims(const std::vector<int>& npus_per_dim, bool is_torus, bool bidi) noexcept;
+
+    /**
+     * Treat the network as a fully connected mesh: requires a single-topology
+     * schedule (topo 0), validates that every off-diagonal BW cell is nonzero
+     * (so the direct 1-hop route IS the BFS shortest path), builds a
+     * direct-route Router, and defers link creation to first traffic
+     * (ensure_mesh_link) instead of materializing all N^2 links up front.
+     * The parsed sparse-map matrices are compressed into a scalar (uniform
+     * mesh) or dense N x N store and then freed -- they are the dominant
+     * fullmesh memory otherwise.
+     */
+    void set_fullmesh() noexcept;
 
     // DOR routing is computed on demand by `router_` (see Router): the eager
     // all-pairs precomputeRoutes_DOR() table was replaced by Router::compute_dor
@@ -190,6 +203,24 @@ class TopologyManager {
     /// When true (bidirectional), torus DOR picks the shorter arc on each dimension.
     /// When false (default), DOR always routes in the id-increasing (+1) direction.
     bool bidi = false;
+
+    /// Fully-connected-mesh mode (set_fullmesh()): direct 1-hop routes, links
+    /// created lazily on first traffic.
+    bool fullmesh_ = false;
+
+    /// Fullmesh: create the (src, dest) link pair on first use, with bw/lt
+    /// taken from the compressed schedule store below.
+    void ensure_mesh_link(DeviceId src, DeviceId dest) noexcept;
+
+    /// Fullmesh compressed schedule (single topo 0), built by set_fullmesh()
+    /// which then frees the parsed sparse-map matrices. Uniform matrices (the
+    /// gen_matrices.py case) collapse to one scalar; otherwise dense N x N.
+    bool mesh_bw_uniform_ = false;
+    bool mesh_lt_uniform_ = false;
+    Bandwidth mesh_uniform_bw_ = Bandwidth(0);
+    Latency mesh_uniform_lt_ = Latency(0);
+    std::vector<std::vector<Bandwidth>> mesh_bw_;
+    std::vector<std::vector<Latency>> mesh_lt_;
 
     /// NPUs marked failed: never a route endpoint or transit hop.
     std::unordered_set<int> failed_npus;

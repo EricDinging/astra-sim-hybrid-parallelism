@@ -18,19 +18,22 @@ Router::Router(std::shared_ptr<Topology> topology,
                bool bidi,
                int devices_count,
                const std::unordered_set<int>* failed_npus,
-               std::size_t budget_bytes) noexcept
+               std::size_t budget_bytes,
+               bool fullmesh) noexcept
     : topology_(std::move(topology)),
       npus_per_dim_(std::move(npus_per_dim)),
       dims_count_(static_cast<int>(npus_per_dim_.size())),
       is_torus_(is_torus),
       bidi_(bidi),
+      fullmesh_(fullmesh),
       devices_count_(devices_count),
       failed_npus_(failed_npus),
       cur_bytes_(0),
       budget_bytes_(budget_bytes),
-      visited_(static_cast<std::size_t>(devices_count), -1),
+      // DOR-walk scratch is never touched in fullmesh mode; skip the O(N) alloc.
+      visited_(fullmesh ? 0 : static_cast<std::size_t>(devices_count), -1),
       epoch_(0) {
-    assert(dims_count_ > 0);
+    assert(dims_count_ > 0 || fullmesh_);
 }
 
 const Route& Router::lookup(DeviceId src, DeviceId dst) const noexcept {
@@ -49,7 +52,7 @@ const Route& Router::lookup(DeviceId src, DeviceId dst) const noexcept {
     }
 
     // Miss: compute, insert at MRU, account, evict to budget.
-    Route r = compute_dor(src, dst);
+    Route r = fullmesh_ ? direct_route(src, dst) : compute_dor(src, dst);
     cur_bytes_ += route_bytes(r);
     lru_.emplace_front(k, std::move(r));
     cache_[k] = lru_.begin();
@@ -100,6 +103,15 @@ void Router::clear_cache() const noexcept {
 void Router::set_budget_bytes(std::size_t bytes) noexcept {
     budget_bytes_ = bytes;
     evict_to_budget();
+}
+
+Route Router::direct_route(DeviceId src, DeviceId dst) const noexcept {
+    // On a complete graph the BFS shortest path is exactly [src, dst];
+    // TopologyManager::set_fullmesh() validated every off-diagonal cell.
+    if (src == dst) {
+        return {topology_->get_device(src)};
+    }
+    return {topology_->get_device(src), topology_->get_device(dst)};
 }
 
 Route Router::compute_dor(DeviceId src, DeviceId dst) const noexcept {

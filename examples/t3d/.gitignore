@@ -17,10 +17,11 @@ __pycache__/
 # Simulation worker servers.
 workers.txt
 
-# BW/LT schedule matrices: generated artifacts (torus fully determined by
-# cluster.json dims + network.yml bw/latency). Rebuilt by ./reproduce.py prereq.
-/configs/bandwidth_schedule.txt
-/configs/latency_schedule.txt
+# BW/LT schedule matrices: generated artifacts (torus and fullmesh fully
+# determined by cluster.json dims + network.yml bw/latency). Rebuilt by
+# ./reproduce.py prereq; the *_fullmesh.txt pair feeds the `ideal` placement.
+/configs/bandwidth_schedule_*.txt
+/configs/latency_schedule_*.txt
 
 # Per-checkout cluster geometry (answered at ./reproduce.py prereq).
 /cluster.json

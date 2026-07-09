@@ -53,7 +53,18 @@ N_JOBS = int(os.environ.get("N_JOBS", 100000))
 POLL_SECS = int(os.environ.get("POLL_SECS", 3600))
 SEED = 0
 LOADS = [f"{i / 100:.2f}" for i in range(5, 101, 5)]  # 0.05 .. 1.00, step 0.05
-PLACEMENTS = ["firstfit", "rfold", "sfc", "l1clustering", "topomatch", "random"]
+# `ideal` is not a binary policy: it runs sfc on a fully connected mesh
+# (--fullmesh + the configs/fullmesh schedules; see run_combo.py), giving the
+# placement-free JCT baseline the other policies are normalized against.
+PLACEMENTS = [
+    "firstfit",
+    "rfold",
+    "sfc",
+    "l1clustering",
+    "topomatch",
+    "random",
+    "ideal",
+]
 
 
 def experiments(root: str = ROOT) -> dict[str, list[str]]:
@@ -124,28 +135,36 @@ def _yml_scalar(path: str, key: str) -> float:
 
 
 def build_schedules(root: str, dims: tuple[int, int, int]) -> None:
-    """(Re)build the BW/LT schedule matrices in configs/ from the cluster
-    dims and network.yml's per-link bandwidth/latency. The matrices are
-    generated artifacts, never checked in: a torus is fully determined by
-    dims plus one bw/lt value. A build is skipped only when the existing
-    file already matches both."""
+    """(Re)build the BW/LT schedule matrices from the cluster dims and
+    network.yml's per-link bandwidth/latency, flat in configs/ with a
+    topology suffix: *_schedule_torus.txt (every policy but ideal) and
+    *_schedule_fullmesh.txt (the `ideal` policy). The matrices are generated
+    artifacts, never checked in. A build is skipped only when the existing
+    file already matches dims, value, and topology (a fullmesh first row has
+    exactly one zero -- the diagonal)."""
     cap = cluster.capacity(dims)
     yml = os.path.join(root, "configs", "network.yml")
-    for tag, name, key in (
-        ("BW", "bandwidth_schedule.txt", "bandwidth"),
-        ("LT", "latency_schedule.txt", "latency"),
-    ):
-        v = _yml_scalar(yml, key)
-        value = int(v) if v == int(v) else v
-        p = os.path.join(root, "configs", name)
-        if os.path.isfile(p):
-            with open(p) as f:
-                f.readline()  # "<tag> 0" block header
-                row = f.readline().split()
-            if len(row) == cap and {float(x) for x in row} == {0.0, float(value)}:
-                continue
-        gen_matrices.write_matrix(p, tag, cap, *dims, value)
-        print(f"built {p}: {cluster.fmt(dims)} torus, per-link {tag}={value}")
+    for topo in ("torus", "fullmesh"):
+        for tag, base, key in (
+            ("BW", "bandwidth", "bandwidth"),
+            ("LT", "latency", "latency"),
+        ):
+            v = _yml_scalar(yml, key)
+            value = int(v) if v == int(v) else v
+            p = os.path.join(root, "configs", f"{base}_schedule_{topo}.txt")
+            if os.path.isfile(p):
+                with open(p) as f:
+                    f.readline()  # "<tag> 0" block header
+                    row = f.readline().split()
+                zeros = sum(1 for x in row if float(x) == 0.0)
+                if (
+                    len(row) == cap
+                    and {float(x) for x in row} == {0.0, float(value)}
+                    and (zeros == 1) == (topo == "fullmesh")
+                ):
+                    continue
+            gen_matrices.write_matrix(p, tag, cap, *dims, value, topo)
+            print(f"built {p}: {cluster.fmt(dims)} {topo}, per-link {tag}={value}")
 
 
 def prereq(root: str = ROOT, jobs: str | None = None) -> None:

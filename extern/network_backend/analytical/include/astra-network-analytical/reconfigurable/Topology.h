@@ -83,6 +83,16 @@ class Topology {
      */
     void connect_ocs_edge(DeviceId src, DeviceId dest, Bandwidth bandwidth, Latency latency) noexcept;
 
+    /**
+     * Ensure both directed links of a full-mesh pair exist, each with its own
+     * bandwidth/latency (fullmesh mode creates links lazily on first traffic
+     * instead of materializing all N^2 links up front). No-op per direction if
+     * the link already exists; existing links keep their values (a global
+     * reconfigure retunes them from the schedule matrices).
+     */
+    void connect_mesh_edge(
+        DeviceId src, DeviceId dest, Bandwidth bw_fwd, Latency lt_fwd, Bandwidth bw_rev, Latency lt_rev) noexcept;
+
   protected:
     /// number of total devices in the topology
     /// device includes non-NPU devices such as switches

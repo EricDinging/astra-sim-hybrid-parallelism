@@ -32,6 +32,12 @@ namespace NetworkAnalyticalReconfigurable {
  * table held -- compute_dor() is the original per-pair walk lifted verbatim,
  * and the override/cache lifecycle mirrors the eager table's state machine
  * (clear() == rebuild-to-DOR, set_override() == apply_job_wiring overwrite).
+ *
+ * fullmesh=true replaces the computed-DOR leg with the direct route
+ * [src, dst]: on a complete graph (every off-diagonal bandwidth cell nonzero,
+ * validated by TopologyManager::set_fullmesh) the BFS shortest path is exactly
+ * one hop, so no geometry is needed and only actively communicating pairs ever
+ * occupy the cache.
  */
 class Router {
   public:
@@ -45,7 +51,8 @@ class Router {
            bool bidi,
            int devices_count,
            const std::unordered_set<int>* failed_npus,
-           std::size_t budget_bytes = kDefaultBudgetBytes) noexcept;
+           std::size_t budget_bytes = kDefaultBudgetBytes,
+           bool fullmesh = false) noexcept;
 
     /**
      * Route from src to dst (override > cache > computed DOR).
@@ -75,6 +82,9 @@ class Router {
 
     /// The original DOR walk, lifted verbatim from precomputeRoutes_DOR().
     Route compute_dor(DeviceId src, DeviceId dst) const noexcept;
+
+    /// Full-mesh route: [src, dst] ([src] when src == dst).
+    Route direct_route(DeviceId src, DeviceId dst) const noexcept;
 
     // Introspection (tests / diagnostics).
     std::size_t cache_size() const noexcept {
@@ -109,6 +119,7 @@ class Router {
     int dims_count_;
     bool is_torus_;
     bool bidi_;
+    bool fullmesh_;
     int devices_count_;
     const std::unordered_set<int>* failed_npus_;
 

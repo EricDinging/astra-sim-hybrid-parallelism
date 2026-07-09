@@ -57,6 +57,23 @@ void Topology::connect_ocs_edge(const DeviceId src,
     }
 }
 
+void Topology::connect_mesh_edge(const DeviceId src,
+                                 const DeviceId dest,
+                                 const Bandwidth bw_fwd,
+                                 const Latency lt_fwd,
+                                 const Bandwidth bw_rev,
+                                 const Latency lt_rev) noexcept {
+    assert(0 <= src && src < devices_count);
+    assert(0 <= dest && dest < devices_count);
+    assert(src != dest);
+    if (!devices[src]->connected(dest)) {
+        connect(src, dest, bw_fwd, lt_fwd, false);
+    }
+    if (!devices[dest]->connected(src)) {
+        connect(dest, src, bw_rev, lt_rev, false);
+    }
+}
+
 void Topology::connect_torus_neighbors(const std::vector<int>& npus_per_dim, bool is_torus) noexcept {
     const int dims = static_cast<int>(npus_per_dim.size());
     assert(dims > 0);

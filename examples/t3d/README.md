@@ -46,14 +46,19 @@ For quick dev tests use short traces: `N_JOBS=20 ./reproduce.py gen <exp>`.
   phase functions), `launcher.py` (worker probe/packing/deploy),
   `run_combo.py` (one sim on a worker), `shapes.py`, `gen_traces.py`,
   `measure_svc.py`, `gen_arrivals.py`, `make_jobs.py`.
-- `configs/` — 16³-torus simulator configs.
+- `configs/` — simulator configs. The generated BW/LT matrices are suffixed
+  by topology: `*_schedule_torus.txt` (all real policies) and
+  `*_schedule_fullmesh.txt` (the `ideal` placement).
 - `tests/` — self-running tests, e.g. `python3 tests/test_sweep.py`.
 - `tracelib/` — Chakra traces, one per legal shape (gitignored). Shared by all
   experiments; a job's iteration count lives in `arrivals.csv`, not the trace.
 - `runs/<experiment>/<admission>-<placement>-load<L>/` — one flat folder per
-  combo (6 placements × 20 loads, ρ = 0.05…1.00) holding its `arrivals.csv`
+  combo (7 placements × 20 loads, ρ = 0.05…1.00) holding its `arrivals.csv`
   and all results: streaming `progress.csv` + `occupancy.csv`, `jobs.csv`,
-  `summary.txt`, `sim.done`.
+  `summary.txt`, `sim.done`. The `ideal` placement runs sfc on a fully
+  connected mesh (`--fullmesh` + the `*_schedule_fullmesh.txt` matrices):
+  placement and routing constraints vanish, giving the JCT baseline the six
+  real policies are normalized against.
 
 ## Experiments
 
