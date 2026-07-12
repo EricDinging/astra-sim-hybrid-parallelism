@@ -91,8 +91,10 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         ],
         f"swf-pareto{half}-load-sweep": [*pareto, half],
         f"fifo-pareto{half}-load-sweep": [*pareto, half],
+        f"ljsf-pareto{half}-load-sweep": [*pareto, half],
         f"swf-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"fifo-pareto{quarter}-load-sweep": [*pareto, quarter],
+        f"ljsf-pareto{quarter}-load-sweep": [*pareto, quarter],
     }
 
 
