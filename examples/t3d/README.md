@@ -41,7 +41,7 @@ For quick dev tests use short traces: `N_JOBS=20 ./reproduce.py gen <exp>`.
 ## Layout
 
 - `reproduce.py` — driver. Bare run = interactive picker (option 0 = cleanup).
-  Phases: `prereq`, `gen`, `launch`, `clean` (soon: `collect`, `post`).
+  Phases: `prereq`, `gen`, `launch`, `monitor`, `collect`, `clean` (soon: `post`).
 - `scripts/` — the libraries behind the phases: `sweep.py` (experiment table +
   phase functions), `launcher.py` (worker probe/packing/deploy),
   `run_combo.py` (one sim on a worker), `shapes.py`, `gen_traces.py`,
@@ -99,3 +99,34 @@ runner that works through its queue. Sims write results (including
 per-job-flushed `progress.csv` and per-event `occupancy.csv`) straight into their
 combo folder. Relaunch is safe: finished combos are skipped, stale twins are
 killed.
+
+## Syncing results back (`./reproduce.py collect`)
+
+Sims write results on the workers; `collect` rsyncs them back into the local
+`runs/<exp>/<combo>/` folders and prints a per-combo completion summary. It
+reads `runs/<exp>/assignments.csv` to know which host holds each combo, pulls
+from every host in parallel, then reports how many combos are done
+(`sim.done` present) vs still pending.
+
+```bash
+./reproduce.py collect <experiment|all>
+```
+
+Safe to run anytime — even mid-run: only result files come back
+(`*.csv`, `sim.done`, `run.err`, `failed_nodes.log`), and `progress.csv` /
+`occupancy.csv` are streamed, so partial progress shows up on each pull. Runs
+are idempotent (rsync only moves changed files), so re-run it periodically to
+refresh. The verbose per-combo logs (`log.log*`, `err.log*`, `jct.log*`, up
+to ~100 MB each) stay on the worker for on-demand debugging and are never
+pulled; arrivals and the shared `jobs-load*` symlink dirs never move either.
+
+Use `./reproduce.py monitor <experiment|all>` to watch progress without
+pulling files — it polls the workers (hourly by default, `POLL_SECS`
+overrides) and prints a live done/pending grid.
+
+**Detach and reattach.** The runners are `setsid`-detached on the workers, so
+they survive local disconnects. Once `launch` prints `launched N combos ...`,
+you can Ctrl-C the driver at any time — the sweep keeps running remotely. Then
+`collect` to pull partial results and `monitor` to reattach, in any order, as
+often as you like. (Ctrl-C *before* that line may leave some hosts without a
+runner started.)
