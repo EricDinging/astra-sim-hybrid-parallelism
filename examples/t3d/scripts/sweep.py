@@ -341,15 +341,18 @@ def progress_table(
     cells: dict[str, tuple[int, str]],
     total: int,
 ) -> str:
-    """One experiment's progress as a placement x load grid. A cell shows the
-    combo's completed-job count, or ✓ once its sim finished rc=0 (completions
-    can be < total when jobs were dropped), or ✗N on a nonzero exit."""
+    """One experiment's progress as a load x placement grid (loads down the
+    rows so many fine-grained loads scroll vertically instead of overflowing
+    the terminal width). A cell shows the combo's completed-job count, or ✓
+    once its sim finished rc=0 (completions can be < total when jobs were
+    dropped), or ✗N on a nonzero exit."""
     admission = exp.split("-")[0]
+    w = max(6, *(len(p) for p in PLACEMENTS)) + 1  # col width fits name + counts
     lines = [f"{exp}  (jobs done, of {total} per combo)"]
-    lines.append("  " + "placement".ljust(14) + "".join(x.rjust(7) for x in LOADS))
-    for pol in PLACEMENTS:
-        row = "  " + pol.ljust(14)
-        for load in LOADS:
+    lines.append("  " + "load".ljust(6) + "".join(p.rjust(w) for p in PLACEMENTS))
+    for load in LOADS:
+        row = "  " + load.ljust(6)
+        for pol in PLACEMENTS:
             n, rc = cells.get(f"{admission}-{pol}-load{load}", (0, "-"))
             if rc == "rc=0":
                 cell = "✓"
@@ -357,7 +360,7 @@ def progress_table(
                 cell = "✗" + rc.removeprefix("rc=")
             else:
                 cell = str(n)
-            row += cell.rjust(7)
+            row += cell.rjust(w)
         lines.append(row)
     return "\n".join(lines)
 
