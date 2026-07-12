@@ -52,7 +52,10 @@ N_JOBS = int(os.environ.get("N_JOBS", 100000))
 # progress-poll interval while launch blocks; override for dev, e.g. POLL_SECS=10
 POLL_SECS = int(os.environ.get("POLL_SECS", 3600))
 SEED = 0
-LOADS = [f"{i / 100:.2f}" for i in range(5, 101, 5)]  # 0.05 .. 1.00, step 0.05
+# 0.05..0.40 step 0.05, then 0.40..1.00 step 0.02 (denser near saturation)
+LOADS = [
+    f"{i / 100:.2f}" for i in dict.fromkeys([*range(5, 41, 5), *range(40, 101, 2)])
+]
 # `ideal` is not a binary policy: it runs sfc on a fully connected mesh
 # (--fullmesh + the configs/fullmesh schedules; see run_combo.py), giving the
 # placement-free JCT baseline the other policies are normalized against.
