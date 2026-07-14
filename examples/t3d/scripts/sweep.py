@@ -109,18 +109,36 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"swf-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"fifo-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"ljsf-pareto{quarter}-load-sweep": [*pareto, quarter],
+        # reconfigurability sweep: same fifo-pareto<quarter> arrivals, but the
+        # placements are rfold at every block granularity (see placements())
+        f"fifo-pareto{quarter}-blocksize-load-sweep": [*pareto, quarter],
         **fail,
         **{e: None for e in placeability.EXPS},
     }
 
 
-def combos(exp: str) -> list[tuple[str, str]]:
+def placements(exp: str, root: str = ROOT) -> list[str]:
+    """The placement columns of an experiment. The blocksize experiment sweeps
+    rfold's block granularity -- rfoldb<N> = rfold with --block-size NxNxN
+    (see run_combo.policy_settings), doubling from 1x1x1 up to the whole
+    torus (folding-only) -- against the firstfit and ideal anchors."""
+    if "-blocksize-" not in exp:
+        return PLACEMENTS
+    dims = cluster.load(root)
+    blocks, b = [], 1
+    while all(d % b == 0 for d in dims):
+        blocks.append(f"rfoldb{b}")
+        b *= 2
+    return ["firstfit", *blocks, "ideal"]
+
+
+def combos(exp: str, root: str = ROOT) -> list[tuple[str, str]]:
     """All (combo_name, load) cells of an experiment, e.g.
     ("easy-firstfit-load0.15", "0.15"). Admission comes from the exp name."""
     admission = exp.split("-")[0]
     return [
         (f"{admission}-{placement}-load{load}", load)
-        for placement in PLACEMENTS
+        for placement in placements(exp, root)
         for load in LOADS
     ]
 
@@ -255,7 +273,7 @@ def gen(exp: str, root: str = ROOT) -> None:
         )
     dims_flag = ["--cluster-dims", cluster.fmt(cluster.load(root))]
     flags = experiments(root)[exp]
-    for combo, load in combos(exp):
+    for combo, load in combos(exp, root):
         out = os.path.join(root, "runs", exp, combo)
         if os.path.isfile(os.path.join(out, "arrivals.csv")):
             print(f"skip  {exp}/{combo} (arrivals.csv exists)")
@@ -299,7 +317,7 @@ def launch(exps: list[str], root: str = ROOT) -> None:
 
     cells_by_exp: dict[str, list[tuple[str, str]]] = {}
     for exp in exps:
-        cs = combos(exp)
+        cs = combos(exp, root)
         for combo, _load in cs:
             if not os.path.isfile(
                 os.path.join(root, "runs", exp, combo, "arrivals.csv")
@@ -375,12 +393,13 @@ def progress_table(
     once its sim finished rc=0 (completions can be < total when jobs were
     dropped), or ✗N on a nonzero exit."""
     admission = exp.split("-")[0]
-    w = max(6, *(len(p) for p in PLACEMENTS)) + 1  # col width fits name + counts
+    pols = placements(exp)
+    w = max(6, *(len(p) for p in pols)) + 1  # col width fits name + counts
     lines = [f"{exp}  (jobs done, of {total} per combo)"]
-    lines.append("  " + "load".ljust(6) + "".join(p.rjust(w) for p in PLACEMENTS))
+    lines.append("  " + "load".ljust(6) + "".join(p.rjust(w) for p in pols))
     for load in LOADS:
         row = "  " + load.ljust(6)
-        for pol in PLACEMENTS:
+        for pol in pols:
             n, rc = cells.get(f"{admission}-{pol}-load{load}", (0, "-"))
             if rc == "rc=0":
                 cell = "✓"
@@ -395,7 +414,7 @@ def progress_table(
 
 def _trace_len(exp: str, root: str) -> int:
     """Jobs per combo of an experiment = rows of its (identical) arrivals."""
-    combo, _ = combos(exp)[0]
+    combo, _ = combos(exp, root)[0]
     path = os.path.join(root, "runs", exp, combo, "arrivals.csv")
     try:
         with open(path) as f:

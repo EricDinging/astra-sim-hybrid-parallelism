@@ -116,9 +116,13 @@ def policy_settings(pol: str) -> tuple[str, str, list[str]]:
     """(placement-policy, schedule-file topology suffix, extra flags) for a
     combo's placement. `ideal` is sfc on a fully connected mesh: same arrivals
     and jobs, but the *_schedule_fullmesh.txt matrices and the binary's
-    --fullmesh direct routing."""
+    --fullmesh direct routing. `rfoldb<N>` is rfold with an NxNxN
+    --block-size (the blocksize experiment's reconfigurability knob)."""
     if pol == "ideal":
         return "sfc", "fullmesh", ["--fullmesh"]
+    if pol.startswith("rfoldb"):
+        b = pol.removeprefix("rfoldb")
+        return "rfold", "torus", [f"--block-size={b}x{b}x{b}"]
     return pol, "torus", []
 
 

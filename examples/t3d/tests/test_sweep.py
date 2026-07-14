@@ -223,6 +223,34 @@ def test_run_combo_policy_settings():
     assert run_combo.policy_settings("sfc") == ("sfc", "torus", [])
     assert run_combo.policy_settings("firstfit") == ("firstfit", "torus", [])
     assert run_combo.policy_settings("ideal") == ("sfc", "fullmesh", ["--fullmesh"])
+    assert run_combo.policy_settings("rfoldb2") == (
+        "rfold",
+        "torus",
+        ["--block-size=2x2x2"],
+    )
+
+
+def test_blocksize_experiment_placements():
+    with tempfile.TemporaryDirectory() as root:
+        _mkroot(root, (8, 8, 8))
+        exp = "fifo-pareto128-blocksize-load-sweep"
+        assert exp in sweep.experiments(root)
+        assert sweep.placements(exp, root) == [
+            "firstfit",
+            "rfoldb1",
+            "rfoldb2",
+            "rfoldb4",
+            "rfoldb8",
+            "ideal",
+        ]
+        cells = sweep.combos(exp, root)
+        assert len(cells) == 6 * len(sweep.LOADS)
+        assert ("fifo-rfoldb2-load0.05", "0.05") in cells
+        # block sizes scale with the cluster: 16^3 adds rfoldb16
+        _mkroot(root, (16, 16, 16))
+        assert "rfoldb16" in sweep.placements(exp, root)
+        # non-blocksize experiments keep the full placement list
+        assert sweep.placements("fifo-pareto128-load-sweep", root) == sweep.PLACEMENTS
 
 
 def test_prereq_builds_tracelib_and_skips_existing_svc():
