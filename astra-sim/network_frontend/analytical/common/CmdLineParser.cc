@@ -139,7 +139,8 @@ void CmdLineParser::define_options() noexcept {
         "is the direct 1-hop path (== BFS shortest path on a complete graph) "
         "and links are created lazily on first traffic. --npus-per-dim still "
         "defines the logical grid for placement policies. Incompatible with "
-        "--bidi, --failure-prob > 0, and --placement-policy=rfold.",
+        "--bidi and --placement-policy=rfold; --failure-prob > 0 excludes "
+        "failed NPUs from placement (direct routes never transit them).",
         cxxopts::value<bool>()->default_value("false"))(
         "route-cache-budget-gb",
         "DOR route-cache memory ceiling in GiB (reconfigurable backend with "

@@ -76,10 +76,18 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     half and quarter capacity for each admission policy, plus a uniform-size
     variant at quarter. The admission policy is the experiment-name prefix
     (easy/swf/fifo); it only matters at launch time, so the three
-    *-pareto<half>-* experiments generate identical (seed-pinned) arrivals."""
+    *-pareto<half>-* experiments generate identical (seed-pinned) arrivals.
+
+    The fail<pct> experiments are fifo-pareto<quarter> twins with a fraction
+    of NPUs marked permanently failed (run_combo.py turns the pct into the
+    binary's --failure-prob, rounding the failed-node count up)."""
     cap = cluster.capacity(cluster.load(root))
     half, quarter = str(cap // 2), str(cap // 4)
     pareto = ["--alpha", "0.5", "--size-max"]
+    fail = {
+        f"fifo-pareto{quarter}-fail{pct}-load-sweep": [*pareto, quarter]
+        for pct in ("0.1", "0.2", "0.5", "1")
+    }
     return {
         f"easy-pareto{half}-load-sweep": [*pareto, half],
         f"easy-pareto{quarter}-load-sweep": [*pareto, quarter],
@@ -95,6 +103,7 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"swf-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"fifo-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"ljsf-pareto{quarter}-load-sweep": [*pareto, quarter],
+        **fail,
     }
 
 

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import math
 import os
 import resource
 import subprocess
@@ -99,6 +100,18 @@ def build_jobs_dir(w: str, exp: str, combo_dir: str, load: str) -> str:
     return jobs
 
 
+def failure_flags(exp: str, dims_csv: str) -> list[str]:
+    """--failure-prob for a fail<pct> experiment (e.g. fifo-pareto128-fail0.5-
+    load-sweep -> 0.5% of the NPUs failed). The binary picks lround(p*N) nodes
+    (fixed seed 42), so pass ceil(pct/100*N)/N to round the count *up*."""
+    for tok in exp.split("-"):
+        if tok.startswith("fail"):
+            cap = math.prod(int(d) for d in dims_csv.split(","))
+            k = math.ceil(float(tok[len("fail") :]) / 100 * cap)
+            return [f"--failure-prob={k / cap}"]
+    return []
+
+
 def policy_settings(pol: str) -> tuple[str, str, list[str]]:
     """(placement-policy, schedule-file topology suffix, extra flags) for a
     combo's placement. `ideal` is sfc on a fully connected mesh: same arrivals
@@ -146,7 +159,9 @@ def main() -> int:
     )
 
     cfg = os.path.join(w, "configs")
+    dims = npus_per_dim(w)
     placement, topo, extra = policy_settings(pol)
+    extra += failure_flags(exp, dims)
     with open(os.path.join(combo_dir, "run.err"), "w") as err:
         rc = subprocess.run(
             [
@@ -161,7 +176,7 @@ def main() -> int:
                 "--comm-scale=1.0",
                 "--injection-scale=1.0",
                 "--rendezvous-protocol=false",
-                f"--npus-per-dim={npus_per_dim(w)}",
+                f"--npus-per-dim={dims}",
                 f"--job-arrival-file={combo_dir}/arrivals.csv",
                 f"--jobs-dir={jobs}",
                 f"--placement-policy={placement}",

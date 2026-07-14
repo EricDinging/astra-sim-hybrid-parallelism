@@ -382,9 +382,13 @@ int main(int argc, char* argv[]) {
             std::exit(1);
         }
         if (failure_prob > 0.0) {
-            logger->critical("--fullmesh is incompatible with --failure-prob "
-                             "(failure sidestep is torus-DOR only)");
-            std::exit(1);
+            // Safe combination: SchedRuntime excludes failed NPUs from every
+            // placement, and fullmesh routes are direct 1-hop between job
+            // endpoints, so a failed NPU can never appear on a route. The
+            // torus-DOR failure sidestep is simply not needed here.
+            logger->info("fullmesh + failure-prob: failed NPUs are excluded "
+                         "from placement only (direct routes never transit "
+                         "them)");
         }
         if (placement_policy == "rfold") {
             logger->critical("--fullmesh is incompatible with "
