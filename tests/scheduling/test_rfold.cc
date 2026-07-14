@@ -255,13 +255,52 @@ TEST(RFoldMultiFold, SubAxisClosureWiredByOcsAtBlock4) {
     EXPECT_EQ(r.reconfig_plan.routes.size(), ring.size());
 }
 
-// Odd 1-D longer than every axis still never places (prime: no factor tuple
-// fits, no closed odd cycle exists) — DEFER forever, never DROP (1-D rule).
-TEST(RFoldMultiFold, OddLongRingStillDefers) {
+// Odd 1-D longer than every axis can never place (prime: no factor tuple
+// fits, no closed odd cycle exists in the bipartite torus), so the idle
+// oracle DROPs it. Used to DEFER forever under the old 1-D any_fits
+// shortcut, which skipped the oracle and aborted the sim at drain.
+TEST(RFoldMultiFold, OddLongRingDrops) {
     auto p = make();
     auto v = full(8, 8, 8);
     auto j = job(13, 11, {11, 1, 1});
-    EXPECT_EQ(p->try_place(j, v).outcome, PlacementOutcome::DEFER);
+    EXPECT_EQ(p->try_place(j, v).outcome, PlacementOutcome::DROP);
+}
+
+// Even 1-D whose length has no <=axis factor tuple (262 = 2*131) and whose
+// snake DFS exhausts kSnakeBudget even on an IDLE torus: the oracle mirrors
+// the snake failure, so the job DROPs instead of deferring forever.
+TEST(RFoldMultiFold, SnakeBudgetFailureOnIdleDrops) {
+    auto p = make();
+    auto v = full(8, 8, 8);
+    auto j = job(14, 262, {1, 1, 262});
+    EXPECT_EQ(p->try_place(j, v).outcome, PlacementOutcome::DROP);
+}
+
+// The oracle consult must not turn busy-cluster defers into drops: 1x1x22
+// (22 = 2*11, no cuboid variant) snakes fine on an idle torus but cannot
+// close a cycle through pairwise-nonadjacent free nodes -- DEFER, retry
+// when the free set changes.
+TEST(RFoldMultiFold, SnakeableRingDefersWhenBusy) {
+    auto p = make();
+    std::vector<int> free;  // even coords only: no two nodes torus-adjacent
+    for (int z = 0; z < 8; z += 2) {
+        for (int y = 0; y < 8; y += 2) {
+            for (int x = 0; x < 8; x += 2) {
+                free.push_back(z * 64 + y * 8 + x);
+            }
+        }
+    }
+    ClusterView busy(std::move(free), {8, 8, 8}, 512, 0);
+    auto j = job(15, 22, {1, 1, 22});
+    EXPECT_EQ(p->try_place(j, busy).outcome, PlacementOutcome::DEFER);
+}
+
+// And the snake success path is untouched: 1x1x22 on an idle torus places.
+TEST(RFoldMultiFold, SnakeableRingPlacesWhenIdle) {
+    auto p = make();
+    auto v = full(8, 8, 8);
+    auto j = job(16, 22, {1, 1, 22});
+    EXPECT_EQ(p->try_place(j, v).outcome, PlacementOutcome::PLACED);
 }
 
 namespace {

@@ -139,13 +139,14 @@ TEST(RFoldWholeTorus, OneDSnakesWhenNoFoldFits) {
 }
 
 // A length-13 ring needs an odd 1-hop cycle, which a bipartite (all-even
-// dims) torus cannot host -- but a 1-D job small enough for the cluster must
-// DEFER, never DROP (the snake might fit after the cluster changes).
-TEST(RFoldWholeTorus, OneDDefersNeverDrops) {
+// dims) torus cannot host -- ever, on any free set -- so the idle-cluster
+// oracle DROPs it. (Used to DEFER forever under the 1-D any_fits shortcut,
+// which skipped the oracle and aborted the sim at event-queue drain.)
+TEST(RFoldWholeTorus, OneDUnplaceableDrops) {
     auto p = make_wt({4, 4, 4});
     auto v = full(4, 4, 4);
     EXPECT_EQ(p->try_place(job(5, 13, {13, 1, 1}), v).outcome,
-              PlacementOutcome::DEFER);
+              PlacementOutcome::DROP);
 }
 
 // The case that emits OCS at block 4x4x4 (see test_rfold.cc

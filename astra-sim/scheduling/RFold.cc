@@ -207,16 +207,18 @@ PlacementResult RFold::try_place(const JobInstance& job,
         }
         return r;
     }
-    // 1-D fallbacks hoisted from the old standalone folding policy. A job
+    // 1-D fallback hoisted from the old standalone folding policy. A job
     // with a single communicating ring can snake through arbitrary free
-    // nodes (consecutive ranks and the wrap each 1 torus hop apart), so a
-    // 1-D job that fits the cluster never DROPs just because no cuboid
-    // footprint fits the torus dims -- and when no fold variant fits the
-    // free NPUs right now, the snake is the placement of last resort.
+    // nodes (consecutive ranks and the wrap each 1 torus hop apart), so when
+    // no fold variant fits the free NPUs right now, the snake is the
+    // placement of last resort. Whether a failed snake means DEFER or DROP
+    // is left to the idle-cluster oracle below (which mirrors this snake on
+    // the idle torus): forcing any_fits here would skip the oracle and leave
+    // a snake-budget failure DEFERring forever on an idle cluster, aborting
+    // the sim at event-queue drain.
     const int non_unit =
         (job.shape[0] > 1) + (job.shape[1] > 1) + (job.shape[2] > 1);
     if (non_unit <= 1) {
-        any_fits = true;
         auto cyc = FoldEnumerator::snake_1d(view.free_npus(), dims,
                                             job.num_ranks, kSnakeBudget);
         if (!cyc.empty()) {
