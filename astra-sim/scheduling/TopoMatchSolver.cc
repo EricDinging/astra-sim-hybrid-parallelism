@@ -5,6 +5,9 @@ LICENSE file in the root directory of this source tree.
 
 #include "astra-sim/scheduling/TopoMatchSolver.hh"
 
+#include <unistd.h>
+
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <set>
@@ -23,8 +26,13 @@ namespace AstraSim {
 namespace Scheduling {
 
 TopoMatchSolver::TopoMatchSolver(int W, int L, int H) : W_(W), L_(L), H_(H) {
+    // PID-suffixed so concurrent sims on one host never share the file: a
+    // late-starting process truncating a shared path while another is mid
+    // SCOTCH_archLoad yields a garbage arch and a segfault (topomatch ignores
+    // archLoad's return value).
     arch_path_ = "/tmp/astrasim_topomatch_torus3D_" + std::to_string(W_) + "x" +
-                 std::to_string(L_) + "x" + std::to_string(H_) + ".tgt";
+                 std::to_string(L_) + "x" + std::to_string(H_) + "_pid" +
+                 std::to_string(getpid()) + ".tgt";
     std::ofstream out(arch_path_);
     out << "torus3D " << W_ << " " << L_ << " " << H_;
     out.flush();
@@ -37,6 +45,7 @@ TopoMatchSolver::TopoMatchSolver(int W, int L, int H) : W_(W), L_(L), H_(H) {
 }
 
 TopoMatchSolver::~TopoMatchSolver() {
+    std::remove(arch_path_.c_str());
     tm_finalize();
 }
 
