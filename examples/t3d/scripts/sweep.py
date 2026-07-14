@@ -33,6 +33,7 @@ import gen_matrices
 import gen_traces
 import launcher
 import measure_svc
+import placeability
 import shapes
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -80,7 +81,12 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
 
     The fail<pct> experiments are fifo-pareto<quarter> twins with a fraction
     of NPUs marked permanently failed (run_combo.py turns the pct into the
-    binary's --failure-prob, rounding the failed-node count up)."""
+    binary's --failure-prob, rounding the failed-node count up).
+
+    The placeability* experiments (one per failure rate, plus the no-failure
+    baseline) are single-job empty-torus censuses handled entirely by
+    placeability.py; their flags value is None -- they have no arrivals,
+    loads, or combos, and launch runs them locally."""
     cap = cluster.capacity(cluster.load(root))
     half, quarter = str(cap // 2), str(cap // 4)
     pareto = ["--alpha", "0.5", "--size-max"]
@@ -104,6 +110,7 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"fifo-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"ljsf-pareto{quarter}-load-sweep": [*pareto, quarter],
         **fail,
+        **{e: None for e in placeability.EXPS},
     }
 
 
@@ -238,6 +245,9 @@ def gen(exp: str, root: str = ROOT) -> None:
     into runs/<exp>/<combo>/ (combos with an arrivals.csv are skipped, so
     re-running is cheap and resumable). All placements at one load get the
     same seed-pinned job stream, for a fair policy comparison."""
+    if experiments(root)[exp] is None:  # placeability: nothing to generate
+        print(f"skip  {exp} (placeability census needs no arrivals)")
+        return
     svc_table = os.path.join(root, "service_times.csv")
     if not os.path.isfile(svc_table):
         raise SystemExit(
@@ -277,7 +287,16 @@ def launch(exps: list[str], root: str = ROOT) -> None:
 
     Experiments are planned JOINTLY -- one runner per host executes its
     share of every experiment at most `slots` sims at a time -- and the
-    combo->host plan lands in runs/<exp>/assignments.csv per experiment."""
+    combo->host plan lands in runs/<exp>/assignments.csv per experiment.
+
+    Placeability experiments have no combos to distribute; each is a local
+    ~0.1s-per-probe census, run to completion before the real launch."""
+    for exp in [e for e in exps if experiments(root)[e] is None]:
+        placeability.run(exp, root, ASTRA_SIM_BIN)
+    exps = [e for e in exps if experiments(root)[e] is not None]
+    if not exps:
+        return
+
     cells_by_exp: dict[str, list[tuple[str, str]]] = {}
     for exp in exps:
         cs = combos(exp)
@@ -388,6 +407,9 @@ def _trace_len(exp: str, root: str) -> int:
 def monitor(exps: list[str], hosts: list[str], root: str = ROOT) -> None:
     """Block until every launched combo has a sim.done, polling all workers
     every POLL_SECS and printing per-experiment progress tables."""
+    exps = [e for e in exps if experiments(root)[e] is not None]
+    if not exps:
+        return
     ws = launcher.workspace(cluster.capacity(cluster.load(root)))
     while True:
         cells: dict[tuple[str, str], tuple[int, str]] = {}
@@ -411,6 +433,9 @@ def collect(exp: str, root: str = ROOT) -> None:
     """Pull the experiment's results from its remote workers into the local
     combo folders (per assignments.csv) and summarize completion. Safe to run
     mid-sweep: progress.csv/occupancy.csv are streamed, so partial results land."""
+    if experiments(root)[exp] is None:  # placeability ran locally; just report
+        placeability.summarize(exp, root)
+        return
     apath = os.path.join(root, "runs", exp, "assignments.csv")
     if not os.path.isfile(apath):
         raise SystemExit(f"{apath} not found -- launch first")
