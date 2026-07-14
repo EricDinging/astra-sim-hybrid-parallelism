@@ -27,12 +27,12 @@ build/astra_analytical/build.sh
 ./reproduce.py prereq
 
 # 5. Generate arrival traces (or run ./reproduce.py bare for a picker)
-./reproduce.py gen <experiment|all>
+./reproduce.py gen <experiment[,experiment...]|all>
 
 # 6. List your servers (user@host per line; empty/missing file = run locally),
 #    then launch
 echo you@server1.example.org >> workers.txt
-./reproduce.py launch <experiment|all>
+./reproduce.py launch <experiment[,experiment...]|all>
 ```
 
 For quick dev tests use short traces: `N_JOBS=20 ./reproduce.py gen <exp>`.
@@ -109,7 +109,7 @@ from every host in parallel, then reports how many combos are done
 (`sim.done` present) vs still pending.
 
 ```bash
-./reproduce.py collect <experiment|all>
+./reproduce.py collect <experiment[,experiment...]|all>
 ```
 
 Safe to run anytime — even mid-run: only result files come back
@@ -120,7 +120,7 @@ refresh. The verbose per-combo logs (`log.log*`, `err.log*`, `jct.log*`, up
 to ~100 MB each) stay on the worker for on-demand debugging and are never
 pulled; arrivals and the shared `jobs-load*` symlink dirs never move either.
 
-Use `./reproduce.py monitor <experiment|all>` to watch progress without
+Use `./reproduce.py monitor <experiment[,experiment...]|all>` to watch progress without
 pulling files — it polls the workers (hourly by default, `POLL_SECS`
 overrides) and prints a live done/pending grid.
 

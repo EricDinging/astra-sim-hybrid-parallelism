@@ -10,15 +10,17 @@ Usage:
                                   then build the prerequisites: Chakra tracelib (via
                                   stage) + measured service_times.csv (both skipped
                                   if present)
-  ./reproduce.py gen [exp|all]    arrival-trace generation for one experiment (or all)
-  ./reproduce.py launch [exp|all]     deploy to workers, start runners, monitor
-  ./reproduce.py monitor [exp|all]    re-attach to a running sweep's progress
+  ./reproduce.py gen [exps|all]   arrival-trace generation for one experiment (or all)
+  ./reproduce.py launch [exps|all]    deploy to workers, start runners, monitor
+  ./reproduce.py monitor [exps|all]   re-attach to a running sweep's progress
                                   (blocks, polls hourly; POLL_SECS overrides)
-  ./reproduce.py collect [exp|all]    pull results back from the workers
-  ./reproduce.py post [exp|all]       (not implemented yet)
+  ./reproduce.py collect [exps|all]   pull results back from the workers
+  ./reproduce.py post [exps|all]      (not implemented yet)
   ./reproduce.py clean            remove all results (runs/<exp>; prerequisites are kept)
 
-Omitting the experiment argument falls back to the interactive picker.
+`exps` is one experiment name or a comma-separated subset. Omitting it falls
+back to the interactive picker, which accepts the same comma-separated form
+(names or menu indices).
 
 Env (prereq phase): STAGE_IMAGE (default astra:latest), DOCKER (default
 "sudo docker"), JOBS (in-container parallelism, default nproc-2).
@@ -70,17 +72,23 @@ def ensure_cluster() -> None:
     print(f"saved {cluster.path(sweep.ROOT)}: {cluster.fmt(dims)}")
 
 
-def pick_experiment(exps: list[str]) -> str:
+def pick_experiments(exps: list[str]) -> list[str]:
+    """Menu selection: a single name/index, 'all', or a comma-separated
+    subset (names and indices mix freely). Cleanup only stands alone."""
     names = [CLEANUP, "all", *exps]
-    print("Which experiment(s) to run?")
+    print("Which experiment(s) to run? (comma-separate for a subset)")
     for i, name in enumerate(names):
         print(f"  {i}) {name}")
     while True:
         raw = input("experiment> ").strip()
-        if raw in names:
-            return raw
-        if raw.isdigit() and 0 <= int(raw) < len(names):
-            return names[int(raw)]
+        toks = [t.strip() for t in raw.split(",") if t.strip()]
+        toks = [
+            names[int(t)] if t.isdigit() and int(t) < len(names) else t for t in toks
+        ]
+        if toks == [CLEANUP]:
+            return toks
+        if toks and all(t == "all" or t in exps for t in toks):
+            return exps if "all" in toks else list(dict.fromkeys(toks))
         print("invalid selection", file=sys.stderr)
 
 
@@ -92,18 +100,17 @@ def confirmed_clean() -> None:
         print("aborted")
 
 
-def for_each(choice: str, fn, exps: list[str]) -> None:
-    for exp in exps if choice == "all" else [choice]:
-        fn(exp)
-
-
 def main(argv: list[str] | None = None) -> int:
     raise_fd_limit()
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     ap.add_argument("phase", nargs="?", choices=PHASES, help="phase to run")
-    ap.add_argument("experiment", nargs="?", help="experiment name, or 'all'")
+    ap.add_argument(
+        "experiment",
+        nargs="?",
+        help="experiment name(s, comma-separated), or 'all'",
+    )
     args = ap.parse_args(argv)
 
     if args.phase == "prereq":
@@ -117,20 +124,25 @@ def main(argv: list[str] | None = None) -> int:
     # every other phase needs cluster.json; this raises SystemExit otherwise
     exps = list(sweep.experiments())
 
-    choice = args.experiment or pick_experiment(exps)
-    if choice == CLEANUP:
-        confirmed_clean()
-        return 0
-    if choice != "all" and choice not in exps:
-        ap.error(f"unknown experiment: {choice}")
+    if args.experiment:
+        toks = [t.strip() for t in args.experiment.split(",") if t.strip()]
+        unknown = [t for t in toks if t != "all" and t not in exps]
+        if unknown or not toks:
+            ap.error(f"unknown experiment(s): {', '.join(unknown) or args.experiment}")
+        selected = exps if "all" in toks else list(dict.fromkeys(toks))
+    else:
+        selected = pick_experiments(exps)
+        if selected == [CLEANUP]:
+            confirmed_clean()
+            return 0
 
     if args.phase == "launch":
         # experiments are planned jointly so a host never oversubscribes
-        sweep.launch(exps if choice == "all" else [choice])
+        sweep.launch(selected)
         return 0
     if args.phase == "monitor":
         sweep.monitor(
-            exps if choice == "all" else [choice],
+            selected,
             sweep.launcher.parse_workers(os.path.join(sweep.ROOT, "workers.txt")),
         )
         return 0
@@ -141,7 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         "collect": sweep.collect,
         "post": sweep.postprocess,
     }[args.phase]
-    for_each(choice, phase_fn, exps)
+    for exp in selected:
+        phase_fn(exp)
     return 0
 
 
