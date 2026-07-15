@@ -299,9 +299,12 @@ def gen(exp: str, root: str = ROOT) -> None:
         print(f"done  {exp}/{combo}")
 
 
-def launch(exps: list[str], root: str = ROOT) -> None:
+def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -> None:
     """Plan, deploy, and start all experiments' combos on the workers
-    (workers.txt; empty/missing = local machine).
+    (workers_file, default workers.txt; empty/missing = local machine).
+    Different launches may use different worker files (separate groups);
+    each experiment's assignments.csv records its hosts, so monitor and
+    collect later target exactly the group a sweep runs on.
 
     Experiments are planned JOINTLY -- one runner per host executes its
     share of every experiment at most `slots` sims at a time -- and the
@@ -330,7 +333,7 @@ def launch(exps: list[str], root: str = ROOT) -> None:
     cap = cluster.capacity(cluster.load(root))
     ws = launcher.workspace(cap)
     host_slots = launcher.probe_all(
-        launcher.parse_workers(os.path.join(root, "workers.txt")),
+        launcher.parse_workers(workers_file or os.path.join(root, "workers.txt")),
         launcher.mem_per_run_gb(cap),
     )
     if launcher.LOCAL not in host_slots and not os.path.isfile(ASTRA_SIM_BIN):
@@ -377,7 +380,7 @@ def launch(exps: list[str], root: str = ROOT) -> None:
     total = sum(len(v) for v in per_host.values())
     print(f"launched {total} combos on {len(host_slots)} host(s)")
 
-    monitor(exps, list(host_slots), root)
+    monitor(exps, root)
     for exp in exps:
         collect(exp, root)
 
@@ -423,18 +426,39 @@ def _trace_len(exp: str, root: str) -> int:
         return N_JOBS
 
 
-def monitor(exps: list[str], hosts: list[str], root: str = ROOT) -> None:
-    """Block until every launched combo has a sim.done, polling all workers
-    every POLL_SECS and printing per-experiment progress tables."""
+def monitor(exps: list[str], root: str = ROOT) -> None:
+    """Block until every launched combo has a sim.done, polling every
+    POLL_SECS and printing per-experiment progress tables. Each experiment's
+    workers come from its runs/<exp>/assignments.csv, so sweeps launched on
+    different worker groups are each polled on their own group (and
+    monitoring all polls the union). Unlaunched experiments are skipped."""
     exps = [e for e in exps if experiments(root)[e] is not None]
+    launched = []
+    for exp in exps:
+        if os.path.isfile(os.path.join(root, "runs", exp, "assignments.csv")):
+            launched.append(exp)
+        else:
+            print(f"skip  {exp} (no assignments.csv -- not launched)")
+    exps = launched
     if not exps:
         return
+    hosts = sorted(
+        {
+            h
+            for exp in exps
+            for _, _, h in launcher.read_assignments(
+                os.path.join(root, "runs", exp, "assignments.csv")
+            )
+        }
+    )
     ws = launcher.workspace(cluster.capacity(cluster.load(root)))
     while True:
         cells: dict[tuple[str, str], tuple[int, str]] = {}
         with concurrent.futures.ThreadPoolExecutor(max(1, len(hosts))) as ex:
             for snap in ex.map(lambda h: launcher.poll(h, root, ws), hosts):
                 cells.update(snap)
+        # a host's queue may also carry other sweeps' combos; count only ours
+        cells = {k: v for k, v in cells.items() if k[0] in exps}
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         print(f"\n=== progress @ {now} ===")
         for exp in exps:

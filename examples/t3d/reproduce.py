@@ -12,8 +12,12 @@ Usage:
                                   if present)
   ./reproduce.py gen [exps|all]   arrival-trace generation for one experiment (or all)
   ./reproduce.py launch [exps|all]    deploy to workers, start runners, monitor
+                                  (prompts for a workers file, default workers.txt --
+                                  give a different file to place a new sweep on a
+                                  separate worker group)
   ./reproduce.py monitor [exps|all]   re-attach to a running sweep's progress
-                                  (blocks, polls hourly; POLL_SECS overrides)
+                                  (blocks, polls hourly; POLL_SECS overrides; polls
+                                  each sweep's own workers per assignments.csv)
   ./reproduce.py collect [exps|all]   pull results back from the workers
   ./reproduce.py post [exps|all]      (not implemented yet)
   ./reproduce.py clean            remove all results (runs/<exp>; prerequisites are kept)
@@ -92,6 +96,21 @@ def pick_experiments(exps: list[str]) -> list[str]:
         print("invalid selection", file=sys.stderr)
 
 
+def ask_workers() -> str:
+    """Prompt for the workers file to launch on (default workers.txt). Giving
+    a different file places the launch on a separate worker group, e.g. when
+    new servers show up mid-sweep; assignments.csv remembers the hosts, so
+    monitor/collect find each sweep's own workers later."""
+    while True:
+        raw = input("workers file [workers.txt]> ").strip() or "workers.txt"
+        path = raw if os.path.isabs(raw) else os.path.join(sweep.ROOT, raw)
+        # the default may legitimately be absent (= run locally); a typed-in
+        # file that doesn't exist is a typo, not a request to run locally
+        if raw == "workers.txt" or os.path.isfile(path):
+            return path
+        print(f"{path} not found", file=sys.stderr)
+
+
 def confirmed_clean() -> None:
     reply = input("remove every runs/<experiment> dir? [y/N] ")
     if reply.strip().lower() in ("y", "yes"):
@@ -138,13 +157,10 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.phase == "launch":
         # experiments are planned jointly so a host never oversubscribes
-        sweep.launch(selected)
+        sweep.launch(selected, workers_file=ask_workers())
         return 0
     if args.phase == "monitor":
-        sweep.monitor(
-            selected,
-            sweep.launcher.parse_workers(os.path.join(sweep.ROOT, "workers.txt")),
-        )
+        sweep.monitor(selected)
         return 0
 
     phase_fn = {
