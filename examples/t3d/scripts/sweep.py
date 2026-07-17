@@ -75,11 +75,11 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     """experiment -> gen_arrivals trace-characteristic flags, derived from
     the cluster capacity (cluster.json): pareto sweeps with max job size at
     half and quarter capacity for each admission policy, plus uniform-size
-    variants at quarter (easy/fifo). The admission policy is the experiment-name prefix
+    variants at quarter (easy/swf/fifo). The admission policy is the experiment-name prefix
     (easy/swf/fifo); it only matters at launch time, so the three
     *-pareto<half>-* experiments generate identical (seed-pinned) arrivals.
 
-    The fail<pct> experiments are easy/fifo-pareto<quarter> twins with a fraction
+    The fail<pct> experiments are easy/swf/fifo-pareto<quarter> twins with a fraction
     of NPUs marked permanently failed (run_combo.py turns the pct into the
     binary's --failure-prob, rounding the failed-node count up).
 
@@ -93,7 +93,7 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     fail = {
         f"{adm}-pareto{quarter}-fail{pct}-load-sweep": [*pareto, quarter]
         for pct in ("0.1", "0.2", "0.5", "1")
-        for adm in ("easy", "fifo")
+        for adm in ("easy", "swf", "fifo")
     }
     uniform = ["--size-dist", "uniform", "--size-max", quarter]
     return {
@@ -106,10 +106,12 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"fifo-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"ljsf-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"easy-uniform{quarter}-load-sweep": uniform,
+        f"swf-uniform{quarter}-load-sweep": uniform,
         f"fifo-uniform{quarter}-load-sweep": uniform,
         # reconfigurability sweeps: same pareto<quarter> arrivals, but the
         # placements are rfold at every block granularity (see placements())
         f"easy-pareto{quarter}-blocksize-load-sweep": [*pareto, quarter],
+        f"swf-pareto{quarter}-blocksize-load-sweep": [*pareto, quarter],
         f"fifo-pareto{quarter}-blocksize-load-sweep": [*pareto, quarter],
         **fail,
         **{e: None for e in placeability.EXPS},
