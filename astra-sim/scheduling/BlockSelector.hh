@@ -93,10 +93,15 @@ class ContiguousFirst : public BlockSelector {
 
 // Scatter selector: place contiguously when possible (reusing ContiguousFirst,
 // so it is a superset of contiguous placeability), otherwise scatter onto the
-// first-fit free blocks (fewest reconfigured OCS links).
+// first-fit free blocks (fewest reconfigured OCS links). With rotate_scatter
+// (rfoldv2) the scatter phase tries all 6 axis rotations of the variant, as
+// the contiguous scan always has; without it (rfoldv1) scatter is
+// orientation-locked, bit-compatible with pre-2026-07 sweeps.
 class MinReconfig : public BlockSelector {
   public:
-    explicit MinReconfig(int search_budget) : budget_(search_budget) {}
+    explicit MinReconfig(int search_budget, bool rotate_scatter = true)
+        : budget_(search_budget),
+          rotate_scatter_(rotate_scatter) {}
     std::optional<Placement> select(
         const FoldVariant& v,
         const std::unordered_set<int>& free,
@@ -108,6 +113,7 @@ class MinReconfig : public BlockSelector {
 
   private:
     int budget_;
+    bool rotate_scatter_;
 };
 
 // Scatter selector: gather the most-isolated free blocks (fewest free
@@ -129,9 +135,11 @@ class MaxDefrag : public BlockSelector {
 };
 
 // name in {contiguous, min-reconfig, max-defrag}. search_budget bounds the
-// scatter selectors' backtracking. Returns nullptr on unknown name.
+// scatter selectors' backtracking; rotate_scatter is min-reconfig's rfoldv2
+// rotation widening (see MinReconfig). Returns nullptr on unknown name.
 std::unique_ptr<BlockSelector> make_block_selector(const std::string& name,
-                                                   int search_budget = 50000);
+                                                   int search_budget = 50000,
+                                                   bool rotate_scatter = true);
 
 }  // namespace Scheduling
 }  // namespace AstraSim

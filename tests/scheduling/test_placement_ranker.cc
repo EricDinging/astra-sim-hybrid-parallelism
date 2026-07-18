@@ -191,22 +191,15 @@ TEST(CommFirstV2, DorLeadsOpenClass) {
     EXPECT_TRUE(r.better(one_seam, two_seams));
 }
 
-// Ablation arms.
-TEST(CommFirstV2, AblationVariants) {
-    auto ocs_first = make_placement_ranker("comm-first-ocs-first");
+// The residual (wall-hugging) key is the rfoldv1/rfoldv2 split: v1's
+// comm-first keeps it, v2's comm-first-no-residual drops it.
+TEST(CommFirstV2, ResidualKeyIsTheV1V2Split) {
     auto no_resid = make_placement_ranker("comm-first-no-residual");
-    auto legacy = make_placement_ranker("comm-first-legacy");
-    ASSERT_TRUE(ocs_first && no_resid && legacy);
-    auto a = mk(2, 0, 0, 0, 0.0, false, false);  // ocs 0, blocks 2
-    auto b = mk(1, 0, 3, 0, 0.0, false, false);  // ocs 3, blocks 1
-    EXPECT_TRUE(ocs_first->better(a, b));        // ocs before blocks
-    EXPECT_TRUE(make_placement_ranker("comm-first")->better(b, a));
+    ASSERT_TRUE(no_resid);
     auto c = mk(2, 0, 1, 50, 0.0, false, false);
     auto d = mk(2, 0, 1, 0, 1.0, false, false);
-    EXPECT_TRUE(no_resid->better(c, d));  // residual ignored => cost
-    auto e = mk(2, 0, 5, 50, 0.0, false, false);
-    auto f = mk(2, 0, 0, 0, 1.0, false, false);
-    EXPECT_TRUE(legacy->better(e, f));  // (blocks, cost) only
+    EXPECT_TRUE(no_resid->better(c, d));  // residual ignored => cost decides
+    EXPECT_TRUE(make_placement_ranker("comm-first")->better(d, c));  // v1 keeps
 }
 
 // Q=0: only C_comm + C_rcfg matter => comm-first-like choice.

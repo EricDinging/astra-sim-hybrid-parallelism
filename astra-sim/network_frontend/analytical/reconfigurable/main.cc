@@ -390,9 +390,9 @@ int main(int argc, char* argv[]) {
                          "from placement only (direct routes never transit "
                          "them)");
         }
-        if (placement_policy == "rfold") {
+        if (placement_policy.rfind("rfold", 0) == 0) {
             logger->critical("--fullmesh is incompatible with "
-                             "--placement-policy=rfold (OCS rewiring assumes "
+                             "--placement-policy=rfold* (OCS rewiring assumes "
                              "sparse torus connectivity)");
             std::exit(1);
         }
@@ -536,7 +536,7 @@ int main(int argc, char* argv[]) {
     // peak-perf would make the estimator divide by zero). `switch` reads
     // only queue depth, so it needs no estimator.
     const bool ranking_needs_estimator =
-        placement_policy == "rfold" &&
+        placement_policy.rfind("rfold", 0) == 0 &&
         placement_cfg.rfold_ranking == "cost-model";
     if ((admission_policy == "sjdf" || admission_policy == "ljdf" ||
          admission_policy == "swf" || admission_policy == "easy" ||

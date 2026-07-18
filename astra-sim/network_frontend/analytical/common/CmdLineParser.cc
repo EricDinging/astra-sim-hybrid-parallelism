@@ -59,7 +59,8 @@ void CmdLineParser::define_options() noexcept {
         "jobs-dir", "Directory containing per-job traces.",
         cxxopts::value<std::string>()->default_value(""))(
         "placement-policy",
-        "firstfit | random | sfc | l1clustering | topomatch | rfold",
+        "firstfit | random | sfc | l1clustering | topomatch | rfoldv1 | "
+        "rfoldv2 (rfold = alias for rfoldv2)",
         cxxopts::value<std::string>()->default_value("firstfit"))(
         "admission-policy",
         "fifo | sjdf | sjsf | swf | easy | ljdf | ljsf | ljsfpack | lwf",
@@ -79,9 +80,10 @@ void CmdLineParser::define_options() noexcept {
         "min-reconfig)",
         cxxopts::value<std::string>()->default_value("min-reconfig"))(
         "rfold-ranking",
-        "comm-first[-ocs-first[-no-residual]|-no-residual|-legacy] | "
-        "packing-first | cost-model | switch (default comm-first)",
-        cxxopts::value<std::string>()->default_value("comm-first"))(
+        "auto (rfoldv1 -> comm-first, rfoldv2 -> comm-first-no-residual) | "
+        "comm-first[-no-residual] | fidelity-first (experimental) | "
+        "packing-first | cost-model | switch",
+        cxxopts::value<std::string>()->default_value("auto"))(
         "rfold-search-budget",
         "Bounded-search expansion cap for rfold scatter selectors",
         cxxopts::value<int>()->default_value("50000"))(

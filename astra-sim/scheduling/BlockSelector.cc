@@ -9,6 +9,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/PlacementRanker.hh"
 #include "astra-sim/scheduling/ScatterAssigner.hh"
 
+#include <algorithm>
 #include <array>
 #include <set>
 #include <utility>
@@ -17,6 +18,24 @@ namespace AstraSim {
 namespace Scheduling {
 
 namespace {
+
+// Axis-permuted copy of a fold variant (footprint and every embedding
+// coordinate; ring edges are rank pairs and stay valid). The contiguous
+// scan rotates internally, but scatter historically tiled only the
+// variant's given orientation, silently dropping rotated glue placements
+// (e.g. an as-is 2x6x8 whose free space fits 8x6x2).
+FoldVariant permute_variant(const FoldVariant& v,
+                            const std::array<int, 3>& ax) {
+    FoldVariant p;
+    p.footprint = {v.footprint[ax[0]], v.footprint[ax[1]], v.footprint[ax[2]]};
+    p.embedding.reserve(v.embedding.size());
+    for (const auto& e : v.embedding) {
+        p.embedding.push_back({e[ax[0]], e[ax[1]], e[ax[2]]});
+    }
+    p.ring_closes = v.ring_closes;
+    p.identity = v.identity;
+    return p;
+}
 
 // Distinct A×B×C blocks a placement's NPUs intersect -- the packing key used
 // by PlacementRanker (kept separate from the scorer's bundled cost, which also
@@ -141,17 +160,34 @@ std::optional<Placement> MinReconfig::select(
     if (c && c->dor_edges == 0 && ranker.scatter_never_beats_closed()) {
         return c;
     }
-    // Scatter fallback. A constant block_rank makes the assigner fall back to
-    // its block-coord tiebreak -> first-fit block order (fewest reconfigured
-    // links).
-    auto rm = scatter_assign(
-        v, free, dims, cm, ring_edges,
-        [](const std::array<int, 3>&) { return 0.0; }, budget_);
-    if (!rm) {
+    // Scatter fallback, over the distinct axis rotations of the variant (the
+    // contiguous scan rotates internally; scatter must too, or rotated glue
+    // placements are silently unreachable). A constant block_rank makes the
+    // assigner fall back to its block-coord tiebreak -> first-fit block order
+    // (fewest reconfigured links).
+    std::optional<Placement> s;
+    std::array<int, 3> ax{0, 1, 2};
+    std::set<std::array<int, 3>> tried_fp;
+    do {  // identity orientation first; rotations only when rotate_scatter_
+        FoldVariant pv = permute_variant(v, ax);
+        if (!tried_fp.insert(pv.footprint).second) {
+            continue;  // symmetric footprint: identical tiling already tried
+        }
+        auto rm = scatter_assign(
+            pv, free, dims, cm, ring_edges,
+            [](const std::array<int, 3>&) { return 0.0; }, budget_);
+        if (!rm) {
+            continue;
+        }
+        auto p = build_placement(*rm, pv, dims, cm, scorer, ring_edges, free);
+        if (!s || ranker.better(p, *s)) {
+            s = std::move(p);
+        }
+    } while (rotate_scatter_ && std::next_permutation(ax.begin(), ax.end()));
+    if (!s) {
         return c;  // possibly nullopt, possibly contiguous-with-DOR-edges
     }
-    auto s = build_placement(*rm, v, dims, cm, scorer, ring_edges, free);
-    if (c && ranker.better(*c, s)) {
+    if (c && ranker.better(*c, *s)) {
         return c;
     }
     return s;
@@ -178,12 +214,13 @@ std::optional<Placement> MaxDefrag::select(
 }
 
 std::unique_ptr<BlockSelector> make_block_selector(const std::string& name,
-                                                   int search_budget) {
+                                                   int search_budget,
+                                                   bool rotate_scatter) {
     if (name == "contiguous") {
         return std::make_unique<ContiguousFirst>();
     }
     if (name == "min-reconfig") {
-        return std::make_unique<MinReconfig>(search_budget);
+        return std::make_unique<MinReconfig>(search_budget, rotate_scatter);
     }
     if (name == "max-defrag") {
         return std::make_unique<MaxDefrag>(search_budget);

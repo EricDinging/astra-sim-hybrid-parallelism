@@ -25,22 +25,21 @@ bool CommFirst::better(const Placement& a, const Placement& b) const {
     if (ca != cb) {
         return ca < cb;
     }
-    const auto ocs = [&](const Placement& p) {
-        return keys_.use_ocs ? p.ocs_links() : 0;
-    };
-    const auto resid = [&](const Placement& p) {
-        return keys_.use_residual ? p.residual_frag : 0;
-    };
     if (ca == 2) {
         return std::make_tuple(a.blocks_touched, a.dor_edges, a.cost) <
                std::make_tuple(b.blocks_touched, b.dor_edges, b.cost);
     }
     const auto key = [&](const Placement& p) {
-        return keys_.ocs_before_blocks
-                   ? std::make_tuple(p.dor_edges, ocs(p), p.blocks_touched,
-                                     resid(p), p.cost)
-                   : std::make_tuple(p.dor_edges, p.blocks_touched, ocs(p),
-                                     resid(p), p.cost);
+        return std::make_tuple(p.dor_edges, p.blocks_touched, p.ocs_links(),
+                               use_residual_ ? p.residual_frag : 0, p.cost);
+    };
+    return key(a) < key(b);
+}
+
+bool FidelityFirst::better(const Placement& a, const Placement& b) const {
+    const auto key = [](const Placement& p) {
+        return std::make_tuple(p.identity ? 0 : 1, p.dor_edges,
+                               p.blocks_touched, p.ocs_links(), p.cost);
     };
     return key(a) < key(b);
 }
@@ -92,22 +91,13 @@ bool CostModelRanker::better(const Placement& a, const Placement& b) const {
 std::unique_ptr<PlacementRanker> make_placement_ranker(
     const std::string& name, const PlacementConfig& cfg) {
     if (name == "comm-first") {
-        return std::make_unique<CommFirst>();
-    }
-    if (name == "comm-first-ocs-first") {
-        return std::make_unique<CommFirst>(CommFirstKeys{true, true, true});
+        return std::make_unique<CommFirst>(/*use_residual=*/true);
     }
     if (name == "comm-first-no-residual") {
-        return std::make_unique<CommFirst>(CommFirstKeys{false, true, false});
+        return std::make_unique<CommFirst>(/*use_residual=*/false);
     }
-    if (name == "comm-first-ocs-first-no-residual") {
-        return std::make_unique<CommFirst>(CommFirstKeys{true, true, false});
-    }
-    // Baseline-keys arm for the stage-2 ablation: v2 classes with only the
-    // pre-existing keys (no ocs_links, no residual_frag). NOT v1 bit-compat —
-    // identity demotion and dor-leads-open-class still apply.
-    if (name == "comm-first-legacy") {
-        return std::make_unique<CommFirst>(CommFirstKeys{false, false, false});
+    if (name == "fidelity-first") {
+        return std::make_unique<FidelityFirst>();
     }
     if (name == "packing-first") {
         return std::make_unique<PackingFirst>();

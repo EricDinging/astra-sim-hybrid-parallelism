@@ -49,35 +49,43 @@ class PlacementRanker {
     }
 };
 
-// Fixed-default ranking, v2 (spec 2026-06-11 §3). Hard class order
-//   0 full fidelity: contiguous, every ring edge 1-hop (dor_edges == 0)
-//   1 open:          contiguous, some edges ride DOR
-//   2 scattered:     strictly last — scatter only when nothing contiguous
-//                    of any fold variant fits
+// Comm-class ranking (spec 2026-06-11 §3). Hard class order
+//   0 closed:    contiguous, every ring edge 1-hop (dor_edges == 0)
+//   1 open:      contiguous, some edges ride DOR
+//   2 scattered: strictly last — scatter only when nothing contiguous
+//                of any fold variant fits
 // Identity is NOT its own class: a fully-closed fold is comm-identical
-// in-sim. At equal packing, identity beats OCS-needing folds via
-// ocs_links == 0; against natively-closing folds the tie is comm-neutral
-// either way and falls through to residual_frag / scorer cost.
-// Within-class keys (CommFirstKeys toggles are the stage-2 ablation arms):
-//   class 0: (blocks_touched, ocs_links, residual_frag, cost)
-//   class 1: (dor_edges, blocks_touched, ocs_links, residual_frag, cost)
-//   class 2: (blocks_touched, dor_edges, cost)   — unchanged from v1
-struct CommFirstKeys {
-    // Swap ocs_links ahead of blocks_touched in BOTH contiguous classes
-    // (after dor_edges; class 0's dor is constant 0 so the spec's class-0
-    // (ocs, blocks, ...) ordering is what this realizes).
-    bool ocs_before_blocks = false;
-    bool use_ocs = true;       // false: drop the ocs_links key
-    bool use_residual = true;  // false: drop the residual_frag key
-};
-
+// in-sim; at equal packing, identity beats OCS-needing folds via
+// ocs_links == 0. Within-class key (classes 0/1):
+//   (dor_edges, blocks_touched, ocs_links[, residual_frag], cost)
+// The residual_frag "wall-hugging" key is the rfoldv1/rfoldv2 split:
+// root-caused 2026-07-18 as the blocksize-valley fragmenter (it steers
+// placements toward enclosed pockets, shredding the free space big jobs
+// need), so rfoldv2's default drops it and rfoldv1 keeps it for
+// bit-compatibility with pre-2026-07 sweeps. (The 2026-06 stage-2 ablation
+// arms — ocs-first, legacy — were deleted with their study.)
 class CommFirst : public PlacementRanker {
   public:
-    explicit CommFirst(CommFirstKeys keys = {}) : keys_(keys) {}
+    explicit CommFirst(bool use_residual = true)
+        : use_residual_(use_residual) {}
     bool better(const Placement& a, const Placement& b) const override;
 
   private:
-    CommFirstKeys keys_;
+    bool use_residual_;
+};
+
+// EXPERIMENTAL, rejected-by-data for the default (2026-07-18 matrix: loses
+// to folding-only on every trace/load cell): shape fidelity outranks
+// everything — an as-is (identity) placement, contiguous OR scattered,
+// beats every folded one; scatter is never demoted to a last-resort class.
+// Kept so the reconfiguration-first-vs-packing-first comparison stays
+// reproducible; see docs/superpowers/specs/2026-07-18-rfold-*.md.
+class FidelityFirst : public PlacementRanker {
+  public:
+    bool better(const Placement& a, const Placement& b) const override;
+    bool scatter_never_beats_closed() const override {
+        return false;  // scatter competes as an equal, always searched
+    }
 };
 
 // The pre-unification rfold ranking, bit-compatible: (blocks_touched,
@@ -170,7 +178,7 @@ class DynamicSwitch : public PlacementRanker {
     const SchedContext* ctx_ = nullptr;
 };
 
-// name in {comm-first[-ocs-first[-no-residual]|-no-residual|-legacy],
+// name in {comm-first, comm-first-no-residual, fidelity-first,
 // packing-first, cost-model, switch}. Returns nullptr on unknown name.
 std::unique_ptr<PlacementRanker> make_placement_ranker(
     const std::string& name, const PlacementConfig& cfg = PlacementConfig{});
