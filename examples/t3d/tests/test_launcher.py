@@ -81,6 +81,66 @@ def test_plan_assignments_single_host_gets_everything():
     ]
 
 
+def test_qname_sorts_lpt_and_roundtrips():
+    names = [
+        launcher.qname("e", f"easy-firstfit-load{ld}", ld)
+        for ld in ("0.05", "1.00", "0.30")
+    ]
+    by_name = [n.split("--")[2] for n in sorted(names)]
+    assert by_name == [
+        "easy-firstfit-load1.00",
+        "easy-firstfit-load0.30",
+        "easy-firstfit-load0.05",
+    ]
+
+
+def test_plan_steals_backlogged_to_idle():
+    # host a ran dry (2 slots, everything done); host b is backlogged
+    # (1 slot busy, 3 queued); our exps = ["e"]
+    snaps = {
+        "a": {("e", "e-ff-load0.90"): (5, "rc=0")},
+        "b": {
+            ("e", "e-ff-load1.00"): (9, "run"),
+            ("e", "e-ff-load0.05"): (0, "q"),
+            ("e", "e-ff-load0.70"): (0, "q"),
+            ("e", "e-rf-load0.50"): (0, "q"),
+        },
+    }
+    moves = launcher.plan_steals(snaps, {"a": 2, "b": 1}, ["e"])
+    # a has 2 free slots; b's surplus is 3 queued vs 0 free -> 2 moves,
+    # longest loads first
+    assert [(m[1], m[3], m[4]) for m in moves] == [
+        ("e-ff-load0.70", "b", "a"),
+        ("e-rf-load0.50", "b", "a"),
+    ]
+
+
+def test_plan_steals_skips_legacy_local_unprobed_and_foreign():
+    snaps = {
+        # legacy '-' entry: slot accounting unknown -> whole host skipped
+        "a": {("e", "e-ff-load0.10"): (0, "-")},
+        # unprobed host -> skipped
+        "c": {("e", "e-ff-load0.20"): (0, "q")},
+        # local -> skipped
+        launcher.LOCAL: {("e", "e-ff-load0.30"): (0, "q")},
+        # foreign experiment's queued combo never moves
+        "b": {("x", "x-ff-load0.90"): (0, "q"), ("e", "e-ff-load0.40"): (0, "q")},
+        "idle": {("e", "e-rf-load0.60"): (7, "rc=0")},
+    }
+    host_slots = {"a": 4, "b": 1, "idle": 4, launcher.LOCAL: 4}
+    moves = launcher.plan_steals(snaps, host_slots, ["e"])
+    # b is backlogged (2 queued, 1 slot) but only its own-exp combo moves
+    assert [(m[0], m[1], m[4]) for m in moves] == [("e", "e-ff-load0.40", "idle")]
+
+
+def test_plan_steals_nothing_when_balanced():
+    snaps = {
+        "a": {("e", "e-ff-load0.90"): (1, "run")},
+        "b": {("e", "e-ff-load0.80"): (1, "run"), ("e", "e-ff-load0.10"): (0, "q")},
+    }
+    assert launcher.plan_steals(snaps, {"a": 1, "b": 2}, ["e"]) == []
+
+
 def test_assignments_roundtrip():
     rows = [("easy-firstfit-load0.05", "0.05", "a@h"), ("x", "1.00", "local")]
     with tempfile.TemporaryDirectory() as d:

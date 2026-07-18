@@ -50,8 +50,9 @@ ASTRA_SIM_BIN = os.path.join(
 
 # trace length; override for quick dev tests, e.g. N_JOBS=20 ./reproduce.py gen ...
 N_JOBS = int(os.environ.get("N_JOBS", 100000))
-# progress-poll interval while launch blocks; override for dev, e.g. POLL_SECS=10
-POLL_SECS = int(os.environ.get("POLL_SECS", 3600))
+# progress-poll (and work-steal) interval while launch blocks; override for
+# dev, e.g. POLL_SECS=10
+POLL_SECS = int(os.environ.get("POLL_SECS", 900))
 SEED = 0
 # 0.05..0.30 step 0.05, then 0.30..1.00 step 0.02 (denser near saturation)
 LOADS = [
@@ -344,6 +345,8 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
     Experiments are planned JOINTLY -- one runner per host executes its
     share of every experiment at most `slots` sims at a time -- and the
     combo->host plan lands in runs/<exp>/assignments.csv per experiment.
+    The plan is only the starting point: the monitor loop this blocks in
+    afterwards steals queued combos onto hosts that run dry (see monitor).
 
     Placeability experiments have no combos to distribute; each is a local
     ~0.1s-per-probe census, run to completion before the real launch."""
@@ -395,8 +398,7 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
     stage = tempfile.mkdtemp(prefix=f"cluster{cap}_deploy_")
 
     def deploy_and_start(host: str) -> None:
-        cells = per_host[host]
-        cells.sort(key=lambda c: -float(c[2]))  # longest sims first (LPT)
+        cells = per_host[host]  # queue-entry names give LPT order, no sort
         launcher.deploy(
             host,
             root,
@@ -405,9 +407,7 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
             [f"runs/{e}/{c}/arrivals.csv" for e, c, _ in cells],
             ws,
         )
-        launcher.start_runner(
-            host, root, [(e, c) for e, c, _ in cells], host_slots[host], ws
-        )
+        launcher.start_runner(host, root, cells, host_slots[host], ws)
 
     with concurrent.futures.ThreadPoolExecutor(len(host_slots)) as ex:
         for _ in ex.map(deploy_and_start, [h for h in per_host if per_host[h]]):
@@ -429,7 +429,9 @@ def progress_table(
     rows so many fine-grained loads scroll vertically instead of overflowing
     the terminal width). A cell shows the combo's completed-job count, or ✓
     once its sim finished rc=0 (completions can be < total when jobs were
-    dropped), or ✗N on a nonzero exit."""
+    dropped), or ✗N on a nonzero exit. Not-finished states (q = queued,
+    run = claimed by a runner slot, - = legacy/unknown) all show the
+    count."""
     admission = exp.split("-")[0]
     pols = placements(exp)
     w = max(6, *(len(p) for p in pols)) + 1  # col width fits name + counts
@@ -441,9 +443,9 @@ def progress_table(
             n, rc = cells.get(f"{admission}-{pol}-load{load}", (0, "-"))
             if rc == "rc=0":
                 cell = "✓"
-            elif rc != "-":
+            elif rc.startswith("rc="):
                 cell = "✗" + rc.removeprefix("rc=")
-            else:
+            else:  # "q" / "run" / "-": not finished yet
                 cell = str(n)
             row += cell.rjust(w)
         lines.append(row)
@@ -461,12 +463,28 @@ def _trace_len(exp: str, root: str) -> int:
         return N_JOBS
 
 
+def reassign(exp: str, combo: str, host: str, root: str = ROOT) -> None:
+    """Point a stolen combo's assignments.csv row at its new host, so
+    collect pulls its results from where the combo actually runs."""
+    path = os.path.join(root, "runs", exp, "assignments.csv")
+    rows = [
+        (c, load, host if c == combo else h)
+        for c, load, h in launcher.read_assignments(path)
+    ]
+    launcher.write_assignments(path, rows)
+
+
 def monitor(exps: list[str], root: str = ROOT) -> None:
     """Block until every launched combo has a sim.done, polling every
     POLL_SECS and printing per-experiment progress tables. Each experiment's
     workers come from its runs/<exp>/assignments.csv, so sweeps launched on
     different worker groups are each polled on their own group (and
-    monitoring all polls the union). Unlaunched experiments are skipped."""
+    monitoring all polls the union). Unlaunched experiments are skipped.
+
+    Between polls the queues are rebalanced: hosts that ran dry steal
+    queued-but-unstarted combos from backlogged hosts (sim durations vary
+    too much for the static launch plan to stay balanced), and
+    assignments.csv follows the moves."""
     exps = [e for e in exps if experiments(root)[e] is not None]
     launched = []
     for exp in exps:
@@ -486,12 +504,22 @@ def monitor(exps: list[str], root: str = ROOT) -> None:
             )
         }
     )
-    ws = launcher.workspace(cluster.capacity(cluster.load(root)))
+    cap = cluster.capacity(cluster.load(root))
+    ws = launcher.workspace(cap)
+    host_slots = launcher.probe_slots(hosts, launcher.mem_per_run_gb(cap))
     while True:
-        cells: dict[tuple[str, str], tuple[int, str]] = {}
         with concurrent.futures.ThreadPoolExecutor(max(1, len(hosts))) as ex:
-            for snap in ex.map(lambda h: launcher.poll(h, root, ws), hosts):
-                cells.update(snap)
+            snaps = dict(
+                zip(hosts, ex.map(lambda h: launcher.poll(h, root, ws), hosts))
+            )
+        for exp, combo, src, dst in launcher.rebalance(
+            snaps, host_slots, exps, root, ws
+        ):
+            reassign(exp, combo, dst, root)
+            print(f"steal {exp}/{combo}: {src} -> {dst}")
+        cells: dict[tuple[str, str], tuple[int, str]] = {}
+        for snap in snaps.values():
+            cells.update(snap)
         # a host's queue may also carry other sweeps' combos; count only ours
         cells = {k: v for k, v in cells.items() if k[0] in exps}
         now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -499,8 +527,9 @@ def monitor(exps: list[str], root: str = ROOT) -> None:
         for exp in exps:
             per_exp = {c: v for (e, c), v in cells.items() if e == exp}
             print(progress_table(exp, per_exp, _trace_len(exp, root)))
-        pending = sum(1 for _, rc in cells.values() if rc == "-")
+        pending = sum(1 for _, rc in cells.values() if not rc.startswith("rc="))
         if pending == 0:
+            launcher.stop_runners(hosts, root, ws)
             print("all combos finished")
             return
         print(f"{pending} combos still running; next check in {POLL_SECS}s")

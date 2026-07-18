@@ -1,4 +1,4 @@
-"""Worker probing and combo->host packing for the launch phase.
+"""Worker probing, combo->host packing, and work stealing.
 
 workers.txt (one user@host per line; blank lines and #-comments ignored)
 lists the servers available for simulations. An empty or missing file means
@@ -7,10 +7,18 @@ and available memory, which bound how many sims each can run concurrently
 (slots). Combos are packed highest-load-first onto the least-loaded host,
 and the plan is written to runs/<exp>/assignments.csv -- the single source
 of truth for launching and progress polling.
+
+The static plan is only a starting point: sim durations vary wildly, so
+each host's share lives in a stealable queue (runs/queue/, one prio-named
+file per combo; runner.py claims entries by atomic rename). Between
+monitor polls, rebalance() moves queued-but-unstarted combos from
+backlogged hosts to hosts that ran dry, and monitor updates
+assignments.csv so collect pulls each combo from where it actually ran.
 """
 
 from __future__ import annotations
 
+import concurrent.futures
 import csv
 import os
 import subprocess
@@ -193,10 +201,12 @@ def deploy(
 
 # Kill an old runner (and every sim it started under this workspace) before
 # starting a new one, so a relaunch never doubles up. Twin-killing also
-# happens per combo inside run_combo.sh; this sweeps combos the new plan no
-# longer contains.
+# happens per combo inside run_combo.py; this sweeps combos the new plan no
+# longer contains. The [y] character class stops pkill -f from matching the
+# remote shell that carries this very command line in its args.
 _KILL_OLD = (
-    "pkill -f 'run_combo.py {w} ' 2>/dev/null; "
+    "pkill -f 'runner.p[y] {w} ' 2>/dev/null; "
+    "pkill -f 'run_combo.p[y] {w} ' 2>/dev/null; "
     "for pg in $(ps -eo pgid,comm,args --no-headers | "
     "awk -v w='--logging-folder={w}/' "
     "'$2==\"AstraSim_Analyt\" && index($0,w) {{print $1}}' | sort -u); do "
@@ -204,40 +214,166 @@ _KILL_OLD = (
 )
 
 
+def qname(exp: str, combo: str, load: str) -> str:
+    """A combo's queue-entry filename. The numeric prefix makes a plain
+    lexicographic sort run higher loads (longer sims) first -- the runner
+    claims entries in name order, so LPT scheduling falls out for free."""
+    return f"{1000 - round(float(load) * 1000):04d}--{exp}--{combo}"
+
+
+QUEUE_DIRS = ("queue", "claimed", "done", "stolen")
+
+
 def start_runner(
     host: str,
     root: str,
-    cells: list[tuple[str, str]],
+    cells: list[tuple[str, str, str]],
     slots: int,
     ws: str,
 ) -> None:
-    """Start the detached per-host runner: xargs feeds (experiment, combo)
-    lines to run_combo.py, at most `slots` concurrently. Survives SSH
-    disconnect (setsid); a rerun replaces any previous runner (and removes
-    stale per-class queue-*.list files from the tiered-packing era so
-    progress.py doesn't double-report)."""
+    """Fill the host's stealable queue -- runs/queue/, one prio-named file
+    per (experiment, combo, load) cell -- and start the detached runner.py
+    (`slots` claim-and-run worker threads; survives SSH disconnect via
+    setsid). A rerun replaces any previous runner and clears every queue
+    artifact, including pre-work-stealing queue*.list files, so
+    progress.py never double-reports."""
     w = root if host == LOCAL else ws
-    queue = "\n".join(f"{exp} {combo}" for exp, combo in cells) + "\n"
+    names = [qname(exp, combo, load) for exp, combo, load in cells]
+    dirs = " ".join(f"{w}/runs/{d}" for d in QUEUE_DIRS)
+    cleanup = (
+        _KILL_OLD.format(w=w)
+        + f"; rm -rf {dirs} {w}/runs/queue.stop {w}/runs/queue*.list"
+        + f"; mkdir -p {dirs}"
+    )
     # The & must background ONE fully-redirected command: with
     # "cd {w} && setsid ... &" the & grabs the whole && list, and that
     # backgrounded subshell keeps sshd's stdout/stderr pipes open while it
     # waits for the runner -- ssh then blocks until TimeoutExpired.
     runner = (
-        f"setsid bash -c 'cd {w} && exec xargs -P {slots} -L1 "
-        f"python3 scripts/run_combo.py {w} < runs/queue.list' "
+        f"setsid bash -c 'cd {w} && exec python3 scripts/runner.py {w} {slots}' "
         f"</dev/null >{w}/runs/runner.log 2>&1 &"
     )
-    cleanup = _KILL_OLD.format(w=w) + f"; rm -f {w}/runs/queue-*.list"
     if host == LOCAL:
-        with open(os.path.join(w, "runs", "queue.list"), "w") as f:
-            f.write(queue)
         subprocess.run(["bash", "-c", cleanup], check=False)
+        for n in names:
+            open(os.path.join(w, "runs", "queue", n), "w").close()
         subprocess.run(["bash", "-c", runner], check=True)
     else:
-        _ssh(host, f"cat > {w}/runs/queue.list <<'EOF'\n{queue}EOF")
         _ssh(host, cleanup, check=False)
+        _ssh(host, f"cd {w}/runs/queue && touch {' '.join(names)}")
         _ssh(host, runner)
     print(f"runner started on {host}: {len(cells)} combos, {slots} slots")
+
+
+def probe_slots(hosts: list[str], mem_per_run: int) -> dict[str, int]:
+    """Best-effort host -> slots for monitor-time work stealing. Unlike
+    probe_all, a host that fails the probe is just left out (it still gets
+    polled; only stealing skips it) and nothing is fatal."""
+
+    def one(h: str) -> tuple[str, int]:
+        try:
+            cpus, mem_gb = probe(h)
+            return h, slot_count(cpus, mem_gb, mem_per_run)
+        except (RuntimeError, subprocess.TimeoutExpired, ValueError):
+            return h, 0
+
+    with concurrent.futures.ThreadPoolExecutor(max(1, len(hosts))) as ex:
+        return {h: n for h, n in ex.map(one, hosts) if n > 0}
+
+
+def plan_steals(
+    snaps: dict[str, dict[tuple[str, str], tuple[int, str]]],
+    host_slots: dict[str, int],
+    exps: list[str],
+) -> list[tuple[str, str, str, str, str]]:
+    """The work-stealing plan for one poll snapshot, as (exp, combo, load,
+    src, dst) moves from backlogged hosts to hosts with idle slots.
+
+    Per host, free = slots - running - queued: a host with free > 0 will
+    run dry before the next poll, one with free < 0 holds more queue than
+    capacity. Only unclaimed ('q') combos of the monitored experiments
+    move, longest (highest-load) first, each from the most backlogged host
+    to the freest. Hosts that are unprobed, local, or still carry legacy
+    queue.list entries ('-' state: queued and running are indistinguishable)
+    are skipped entirely."""
+    free: dict[str, int] = {}
+    pending: dict[str, list[tuple[str, str]]] = {}
+    for h, snap in snaps.items():
+        if h == LOCAL or h not in host_slots or not snap:
+            continue
+        states = [rc for _n, rc in snap.values()]
+        if "-" in states:
+            continue
+        free[h] = host_slots[h] - states.count("run") - states.count("q")
+        pending[h] = sorted(
+            (ec for ec, (_n, rc) in snap.items() if rc == "q" and ec[0] in exps),
+            key=lambda ec: -float(ec[1].rsplit("load", 1)[1]),
+        )
+    moves = []
+    while True:
+        tgts = [h for h, f in free.items() if f > 0]
+        srcs = [h for h, f in free.items() if f < 0 and pending[h]]
+        if not tgts or not srcs:
+            return moves
+        dst = max(tgts, key=lambda h: free[h])
+        src = min(srcs, key=lambda h: free[h])
+        exp, combo = pending[src].pop(0)
+        moves.append((exp, combo, combo.rsplit("load", 1)[1], src, dst))
+        free[src] += 1
+        free[dst] -= 1
+
+
+def rebalance(
+    snaps: dict[str, dict[tuple[str, str], tuple[int, str]]],
+    host_slots: dict[str, int],
+    exps: list[str],
+    root: str,
+    ws: str,
+) -> list[tuple[str, str, str, str]]:
+    """Execute the steal plan for one poll and return the moves that
+    actually happened, so monitor can update assignments.csv. Per move:
+    atomically take the queue entry off src (a runner slot claiming it
+    first wins the rename -- the steal is then simply dropped), ship the
+    combo's arrivals to dst, and queue it there; dst's idle runner picks it
+    up within its recheck interval. A host that fails mid-round is skipped
+    for the rest of the round and retried at the next poll."""
+    done, dead = [], set()
+    for exp, combo, load, src, dst in plan_steals(snaps, host_slots, exps):
+        if src in dead or dst in dead:
+            continue
+        name = qname(exp, combo, load)
+        try:
+            _ssh(src, f"mv {ws}/runs/queue/{name} {ws}/runs/stolen/{name}")
+        except (RuntimeError, subprocess.TimeoutExpired):
+            dead.add(src)  # raced by src's own runner, or src unreachable
+            continue
+        try:
+            _ssh(dst, f"mkdir -p {ws}/runs/{exp}/{combo}")
+            _rsync(
+                dst,
+                [os.path.join(root, "runs", exp, combo, "arrivals.csv")],
+                f"{ws}/runs/{exp}/{combo}/",
+            )
+            _ssh(dst, f"touch {ws}/runs/queue/{name}")
+        except (RuntimeError, subprocess.TimeoutExpired):
+            # put the entry back so the combo is never lost
+            _ssh(src, f"mv {ws}/runs/stolen/{name} {ws}/runs/queue/{name}", check=False)
+            print(f"WARN steal {exp}/{combo} {src} -> {dst} failed; returned to {src}")
+            dead.add(dst)
+            continue
+        done.append((exp, combo, src, dst))
+    return done
+
+
+def stop_runners(hosts: list[str], root: str, ws: str) -> None:
+    """Drop runs/queue.stop on every host so idle runner slots exit instead
+    of sleeping forever for steals that will never come (start_runner
+    removes the marker again at the next launch)."""
+    for h in hosts:
+        if h == LOCAL:
+            open(os.path.join(root, "runs", "queue.stop"), "w").close()
+        else:
+            _ssh(h, f"touch {ws}/runs/queue.stop", check=False)
 
 
 def poll(host: str, root: str, ws: str) -> dict[tuple[str, str], tuple[int, str]]:

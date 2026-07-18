@@ -16,8 +16,10 @@ Usage:
                                   give a different file to place a new sweep on a
                                   separate worker group)
   ./reproduce.py monitor [exps|all]   re-attach to a running sweep's progress
-                                  (blocks, polls hourly; POLL_SECS overrides; polls
-                                  each sweep's own workers per assignments.csv)
+                                  (blocks, polls every 15 min; POLL_SECS overrides; polls
+                                  each sweep's own workers per assignments.csv, and
+                                  rebalances: idle hosts steal queued combos from
+                                  backlogged ones between polls)
   ./reproduce.py collect [exps|all]   pull results back from the workers
   ./reproduce.py post [exps|all]      (not implemented yet)
   ./reproduce.py clean            remove all results (runs/<exp>; prerequisites are kept)
