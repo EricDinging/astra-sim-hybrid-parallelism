@@ -202,12 +202,14 @@ def test_snap_shape_menu_shapes_are_fixed_points():
         assert gen_arrivals.snap_shape(t, MENU) == t
 
 
-def test_snap_shape_rejects_size_below_menu():
-    try:
-        gen_arrivals.snap_shape((1, 1, 1), [(2, 1, 1), (4, 2, 1)])
-    except ValueError:
-        return
-    assert False, "expected ValueError when no menu size <= job size"
+def test_snap_shape_rounds_up_below_menu():
+    assert gen_arrivals.snap_shape((1, 1, 1), [(2, 1, 1), (4, 2, 1)]) == (2, 1, 1)
+
+
+def test_snap_shape_single_shape_menu_maps_everything():
+    mono = [(4, 2, 1)]
+    for s in [(1, 1, 1), (2, 2, 1), (4, 2, 1), (8, 1, 1), (6, 4, 4), (8, 4, 4)]:
+        assert gen_arrivals.snap_shape(s, mono) == (4, 2, 1)
 
 
 def test_build_job_sequence_snap_is_rounded_twin():

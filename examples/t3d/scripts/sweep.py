@@ -91,7 +91,9 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     for every 6-dim shape) plus the two-whole-block brick at the quarter cap.
     Same seed and Pareto size draws as the base trace; sizes round down except
     onto whole-block targets within 4/3x, so the mean stays ~equal (9.17 ->
-    9.11 at 8x8x8).
+    9.11 at 8x8x8). The mono experiments take this to the limit: a
+    single-shape menu maps EVERY job onto the probed most placeable
+    ~mean-size shape (4x2x1).
 
     The placeability* experiments (one per failure rate, plus the no-failure
     baseline) are single-job empty-torus censuses handled entirely by
@@ -109,6 +111,11 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"{2 * half_axis}x{half_axis}x{half_axis}"
     ]
     rounded = [*pareto, quarter, "--snap-shapes", ",".join(menu)]
+    # mono: the rounded idea taken to the limit -- every job becomes the single
+    # most placeable ~mean-size shape. 4x2x1 was probed on 8x8x8: all six
+    # placements pack it 64/64 (tie with 8x1x1/2x2x2), and it has the best
+    # packed-torus JCT on 5 of 6 policies; size 8 ~ the base trace's mean 9.2
+    mono = [*pareto, quarter, "--snap-shapes", "4x2x1"]
     fail = {
         f"{adm}-pareto{quarter}-fail{pct}-load-sweep": [*pareto, quarter]
         for pct in ("0.1", "0.2", "0.5", "1")
@@ -128,6 +135,10 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"swf-pareto{quarter}-rounded-load-sweep": rounded,
         f"fifo-pareto{quarter}-rounded-load-sweep": rounded,
         f"ljsf-pareto{quarter}-rounded-load-sweep": rounded,
+        f"easy-pareto{quarter}-mono-load-sweep": mono,
+        f"swf-pareto{quarter}-mono-load-sweep": mono,
+        f"fifo-pareto{quarter}-mono-load-sweep": mono,
+        f"ljsf-pareto{quarter}-mono-load-sweep": mono,
         f"easy-uniform{quarter}-load-sweep": uniform,
         f"swf-uniform{quarter}-load-sweep": uniform,
         f"fifo-uniform{quarter}-load-sweep": uniform,

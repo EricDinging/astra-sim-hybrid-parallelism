@@ -152,15 +152,16 @@ def snap_shape(
     Size rule: round DOWN to the largest menu size <= the job size, except
     round UP to the next menu size when that is a whole-block multiple within
     4/3x -- "very close to a nice round-up shape" (e.g. 48 -> 64 = one 4x4x4
-    block, 96 -> 128 = two). Shape rule: among targets of the chosen size,
-    keep the job's dimensionality as close as possible (ties toward the
-    cube-ier target), so 1D/2D/3D jobs land on 1D/2D/3D-ish targets even
-    when the exact dimensionality is not on the menu."""
+    block, 96 -> 128 = two), and jobs below the smallest menu size round up
+    to it. Shape rule: among targets of the chosen size, keep the job's
+    dimensionality as close as possible (ties toward the cube-ier target),
+    so 1D/2D/3D jobs land on 1D/2D/3D-ish targets even when the exact
+    dimensionality is not on the menu."""
     z = shape[0] * shape[1] * shape[2]
     sizes = sorted({a * b * c for (a, b, c) in menu})
-    if z < sizes[0]:
-        raise ValueError(f"no menu size <= job size {z}")
-    tsize = max(s for s in sizes if s <= z)
+    # a job below the smallest menu size rounds up to it (so a single-shape
+    # menu maps every job onto that one shape)
+    tsize = max((s for s in sizes if s <= z), default=sizes[0])
     ups = [s for s in sizes if s > z]
     if ups and ups[0] % block_vol == 0 and 3 * ups[0] <= 4 * z:
         tsize = ups[0]
