@@ -158,6 +158,75 @@ def test_build_job_sequence_dims_restriction():
         assert all(d in (1, 4, 8) for d in shape)
 
 
+# the 8x8x8 rounded-experiment menu: descending shapes over {1,2,4} (sub-block
+# tilers of the 4x4x4 rfold block) plus the two-block 8x4x4 brick
+MENU = [
+    (1, 1, 1),
+    (2, 1, 1),
+    (2, 2, 1),
+    (2, 2, 2),
+    (4, 1, 1),
+    (4, 2, 1),
+    (4, 2, 2),
+    (4, 4, 1),
+    (4, 4, 2),
+    (4, 4, 4),
+    (8, 4, 4),
+]
+
+
+def test_snap_shape_rounds_down_by_default():
+    assert gen_arrivals.snap_shape((6, 1, 1), MENU) == (4, 1, 1)  # 6 -> 4, 1D
+    assert gen_arrivals.snap_shape((6, 2, 1), MENU) == (4, 2, 1)  # 12 -> 8, 2D
+    assert gen_arrivals.snap_shape((6, 6, 1), MENU) == (4, 4, 2)  # 36 -> 32
+
+
+def test_snap_shape_rounds_up_to_whole_blocks():
+    # within 4/3x of a whole-block multiple of the 4x4x4 block => up
+    assert gen_arrivals.snap_shape((6, 4, 2), MENU) == (4, 4, 4)  # 48 -> 64
+    assert gen_arrivals.snap_shape((6, 4, 4), MENU) == (8, 4, 4)  # 96 -> 128
+    # 72 is NOT within 4/3x of 128 => down to 64
+    assert gen_arrivals.snap_shape((6, 6, 2), MENU) == (4, 4, 4)
+
+
+def test_snap_shape_keeps_dimensionality_close():
+    assert gen_arrivals.snap_shape((1, 1, 2), MENU) == (2, 1, 1)  # canonical 1D
+    assert gen_arrivals.snap_shape((8, 2, 1), MENU) == (4, 4, 1)  # 2D stays 2D
+    assert gen_arrivals.snap_shape((2, 2, 4), MENU) == (4, 2, 2)  # 3D stays 3D
+    # no 1D size-8 target: a 1D job crosses to the nearest dimensionality (2D)
+    assert gen_arrivals.snap_shape((8, 1, 1), MENU) == (4, 2, 1)
+
+
+def test_snap_shape_menu_shapes_are_fixed_points():
+    for t in MENU:
+        assert gen_arrivals.snap_shape(t, MENU) == t
+
+
+def test_snap_shape_rejects_size_below_menu():
+    try:
+        gen_arrivals.snap_shape((1, 1, 1), [(2, 1, 1), (4, 2, 1)])
+    except ValueError:
+        return
+    assert False, "expected ValueError when no menu size <= job size"
+
+
+def test_build_job_sequence_snap_is_rounded_twin():
+    base = gen_arrivals.build_job_sequence(
+        random.Random(7), 300, "bw", 0.5, size_max=128
+    )
+    snapped = gen_arrivals.build_job_sequence(
+        random.Random(7), 300, "bw", 0.5, size_max=128, snap=MENU
+    )
+    assert len(base) == len(snapped)
+    for (bsize, bshape, bit), (ssize, sshape, sit) in zip(base, snapped):
+        assert sit == bit  # rng draws stay aligned
+        assert sshape in MENU
+        assert sshape == gen_arrivals.snap_shape(bshape, MENU)
+        # sizes round down, except up onto whole-block targets within 4/3x
+        assert ssize == sshape[0] * sshape[1] * sshape[2]
+        assert ssize <= bsize or (ssize % 64 == 0 and 3 * ssize <= 4 * bsize)
+
+
 def test_load_service_times_roundtrip():
     with tempfile.TemporaryDirectory() as d:
         p = os.path.join(d, "svc.csv")

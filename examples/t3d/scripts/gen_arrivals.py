@@ -41,7 +41,9 @@ SAMPLING
 --------
 - size:  truncated Pareto over the sorted DISTINCT-SIZE INDEX (alpha default
          0.5); weights by rank, not value, so the large-job tail survives.
-- shape: uniform among legal shapes of the drawn size.
+- shape: uniform among legal shapes of the drawn size; --snap-shapes then
+         rounds the shape onto a curated target menu (rounded-twin traces,
+         see snap_shape/build_job_sequence).
 - duration: clamped log-normal over [1, max-iters] (iter-median default 1.3,
          iter-sigma default 1.2). Matches the body of published ML-cluster
          runtime traces: median pins ~55% of jobs at 1 iteration (~71% at <=2),
@@ -128,6 +130,45 @@ def sample_size_index(rng: random.Random, m: int, alpha: float) -> int:
     return min(max(k, 0), m - 1)
 
 
+# volume of the placement block the snap menu is matched to (the binary's
+# default rfold --block-size, 4x4x4); a menu size that is a whole-block
+# multiple counts as a "nice" round-up target
+SNAP_BLOCK_VOL = 64
+
+
+def ndim(shape: tuple[int, int, int]) -> int:
+    """Dimensionality of a shape = dims > 1 (1x1x1 counts as 1D)."""
+    return max(1, sum(d > 1 for d in shape))
+
+
+def snap_shape(
+    shape: tuple[int, int, int],
+    menu: list[tuple[int, int, int]],
+    block_vol: int = SNAP_BLOCK_VOL,
+) -> tuple[int, int, int]:
+    """Round `shape` onto a target from `menu` (curated easily-placeable
+    shapes; see the packing probe behind the rounded experiments).
+
+    Size rule: round DOWN to the largest menu size <= the job size, except
+    round UP to the next menu size when that is a whole-block multiple within
+    4/3x -- "very close to a nice round-up shape" (e.g. 48 -> 64 = one 4x4x4
+    block, 96 -> 128 = two). Shape rule: among targets of the chosen size,
+    keep the job's dimensionality as close as possible (ties toward the
+    cube-ier target), so 1D/2D/3D jobs land on 1D/2D/3D-ish targets even
+    when the exact dimensionality is not on the menu."""
+    z = shape[0] * shape[1] * shape[2]
+    sizes = sorted({a * b * c for (a, b, c) in menu})
+    if z < sizes[0]:
+        raise ValueError(f"no menu size <= job size {z}")
+    tsize = max(s for s in sizes if s <= z)
+    ups = [s for s in sizes if s > z]
+    if ups and ups[0] % block_vol == 0 and 3 * ups[0] <= 4 * z:
+        tsize = ups[0]
+    d = ndim(shape)
+    cands = [t for t in menu if t[0] * t[1] * t[2] == tsize]
+    return min(cands, key=lambda t: (abs(ndim(t) - d), -ndim(t)))
+
+
 def sample_duration(
     rng: random.Random,
     max_iters: int = 20,
@@ -175,6 +216,7 @@ def build_job_sequence(
     iter_sigma: float = 1.2,
     size_dist: str = "pareto",
     dims: frozenset[int] | None = None,
+    snap: list[tuple[int, int, int]] | None = None,
 ) -> list[tuple[int, tuple[int, int, int], int]]:
     """Draw n jobs as (size, shape, num_iterations).
 
@@ -184,9 +226,16 @@ def build_job_sequence(
     of that size (restricted to `dims` when given). Duration ~ clamped log-normal
     over [1, max_iters] (sample_duration, params iter_median / iter_sigma).
 
+    `snap` rounds each drawn shape onto a menu of curated target shapes AFTER
+    the draw (snap_shape: size rounds down except when a whole-block target is
+    within 4/3x, dimensionality is preserved as closely as possible). Snapping
+    consumes no rng calls, so a snapped trace is a job-for-job rounded twin of
+    the unsnapped one (same seed, same draws) -- same Pareto size profile with
+    ~the same mean size, concentrated on the few easily placeable menu shapes.
+
     Both index draws consume exactly one rng call, and shapes-of-size are taken
-    in all_legal_shapes order, so the default (pareto, dims=None) path is
-    byte-identical to the original two-line sampler."""
+    in all_legal_shapes order, so the default (pareto, dims=None, snap=None)
+    path is byte-identical to the original two-line sampler."""
     allowed = legal_shapes(model, size_min, size_max, dims)
     sizes = sorted({a * b * c for (a, b, c) in allowed})
     m = len(sizes)
@@ -201,6 +250,9 @@ def build_job_sequence(
             idx = sample_size_index(rng, m, alpha)
         size = sizes[idx]
         shape = rng.choice(by_size[size])
+        if snap:
+            shape = snap_shape(shape, snap)
+            size = shape[0] * shape[1] * shape[2]
         jobs.append(
             (size, shape, sample_duration(rng, max_iters, iter_median, iter_sigma))
         )
@@ -339,6 +391,14 @@ def main(argv: list[str] | None = None) -> int:
         "list, e.g. '1,4,8' for block-aligned shapes (default: all legal dims)",
     )
     ap.add_argument(
+        "--snap-shapes",
+        default=None,
+        help="round each drawn shape onto the nearest target in this comma "
+        "list of shapes, e.g. '1x1x1,2x1x1,...,4x4x4'; size rounds down except "
+        "when a whole-block menu size is within 4/3x, dimensionality is kept "
+        "as close as possible (see snap_shape)",
+    )
+    ap.add_argument(
         "--max-iters",
         type=int,
         default=20,
@@ -379,6 +439,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     shapes.init(cluster_dims)
     dims = frozenset(int(x) for x in args.dims.split(",")) if args.dims else None
+    snap = (
+        [shapes.parse_shape(s) for s in args.snap_shapes.split(",")]
+        if args.snap_shapes
+        else None
+    )
 
     rng = random.Random(args.seed)
     jobs = build_job_sequence(
@@ -393,6 +458,7 @@ def main(argv: list[str] | None = None) -> int:
         args.iter_sigma,
         args.size_dist,
         dims,
+        snap,
     )
     svc_table = load_service_times(args.svc) if args.svc else None
     svc_of = make_svc_fn(svc_table, args.uniform_svc_ns)

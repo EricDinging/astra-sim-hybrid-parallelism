@@ -83,13 +83,32 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     of NPUs marked permanently failed (run_combo.py turns the pct into the
     binary's --failure-prob, rounding the failed-node count up).
 
+    The rounded experiments are pareto<quarter> twins whose drawn shapes are
+    rounded onto a menu of very placeable targets (--snap-shapes): the
+    canonical descending shapes over power-of-two dims up to the half-axis
+    (= sub-block tilers of the default 4x4x4 rfold block; the packing probe
+    measured fill=1.0 for all of them under firstfit AND rfold, vs 0.75-0.98
+    for every 6-dim shape) plus the two-whole-block brick at the quarter cap.
+    Same seed and Pareto size draws as the base trace; sizes round down except
+    onto whole-block targets within 4/3x, so the mean stays ~equal (9.17 ->
+    9.11 at 8x8x8).
+
     The placeability* experiments (one per failure rate, plus the no-failure
     baseline) are single-job empty-torus censuses handled entirely by
     placeability.py; their flags value is None -- they have no arrivals,
     loads, or combos, and launch runs them locally."""
-    cap = cluster.capacity(cluster.load(root))
+    dims = cluster.load(root)
+    cap = cluster.capacity(dims)
     half, quarter = str(cap // 2), str(cap // 4)
     pareto = ["--alpha", "0.5", "--size-max"]
+    # snap menu: descending shapes over power-of-two dims <= half-axis
+    # (sub-block tilers), plus the two-block brick (e.g. 8x4x4 = quarter)
+    half_axis = max(dims) // 2
+    dom = [2**k for k in range(half_axis.bit_length())]
+    menu = [f"{a}x{b}x{c}" for a in dom for b in dom for c in dom if a >= b >= c] + [
+        f"{2 * half_axis}x{half_axis}x{half_axis}"
+    ]
+    rounded = [*pareto, quarter, "--snap-shapes", ",".join(menu)]
     fail = {
         f"{adm}-pareto{quarter}-fail{pct}-load-sweep": [*pareto, quarter]
         for pct in ("0.1", "0.2", "0.5", "1")
@@ -105,6 +124,10 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"swf-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"fifo-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"ljsf-pareto{quarter}-load-sweep": [*pareto, quarter],
+        f"easy-pareto{quarter}-rounded-load-sweep": rounded,
+        f"swf-pareto{quarter}-rounded-load-sweep": rounded,
+        f"fifo-pareto{quarter}-rounded-load-sweep": rounded,
+        f"ljsf-pareto{quarter}-rounded-load-sweep": rounded,
         f"easy-uniform{quarter}-load-sweep": uniform,
         f"swf-uniform{quarter}-load-sweep": uniform,
         f"fifo-uniform{quarter}-load-sweep": uniform,
