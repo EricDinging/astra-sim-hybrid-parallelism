@@ -15,10 +15,10 @@ namespace Scheduling {
 
 BlockModel::BlockModel(std::array<int, 3> dims,
                        std::array<int, 3> block,
-                       bool polarity_free)
+                       bool ocs_enabled)
     : dims_(dims),
       block_(block),
-      polarity_free_(polarity_free) {}
+      ocs_enabled_(ocs_enabled) {}
 
 bool BlockModel::valid() const {
     for (int d = 0; d < 3; ++d) {
@@ -94,7 +94,7 @@ bool BlockModel::ocs_realizable(int u, int v) const {
     // same-face pair would be the same node, which the u == v guard excludes.
     const bool u_face = is_face_node(u, axis, +1) || is_face_node(u, axis, -1);
     const bool v_face = is_face_node(v, axis, +1) || is_face_node(v, axis, -1);
-    if (polarity_free_) {
+    if (ocs_enabled_) {
         return u_face && v_face;
     }
     return (is_face_node(u, axis, +1) && is_face_node(v, axis, -1)) ||
@@ -116,7 +116,7 @@ int BlockModel::ocs_axis(int u, int v) const {
         int wv = b[ax] % block_[ax];
         bool opp = (wu == block_[ax] - 1 && wv == 0) ||
                    (wu == 0 && wv == block_[ax] - 1);
-        if (polarity_free_) {
+        if (ocs_enabled_) {
             // Corrected R3: cross-block circuits may join any two face ports
             // at matching position, same polarity included (+x<->+x). A
             // same-block pair with matching perpendicular coords and u != v
@@ -145,47 +145,11 @@ bool BlockModel::ocs_realizable_scatter(int u, int v) const {
     return ocs_axis(u, v) >= 0;
 }
 
-int BlockModel::free_neighbor_blocks(
-    std::array<int, 3> blk, const std::unordered_set<int>& free) const {
-    std::array<int, 3> g{dims_[0] / block_[0], dims_[1] / block_[1],
-                         dims_[2] / block_[2]};
-    std::set<std::array<int, 3>> neigh;
-    for (int a = 0; a < 3; ++a) {
-        for (int s = -1; s <= 1; s += 2) {
-            std::array<int, 3> nb = blk;
-            nb[a] = (blk[a] + s + g[a]) % g[a];
-            if (nb != blk) {
-                neigh.insert(nb);
-            }
-        }
-    }
-    int cnt = 0;
-    for (const auto& nb : neigh) {
-        bool has_free = false;
-        for (int z = nb[2] * block_[2];
-             z < nb[2] * block_[2] + block_[2] && !has_free; ++z) {
-            for (int y = nb[1] * block_[1];
-                 y < nb[1] * block_[1] + block_[1] && !has_free; ++y) {
-                for (int x = nb[0] * block_[0];
-                     x < nb[0] * block_[0] + block_[0] && !has_free; ++x) {
-                    if (free.count(id_of({x, y, z})) > 0) {
-                        has_free = true;
-                    }
-                }
-            }
-        }
-        if (has_free) {
-            ++cnt;
-        }
-    }
-    return cnt;
-}
-
 std::vector<std::pair<int, int>> BlockModel::wirable_subset(
     const std::vector<std::pair<int, int>>& phys_ring_edges,
     const std::vector<std::pair<int, int>>& wires) const {
-    if (!polarity_free_) {
-        return wires;  // v1 model: torus links are hardware, no port sharing
+    if (!ocs_enabled_) {
+        return wires;  // no-OCS model: torus links are hardware, no sharing
     }
     // (node, axis, +1/-1) -> claimed. For 1-wide block axes every node holds
     // both ports of the axis; mirror directions_disjoint's allowance with a

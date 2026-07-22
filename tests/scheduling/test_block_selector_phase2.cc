@@ -51,13 +51,12 @@ std::unordered_set<int> full_free(int n) {
 
 TEST(Phase2Factory, KnownNames) {
     EXPECT_NE(make_block_selector("min-reconfig"), nullptr);
-    EXPECT_NE(make_block_selector("max-defrag"), nullptr);
     EXPECT_EQ(make_block_selector("nope"), nullptr);
 }
 
 TEST(MinReconfig, UsesContiguousWhenAvailable) {
     BlockModel cm({8, 8, 8}, {4, 4, 4});
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     MinReconfig sel(50000);
     auto free = full_free(512);
     auto ring = FootprintRouter::ring_edges({2, 2, 2});
@@ -70,7 +69,7 @@ TEST(MinReconfig, UsesContiguousWhenAvailable) {
 
 TEST(MinReconfig, ScattersWhenNoContiguousFit) {
     BlockModel cm({8, 8, 8}, {4, 4, 4});
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     MinReconfig sel(50000);
     std::unordered_set<int> free;
     add_block(free, 0, 0, 0);
@@ -87,44 +86,10 @@ TEST(MinReconfig, ScattersWhenNoContiguousFit) {
     }
 }
 
-TEST(MaxDefrag, PrefersIsolatedBlock) {
-    BlockModel cm({8, 8, 8}, {4, 4, 4});
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
-    MaxDefrag sel(50000);
-    std::unordered_set<int> free;
-    add_block(free, 0, 0, 0);  // part of an adjacent pair (isolation >= 1)
-    add_block(free, 1, 0, 0);
-    add_block(free, 1, 1, 1);  // isolated (0 free neighbors)
-    auto ring = FootprintRouter::ring_edges({4, 4, 4});
-    CommFirst ranker;
-    auto p = sel.select(ident({4, 4, 4}), free, {8, 8, 8}, cm, *scorer, ranker,
-                        ring);
-    ASSERT_TRUE(p.has_value());
-    for (int id : p->rank_map) {  // chose the isolated block(1,1,1) -> all >= 4
-        auto c = cm.coord(id);
-        EXPECT_GE(c[0], 4);
-        EXPECT_GE(c[1], 4);
-        EXPECT_GE(c[2], 4);
-    }
-}
-
 TEST(MinReconfig, NulloptWhenScatterImpossible) {
     BlockModel cm({8, 8, 8}, {4, 4, 4});
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     MinReconfig sel(50000);
-    std::unordered_set<int> free;
-    add_block(free, 0, 0, 0);  // only 1 block free, job needs 2
-    auto ring = FootprintRouter::ring_edges({8, 4, 4});
-    CommFirst ranker;
-    auto p = sel.select(ident({8, 4, 4}), free, {8, 8, 8}, cm, *scorer, ranker,
-                        ring);
-    EXPECT_FALSE(p.has_value());
-}
-
-TEST(MaxDefrag, NulloptWhenScatterImpossible) {
-    BlockModel cm({8, 8, 8}, {4, 4, 4});
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
-    MaxDefrag sel(50000);
     std::unordered_set<int> free;
     add_block(free, 0, 0, 0);  // only 1 block free, job needs 2
     auto ring = FootprintRouter::ring_edges({8, 4, 4});

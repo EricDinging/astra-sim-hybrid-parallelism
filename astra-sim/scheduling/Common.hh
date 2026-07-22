@@ -42,29 +42,12 @@ struct PlacementResult {
 };
 
 struct PlacementConfig {
-    std::string defrag_metric = "fewest-blocks-ocs";  // --defrag-metric
-    std::array<int, 3> block_size = {4, 4, 4};        // --block-size (rfold)
-    std::string rfold_selector = "min-reconfig";      // --rfold-selector
-    std::string rfold_ranking =
-        "auto";  // --rfold-ranking (auto: per rfold version)
-    int rfold_search_budget = 50000;  // --rfold-search-budget
-    bool rfold_multifold = true;      // --rfold-multifold
-    // Corrected-R3 circuit legality (cross-block same-polarity pairings).
-    // Not a CLI flag: resolved from the rfold version (v2 true, v1 false)
-    // in make_placement_policy, like the ranking default.
-    bool rfold_polarity_free = true;
-    // cost-model ranking knobs (--cost-model-*), spec 2026-06-11 §4
-    double cm_kappa = 1.0;           // seam-penalty calibration
-    double cm_c_ext = 1.0;           // externality coefficient
-    double cm_t_reconfig_s = 0.010;  // per-OCS-link charge (seconds)
-    double cm_gamma = 1.0;           // lookahead charge coefficient
-    int cm_lookahead_k = 0;          // top-K finalists probed (0 = proxy only)
-    int cm_lookahead_q = 8;          // queued shapes probed per finalist
-    bool cm_scatter_guard = true;    // keep scatter strictly last
-    // >0: freeze the proxy externality's beta to this constant (seconds),
-    // replacing the state-dependent c_ext*Q*mean(t_svc) — the spec's
-    // "cost-model-static" ablation arm. 0 = dynamic beta (default).
-    double cm_beta_const_s = 0.0;
+    std::string defrag_metric = "fewest-blocks";  // --defrag-metric
+    std::array<int, 3> block_size = {4, 4, 4};    // --block-size (rfold)
+    std::string rfold_selector = "min-reconfig";  // --rfold-selector
+    std::string rfold_ranking = "frag-first";     // --rfold-ranking
+    int rfold_search_budget = 50000;              // --rfold-search-budget
+    bool rfold_multifold = true;                  // --rfold-multifold
     int switch_theta = 1;  // DynamicSwitch backlog threshold
 };
 

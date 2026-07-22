@@ -46,20 +46,6 @@ double Compactness::cost(const ScoredPlacement& p) const {
     return std::max({p.footprint[0], p.footprint[1], p.footprint[2]});
 }
 
-double FewestBlocksThenOcsLinks::cost(const ScoredPlacement& p) const {
-    const auto& d = *p.dims;
-    // Pack (blocks, ocs_links, max_footprint) so each term strictly dominates
-    // the next. max_footprint < wf; ocs_links <= 3*N < wo; so ocs*wf + mf can
-    // never reach wo*wf (one block unit), and mf can never reach wf (one OCS
-    // unit). N = total torus nodes.
-    const long N = static_cast<long>(d[0]) * d[1] * d[2];
-    const int mf = std::max({p.footprint[0], p.footprint[1], p.footprint[2]});
-    const double wf = std::max({d[0], d[1], d[2]}) + 1.0;
-    const double wo = 3.0 * static_cast<double>(N) + 1.0;
-    return static_cast<double>(count_blocks(*p.npus, d, block_)) * (wo * wf) +
-           static_cast<double>(p.ocs_links) * wf + mf;
-}
-
 bool parse_block_size(const std::string& s, std::array<int, 3>& out) {
     std::stringstream ss(s);
     std::string tok;
@@ -89,9 +75,6 @@ std::unique_ptr<FragmentationScorer> make_fragmentation_scorer(
     }
     if (name == "compactness") {
         return std::make_unique<Compactness>();
-    }
-    if (name == "fewest-blocks-ocs") {
-        return std::make_unique<FewestBlocksThenOcsLinks>(block);
     }
     return nullptr;
 }

@@ -37,7 +37,7 @@ static FoldVariant identity_2x2x2() {
 
 TEST(ContiguousFirst, PlacesIdentityWithinOneBlock) {
     BlockModel cm({8, 8, 8}, {4, 4, 4});
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     ContiguousFirst sel;
     auto free = full_free(512);
     auto ring = FootprintRouter::ring_edges({2, 2, 2});
@@ -51,7 +51,7 @@ TEST(ContiguousFirst, PlacesIdentityWithinOneBlock) {
 
 TEST(ContiguousFirst, NoFitWhenNoFreeSpace) {
     BlockModel cm({8, 8, 8}, {4, 4, 4});
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     ContiguousFirst sel;
     std::unordered_set<int> free;  // empty
     auto ring = FootprintRouter::ring_edges({2, 2, 2});
@@ -80,7 +80,7 @@ static FoldVariant ring4_x() {
 
 TEST(ContiguousFirst, PlacesRealizableSelfWrap) {
     BlockModel cm({8, 8, 8}, {4, 4, 4});
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     ContiguousFirst sel;
     auto free = full_free(512);
     auto ring = FootprintRouter::ring_edges({4, 1, 1});
@@ -102,7 +102,7 @@ TEST(ContiguousFirst, PlacesNonRealizableClosureViaDor) {
     // contiguous placeability maximal: any cuboid fit is accepted.
     BlockModel cm({8, 8, 8}, {4, 4, 4});
     auto id = [](int x, int y, int z) { return z * 64 + y * 8 + x; };
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     ContiguousFirst sel;
     std::unordered_set<int> free = {id(2, 0, 0), id(3, 0, 0), id(4, 0, 0),
                                     id(5, 0, 0)};
@@ -121,7 +121,7 @@ TEST(ContiguousFirst, PrefersRealizableOverDorPlacement) {
     // score.
     BlockModel cm({8, 8, 8}, {4, 4, 4});
     auto id = [](int x, int y, int z) { return z * 64 + y * 8 + x; };
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     ContiguousFirst sel;
     std::unordered_set<int> free = {id(0, 0, 0), id(1, 0, 0), id(2, 0, 0),
                                     id(3, 0, 0), id(2, 1, 0), id(3, 1, 0),
@@ -142,7 +142,7 @@ TEST(MinReconfig, ReturnsContiguousDorPlacementWhenScatterImpossible) {
     // its DOR-ridden closure rather than failing.
     BlockModel cm({8, 8, 8}, {4, 4, 4});
     auto id = [](int x, int y, int z) { return z * 64 + y * 8 + x; };
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4});
+    auto scorer = make_fragmentation_scorer("fewest-blocks", {4, 4, 4});
     MinReconfig sel(50000);
     std::unordered_set<int> free = {id(2, 0, 0), id(3, 0, 0), id(4, 0, 0),
                                     id(5, 0, 0)};
@@ -156,7 +156,7 @@ TEST(MinReconfig, ReturnsContiguousDorPlacementWhenScatterImpossible) {
 
 namespace {
 // Prefers scatter outright and disclaims the early-return guarantee —
-// stands in for cost-model with the scatter guard off.
+// stands in for a ranker that lets scatter compete.
 struct ScatterLover : public PlacementRanker {
     bool better(const Placement& a, const Placement& b) const override {
         if (a.scattered != b.scattered) {
@@ -181,7 +181,7 @@ TEST(MinReconfigGate, RankerCanPreferScatterOverClosedContiguous) {
     }
     auto vs = FoldEnumerator::enumerate({2, 2, 2});
     MinReconfig sel(50000);
-    FewestBlocksThenOcsLinks scorer({2, 2, 2});
+    FewestBlocksTouched scorer({2, 2, 2});
     ScatterLover ranker;
     auto ring = FootprintRouter::ring_edges({2, 2, 2});
     auto p = sel.select(vs[0], free, dims, cm, scorer, ranker, ring);
@@ -202,32 +202,10 @@ TEST(MinReconfigGate, DefaultRankerReturnsClosedContiguousNotScatter) {
     }
     auto vs = FoldEnumerator::enumerate({2, 2, 2});
     MinReconfig sel(50000);
-    FewestBlocksThenOcsLinks scorer({2, 2, 2});
+    FewestBlocksTouched scorer({2, 2, 2});
     CommFirst ranker;
     auto ring = FootprintRouter::ring_edges({2, 2, 2});
     auto p = sel.select(vs[0], free, dims, cm, scorer, ranker, ring);
     ASSERT_TRUE(p.has_value());
     EXPECT_FALSE(p->scattered);
-}
-
-// residual_frag = sum over touched blocks of free_neighbor_blocks (computed
-// against the pre-placement free set). On a fully-free 8^3 torus with 2^3
-// blocks, any single-block placement touches 1 block with 6 free neighbors.
-TEST(BlockSelectorResidual, SingleBlockOnIdleTorusIsSix) {
-    std::vector<int> dims = {8, 8, 8};
-    BlockModel cm({8, 8, 8}, {2, 2, 2});
-    std::unordered_set<int> free;
-    for (int i = 0; i < 512; ++i) {
-        free.insert(i);
-    }
-    auto vs = FoldEnumerator::enumerate({2, 2, 2});
-    ContiguousFirst sel;
-    auto scorer = make_fragmentation_scorer("fewest-blocks-ocs", {2, 2, 2});
-    CommFirst ranker;
-    auto ring = FootprintRouter::ring_edges({2, 2, 2});
-    auto p = sel.select(vs[0], free, dims, cm, *scorer, ranker, ring);
-    ASSERT_TRUE(p.has_value());
-    EXPECT_EQ(p->blocks_touched, 1);
-    EXPECT_EQ(p->residual_frag, 6);
-    EXPECT_EQ(p->ocs_links(), static_cast<int>(p->ocs_edges.size()));
 }

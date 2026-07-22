@@ -19,9 +19,9 @@ struct FoldVariant {
     // are neutral (their closure is a placement-time, full-axis property).
     bool ring_closes = false;
     // True for the unfolded variant (footprint == requested shape). Marks
-    // the variant for tests/diagnostics; comm-first v2 no longer ranks
-    // identity as its own class (it competes inside full-fidelity on
-    // packing/ocs/residual keys), but the flag stays cheap and useful.
+    // the variant for tests/diagnostics; comm-first does not rank identity
+    // as its own class (it competes inside full-fidelity on the packing
+    // keys), but the flag stays cheap and useful.
     bool identity = false;
 };
 

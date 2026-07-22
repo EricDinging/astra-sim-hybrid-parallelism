@@ -87,7 +87,7 @@ flowchart LR
   <tr>
     <td><b>S1</b> static base torus with free adjacent seams</td>
     <td class="rev">REVISED</td>
-    <td>Default torus = <i>initial OCS configuration</i>, not hardware. No behavior change (S3 keeps the shared fabric); finish by dropping the <code>ocs_links</code> tiebreak from the default rank key and relaxing the realizability predicate to corrected R3.</td>
+    <td>Default torus = <i>initial OCS configuration</i>, not hardware. Fully implemented: no ranking key prices circuits or default seams, and realizability follows corrected R3 (gated on <code>ocs_enabled</code>; false only at whole-torus block, where no OCS exists).</td>
   </tr>
   <tr>
     <td><b>S2</b> sub-cube placements, arbitrary even shapes</td>
@@ -101,30 +101,33 @@ flowchart LR
   </tr>
 </table>
 
-<h2>4 &middot; What stays true regardless (evidence)</h2>
+<h2>4 &middot; What the experiments settled</h2>
 <div class="card">
-<p><b>The class gate survives S1's revision — it was never about adjacency.</b>
-Removing it (uniform-seams experiment, 8&times;20k-job runs): mean JCT
-7.2&thinsp;s &rarr; <span class="bad">43&ndash;65&thinsp;s</span> at fifo/0.60, with eager
-gluing rising only 0.8% &rarr; 3%. The gate protects <b>clean cubes</b>: awkward
-shapes must dirty some cube, and eager scattering dirties several per job, starving
-future jobs. Whole-cube placements dirty nothing and are unconditionally fine.</p>
-<p><b>Current model is conservative:</b> the opposite-face-only predicate rejects
-wirings the real machine allows (corrected R3), so every simulated placement is
-realizable, but the machine's full flexibility is understated until the predicate
-is relaxed.</p>
+<p><b>Fragmentation, not contiguity, is the thing to protect.</b> The 2026-07-19
+experiment that made "non-contiguous competes as an equal" look catastrophic
+(mean JCT 7.2&thinsp;s &rarr; <span class="bad">43&ndash;65&thinsp;s</span>) predated
+tile packing: origin-locked tiles sprayed fragments into idle cubes. With cube
+sharing and the fragmented-cube-first order in place, dropping the contiguity
+tier <span class="rev">won every probe cell</span> (5k jobs: fifo-0.60 &minus;4.8%,
+fifo-0.90 &minus;15%, easy-0.90 &minus;2.5%). The shipped ranking is tier-free:
+a placement pays only for cubes it takes from fully idle to partially occupied.</p>
+<p><b>Remaining conservatism:</b> polarity-free pairings are legal in the model,
+but no search yet exploits mirrored tile traversal.</p>
 </div>
 
 <h2>5 &middot; Implementation status (2026-07-22)</h2>
 <div class="card">
-<p><b>Landed</b> (uncommitted, 313/313 tests, all gated on the rfoldv2 mode flag —
-rfoldv1 stays bit-compatible): corrected-R3 predicates &middot; ocs-key drop &middot;
+<p><b>Final state (2026-07-22, 290/290 tests):</b> a single <code>rfold</code>
+(rfoldv1 and all superseded study arms deleted). Corrected-R3 predicates &middot;
 <b>R5 port-exclusivity fix</b> (the new legality checker caught real placements
-putting two circuits on one port) &middot; <b>DOR-tolerant glue</b> (unwirable edges ride
-the S3 shared fabric; before this, only dims {1,2,4,8} could glue — the whole
-72-chip family could not) &middot; <b>tile nesting</b> (per-tile offsets, cube sharing,
-dirty-cube-first) &middot; micro-benchmark layer (<code>rdcn_check.hh</code> +
-<code>microbench_rfold</code>).</p>
+putting two circuits on one port) &middot; <b>best-effort wiring</b> for
+non-contiguous placement (unwirable edges ride the shared fabric; before this,
+only side lengths {1,2,4,8} could place non-contiguously — the whole 72-chip
+family could not) &middot; <b>tile packing with cube sharing</b> (per-tile offsets,
+fragmented-cube-first) &middot; <b>fragmentation-first ranking</b>
+<code>(frag, cubes, multihop, cost)</code> — the contiguity tier lost every probe
+cell (up to &minus;15% mean JCT) and is gone &middot; micro-benchmark layer
+(<code>rdcn_check.hh</code> + <code>microbench_rfold</code>).</p>
 </div>
 <table>
   <tr><th>cell (mean JCT, s)</th><th>folding b8</th><th>base b4</th><th>+DOR-glue</th><th>+nesting (final)</th></tr>
@@ -136,11 +139,10 @@ dirty-cube-first) &middot; micro-benchmark layer (<code>rdcn_check.hh</code> +
   <tr><td>p256 fifo 0.90</td><td>661.6</td><td>639.4</td><td>576.5</td><td class="rev">341.4 (&minus;47%)</td></tr>
 </table>
 <div class="card">
-<p><b>Open items:</b> reconfig-count definition &middot; mirrored tile traversal
-(optional) &middot; algo.tex prose update &middot; <b>user decision</b>: the EASY-admission
-fairness tradeoff — gluing places big jobs earlier (big-job wait &minus;15%) at
-small jobs' expense (mean +27% at easy&nbsp;0.90); accept, or gate gluing on queue
-pressure.</p>
+<p><b>Open items:</b> mirrored tile traversal (optional) &middot; full-length
+EASY re-validation — the tier-free ranking improved easy-0.90 in 5k-job probes
+(&minus;2.5%), but the 20k-job fairness picture (big-job vs small-job wait)
+awaits a re-run.</p>
 </div>
 
 </body>

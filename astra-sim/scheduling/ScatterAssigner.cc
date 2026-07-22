@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/FootprintRouter.hh"
 
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <set>
 
@@ -75,7 +76,6 @@ std::optional<std::vector<int>> scatter_assign(
     const std::vector<int>& dims,
     const BlockModel& cm,
     const std::vector<std::pair<int, int>>& ring,
-    const std::function<double(const std::array<int, 3>&)>& block_rank,
     int budget) {
     const std::array<int, 3> blk = cm.block_dims();
     const std::array<int, 3>& fp = v.footprint;
@@ -116,7 +116,7 @@ std::optional<std::vector<int>> scatter_assign(
                         lo[i] = t.offset_free[i] ? O[i] : 0;
                         hi[i] = lo[i] + tb.shape[i];
                     }
-                    std::vector<std::pair<double, std::array<int, 3>>> cands;
+                    std::vector<std::array<int, 3>> cands;
                     for (int cz = 0; cz < gdim[2]; ++cz) {
                         for (int cy = 0; cy < gdim[1]; ++cy) {
                             for (int cx = 0; cx < gdim[0]; ++cx) {
@@ -140,28 +140,22 @@ std::optional<std::vector<int>> scatter_assign(
                                     }
                                 }
                                 if (ok) {
-                                    cands.push_back({block_rank(C), C});
+                                    cands.push_back(C);
                                 }
                             }
                         }
                     }
-                    std::sort(cands.begin(), cands.end(),
-                              [](const auto& a, const auto& c) {
-                                  if (a.first != c.first) {
-                                      return a.first < c.first;
-                                  }
-                                  return a.second < c.second;
-                              });
+                    std::sort(cands.begin(), cands.end());
                     for (const auto& pc : cands) {
                         if (++spent > budget) {
                             return false;
                         }
-                        used.insert(pc.second);
-                        grid2blk[tb.grid] = pc.second;
+                        used.insert(pc);
+                        grid2blk[tb.grid] = pc;
                         if (dfs(bi + 1)) {
                             return true;
                         }
-                        used.erase(pc.second);
+                        used.erase(pc);
                         grid2blk.erase(tb.grid);
                     }
                     return false;
@@ -169,7 +163,7 @@ std::optional<std::vector<int>> scatter_assign(
 
                 if (dfs(0)) {
                     auto rm = build_rank_map(v, t, O, dims, blk, grid2blk);
-                    if (cm.polarity_free()) {
+                    if (cm.ocs_enabled()) {
                         // RDCN mode: DOR-tolerant glue. Ring edges the OCS
                         // cannot serve are not grounds for rejection — like
                         // open contiguous placements they ride the shared
@@ -184,7 +178,7 @@ std::optional<std::vector<int>> scatter_assign(
                         return rm;
                     }
                     auto oe = FootprintRouter::ocs_edges(ring, rm, cm);
-                    // Strict pre-2026-07 gate (rfoldv1 bit-compat): the first
+                    // Strict gate (no-OCS folding arm): the first
                     // complete assignment decides realizability — whether a
                     // ring wrap-closure lands on opposite block faces is a
                     // fold-variant property (offset- and assignment-
@@ -225,8 +219,8 @@ std::optional<std::vector<int>> scatter_assign_nested(
                             dims[2] / blk[2]};
     const int vol = blk[0] * blk[1] * blk[2];
 
-    // Per-block free-chip count: 0 < count < vol marks a dirty block —
-    // preferred hosts for partial tiles (concentrate the dirt).
+    // Per-block free-chip count: 0 < count < vol marks a fragmented block —
+    // preferred hosts for partial tiles (concentrate fragmentation).
     std::map<std::array<int, 3>, int> free_in_block;
     for (int n : free) {
         ++free_in_block[cm.block_of(n)];
@@ -247,7 +241,7 @@ std::optional<std::vector<int>> scatter_assign_nested(
         const Block& tb = t.blocks[bi];
         const bool full_tile = tb.shape[0] == blk[0] && tb.shape[1] == blk[1] &&
                                tb.shape[2] == blk[2];
-        // Candidates: (rank, block, offset). Rank prefers dirty blocks for
+        // Candidates: (rank, block, offset). Rank prefers fragmented blocks for
         // partial tiles; full tiles need a wholly-free block either way.
         struct Cand {
             double rank;
@@ -267,7 +261,7 @@ std::optional<std::vector<int>> scatter_assign_nested(
                     if (full_tile && bf < vol) {
                         continue;
                     }
-                    const bool dirty = bf < vol;
+                    const bool frag = bf < vol;
                     for (int oz = 0; oz + tb.shape[2] <= blk[2]; ++oz) {
                         for (int oy = 0; oy + tb.shape[1] <= blk[1]; ++oy) {
                             for (int ox = 0; ox + tb.shape[0] <= blk[0]; ++ox) {
@@ -289,10 +283,10 @@ std::optional<std::vector<int>> scatter_assign_nested(
                                     }
                                 }
                                 if (ok) {
-                                    // Dirty blocks first, then origin-most
+                                    // Fragmented blocks first, then origin-most
                                     // offsets, then block order (determinism).
                                     cands.push_back(
-                                        {dirty ? 0.0 : 1.0, C, {ox, oy, oz}});
+                                        {frag ? 0.0 : 1.0, C, {ox, oy, oz}});
                                 }
                             }
                         }

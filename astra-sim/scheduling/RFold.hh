@@ -41,10 +41,7 @@ class RFold : public PlacementPolicy {
           selector_(std::move(selector)),
           scorer_(std::move(scorer)),
           ranker_(std::move(ranker)),
-          multifold_(cfg.rfold_multifold),
-          polarity_free_(cfg.rfold_polarity_free),
-          lookahead_q_(cfg.cm_lookahead_q),
-          gamma_(cfg.cm_gamma) {}
+          multifold_(cfg.rfold_multifold) {}
     PlacementResult try_place(const JobInstance& job,
                               const ClusterView& view) override;
     std::string name() const override {
@@ -81,24 +78,7 @@ class RFold : public PlacementPolicy {
     std::map<std::array<int, 3>, bool> idle_ok_;
     const SchedContext* runtime_ctx_ = nullptr;
     bool multifold_;
-    bool polarity_free_;
-    // Consumed by the cost-model lookahead pass in try_place.
-    int lookahead_q_;
-    double gamma_;
 };
-
-namespace detail {
-// Lookahead charging pass (cost-model): truncate `cands` (already ranker-
-// sorted, best first) to the top k finalists, then charge each finalist
-// gamma * est_duration_s for every queued job (FCFS order, top q) it flips
-// from placeable-now to blocked. ctx.probe must be set. Exposed for tests.
-void apply_lookahead(std::vector<Placement>& cands,
-                     int k,
-                     int q,
-                     double gamma,
-                     const SchedContext& ctx,
-                     const std::unordered_set<int>& free);
-}  // namespace detail
 
 }  // namespace Scheduling
 }  // namespace AstraSim

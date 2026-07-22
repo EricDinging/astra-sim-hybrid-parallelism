@@ -39,7 +39,7 @@ struct RdcnReport {
     int wired = 0;          // ring edges on re-pointed circuits
     int multihop = 0;       // ring edges left to shared-fabric routing (S3)
     // Cubes this placement occupies only partially (the damage metric).
-    int dirty_cubes = 0;
+    int frag_cubes = 0;
     int cubes_touched = 0;
 };
 
@@ -162,7 +162,7 @@ inline RdcnReport rdcn_check(const PlacementResult& r,
     const int cube_vol = block[0] * block[1] * block[2];
     for (const auto& [c, cnt] : per_cube) {
         if (cnt < cube_vol) {
-            ++rep.dirty_cubes;
+            ++rep.frag_cubes;
         }
     }
     return rep;

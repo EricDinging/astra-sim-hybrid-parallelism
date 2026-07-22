@@ -27,31 +27,18 @@ struct Placement {
     std::vector<std::pair<int, int>> ocs_edges;  // global cross-block OCS edges
     double cost;
     // Distinct A×B×C blocks the placement intersects: the packing signal used
-    // by PlacementRanker. (cost's leading term is also block count, but cost
-    // bundles an anti-OCS ocs_links penalty below it, so cost cannot serve as
-    // the packing key without suppressing useful OCS wiring -- hence this
-    // explicit field.)
+    // by PlacementRanker.
     int blocks_touched = 0;
     // Ring-edge pairs that are neither torus-adjacent nor OCS-realizable at
     // this position: they ride the backend's standard DOR (unpinned)
     // instead of a pinned 1-hop route. Used as a secondary tiebreak by
     // PlacementRanker.
     int dor_edges = 0;
-    // Sum over the touched blocks of free_neighbor_blocks against the
-    // PRE-placement free set: lower = the placement consumes already-isolated
-    // blocks (wall-hugging). Final fixed-ranking tiebreak before cost.
-    int residual_frag = 0;
-    // Blocks this placement newly wounds: clean before (every chip free),
-    // partially occupied after. The RDCN damage metric — dirtying an
-    // already-dirty block or cleanly consuming a whole one costs nothing.
-    // Leads the v2 scatter-class key (CommFirst).
-    int dirty_delta = 0;
-    // Queue-externality charge filled by RFold's cost-model lookahead pass;
-    // 0 otherwise. Read only by CostModelRanker.
-    double lookahead_ext_s = 0.0;
-    int ocs_links() const {
-        return static_cast<int>(ocs_edges.size());
-    }
+    // Blocks this placement newly fragments: fully idle before, partially
+    // occupied after. Fragmenting an already-fragmented block or cleanly
+    // consuming a whole one costs nothing. Leads the default (frag-first)
+    // ranking key.
+    int frag_delta = 0;
     // Construction facts consumed by PlacementRanker keys (set by whichever
     // selector builds the placement; rankers derive comm classes from these
     // rather than the selector baking preference into cost):
@@ -98,34 +85,12 @@ class ContiguousFirst : public BlockSelector {
 
 // Scatter selector: place contiguously when possible (reusing ContiguousFirst,
 // so it is a superset of contiguous placeability), otherwise scatter onto the
-// first-fit free blocks (fewest reconfigured OCS links). With rotate_scatter
-// (rfoldv2) the scatter phase tries all 6 axis rotations of the variant, as
-// the contiguous scan always has; without it (rfoldv1) scatter is
-// orientation-locked, bit-compatible with pre-2026-07 sweeps.
+// first-fit free blocks (fewest reconfigured OCS links). The scatter phase
+// tries all 6 axis rotations of the variant, as the contiguous scan always
+// has.
 class MinReconfig : public BlockSelector {
   public:
-    explicit MinReconfig(int search_budget, bool rotate_scatter = true)
-        : budget_(search_budget),
-          rotate_scatter_(rotate_scatter) {}
-    std::optional<Placement> select(
-        const FoldVariant& v,
-        const std::unordered_set<int>& free,
-        const std::vector<int>& dims,
-        const BlockModel& cm,
-        const FragmentationScorer& scorer,
-        const PlacementRanker& ranker,
-        const std::vector<std::pair<int, int>>& ring_edges) const override;
-
-  private:
-    int budget_;
-    bool rotate_scatter_;
-};
-
-// Scatter selector: gather the most-isolated free blocks (fewest free
-// neighbor-blocks) to preserve large contiguous holes for future jobs.
-class MaxDefrag : public BlockSelector {
-  public:
-    explicit MaxDefrag(int search_budget) : budget_(search_budget) {}
+    explicit MinReconfig(int search_budget) : budget_(search_budget) {}
     std::optional<Placement> select(
         const FoldVariant& v,
         const std::unordered_set<int>& free,
@@ -139,12 +104,10 @@ class MaxDefrag : public BlockSelector {
     int budget_;
 };
 
-// name in {contiguous, min-reconfig, max-defrag}. search_budget bounds the
-// scatter selectors' backtracking; rotate_scatter is min-reconfig's rfoldv2
-// rotation widening (see MinReconfig). Returns nullptr on unknown name.
+// name in {contiguous, min-reconfig}. search_budget bounds the scatter
+// selector's backtracking. Returns nullptr on unknown name.
 std::unique_ptr<BlockSelector> make_block_selector(const std::string& name,
-                                                   int search_budget = 50000,
-                                                   bool rotate_scatter = true);
+                                                   int search_budget = 50000);
 
 }  // namespace Scheduling
 }  // namespace AstraSim

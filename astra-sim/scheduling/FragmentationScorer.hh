@@ -21,7 +21,6 @@ struct ScoredPlacement {
     const std::vector<int>* npus;  // global NPU ids of the placement
     const std::vector<int>* dims;  // torus dims [Dx, Dy, Dz]
     std::array<int, 3> footprint;  // physical footprint shape (for tiebreak)
-    int ocs_links = 0;             // OCS links the placement needs (rfold)
 };
 
 class FragmentationScorer {
@@ -49,25 +48,11 @@ class Compactness : public FragmentationScorer {
     double cost(const ScoredPlacement& p) const override;
 };
 
-// Lexicographic (blocks, ocs_links, max_footprint) packed into one double:
-// fewest blocks dominates, then fewest OCS links, then most cube-like
-// footprint. The default scorer for rfold (select with --defrag-metric
-// fewest-blocks-ocs).
-class FewestBlocksThenOcsLinks : public FragmentationScorer {
-  public:
-    explicit FewestBlocksThenOcsLinks(std::array<int, 3> block)
-        : block_(block) {}
-    double cost(const ScoredPlacement& p) const override;
-
-  private:
-    std::array<int, 3> block_;
-};
-
 // Parse "AxBxC" -> {A,B,C}. Returns false on malformed input.
 bool parse_block_size(const std::string& s, std::array<int, 3>& out);
 
-// name in {fewest-blocks, compactness, fewest-blocks-ocs}. block used only by
-// fewest-blocks and fewest-blocks-ocs. Returns nullptr on unknown name.
+// name in {fewest-blocks, compactness}. block used only by fewest-blocks.
+// Returns nullptr on unknown name.
 std::unique_ptr<FragmentationScorer> make_fragmentation_scorer(
     const std::string& name, std::array<int, 3> block);
 

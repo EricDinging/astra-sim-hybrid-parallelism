@@ -59,26 +59,14 @@ hardware.** The simulator's static all-machine torus is henceforth read as
 "the circuits that happen to be wired at boot." Adjacent-cube seams are
 *not* cheaper than remote seams — both are one circuit (R4). Because S3 is
 kept, this reinterpretation changes no simulation behavior: the default
-circuits are exactly the shared fabric multi-hop traffic rides. What must
-change to finish the revision:
-
-1. *Ranking:* drop the `ocs_links` tiebreak from the default (rfoldv2)
-   rank key — the last remnant of "prefer default seams." Key becomes
-   `(class, multihop, cubes, cost)`. Needs the standard 4-cell validation
-   before shipping (deep tiebreak, near-zero effect expected, unverified).
-   The `rfoldv1` bit-compat arm keeps the old key.
-2. *Realizability:* accept cross-cube same-polarity pairings per corrected
-   R3. Today `BlockModel::ocs_axis` / `ocs_realizable` require opposite
-   faces — **stricter than the real machine**, so current results are
-   conservative (every accepted placement is realizable; some realizable
-   placements are rejected). Exploiting the freedom (mirrored tile
-   traversal, so a busy port can be dodged by flipping a tile's direction)
-   is a follow-on extension.
-3. *Open decision:* what "reconfiguration count" measures — every circuit a
-   job wires (uniform, TPU-faithful) vs. only circuits moved away from the
-   current configuration (what rewiring downtime actually costs). Leaning
-   toward the second, since switching time is the only physical cost that
-   survives R4.
+circuits are exactly the shared fabric multi-hop traffic rides. The revision is fully
+implemented (2026-07-22): no ranking key prices circuits or default seams,
+realizability accepts cross-cube same-polarity pairings per corrected R3
+(`BlockModel`, gated on `ocs_enabled` — false only at whole-torus block,
+where no OCS exists and folding-only semantics apply), and the
+reconfiguration-count question dissolved when its only consumer (the
+cost-model ranker) was deleted. Still unexploited: mirrored tile traversal
+(flipping a tile's direction to dodge a busy port).
 
 **S2 — KEPT deliberately: sub-cube placements.** Our jobs may have any
 even-sided shape, occupy fractions of cubes, and share a cube — finer
@@ -93,49 +81,51 @@ study what shared-fabric support would take and be worth.
 
 ## Part 3 — Established consequences (evidence on record)
 
-- **The class gate is structural, not adjacency-based.** Removing it
-  (uniform-seams experiment, 8×20k-job runs, 2026-07-19): mean JCT went
-  from 7.2 s to 43–65 s at fifo/0.60, with eager gluing rising only
-  0.8 % → 3 %. The gate protects *clean cubes* from slivers, a mechanism
-  that exists below cube granularity where even real TPUs have static
-  wiring. It survives the S1 revision untouched.
-- **The damage metric is dirty-cube count, not distance.** An awkward shape
-  (side not divisible by N) must leave some cube partly full; eager
-  scattering dirties several cubes per job (tiles pin to cube origins, so
-  leftovers cannot be shared with the next job), starving future jobs of
-  clean cubes. Whole-cube placements dirty nothing and are unconditionally
-  fine — any set of free cubes is as good as any other.
-- **Model conservatism.** Until S1-revision item 2 lands, the simulator
-  under-uses the real machine's wiring freedom (opposite-face-only seams).
+- **The contiguity tier was an artifact of primitive non-contiguous
+  placement, now removed (2026-07-22).** The 2026-07-19 experiment that made
+  "non-contiguous competes as an equal" look catastrophic (mean JCT 7.2 s →
+  43–65 s) predated tile packing: origin-locked tiles sprayed fragments
+  into idle cubes. With cube sharing, per-tile offsets, and the
+  fragmented-cube-first order in place, dropping the tier *wins* every
+  probe cell (5k jobs, mean JCT: fifo-0.60 −4.8 %, fifo-0.90 −15 %,
+  easy-0.90 −2.5 %). The shipped ranking is tier-free:
+  `(frag, cubes, multihop, cost)` for every placement.
+- **The damage metric is newly-fragmented-cube count, not distance.**
+  A placement pays only for cubes it takes from fully idle to partially
+  occupied; consuming whole cubes or adding to already-fragmented ones is
+  free. Any set of idle cubes is as good as any other.
+- **Remaining conservatism.** Polarity-free pairings are legal in the
+  model but no search yet exploits mirrored tile traversal.
 
-## Part 4 — Change checklist (updated 2026-07-22)
+## Part 4 — Change checklist (final, 2026-07-22)
 
-- [x] Drop `ocs_links` from the rfoldv2 rank key (validated, 2 rounds)
-- [x] Relax `ocs_axis`/`ocs_realizable` to corrected R3 (cross-cube any
-      polarity; same-cube opposite-face only) — `BlockModel` polarity_free
-      flag; v1 strict for bit-compat
-- [x] **(found by the new RDCN checker)** R5 port-exclusivity fix: a wired
-      ring closure can no longer share a face port with a default-seam ride
-      of the same placement (`BlockModel::wirable_subset`)
-- [x] **DOR-tolerant glue** (major addition): the scatter gate no longer
-      rejects variants with unwirable edges — they ride the S3 shared
-      fabric as `dor_edges`. Root cause fixed: glueable dims were
-      {1, 2, 4, 8}, so every factor-3 shape (the 72-chip family, ~10% of
-      pareto128 chip-mass) could never glue at all
-- [x] **Tile nesting** (`scatter_assign_nested`): per-tile in-cube offsets,
-      same/cross-job cube sharing on disjoint chips, dirty-cube-first
-      candidate order; `dirty_delta` (newly-wounded clean cubes) leads the
-      v2 scatter ranking. Whole-torus blocks (folding-only arm) keep strict
-      pre-RDCN semantics — no OCS, no RDCN machinery
+- [x] Corrected-R3 realizability (cross-cube any polarity; same-cube
+      opposite-face only), gated on `ocs_enabled` (false = whole-torus
+      block, the folding-only arm)
+- [x] R5 port exclusivity (`BlockModel::wirable_subset`) — found by the new
+      RDCN legality checker; a wired ring closure can no longer share a
+      face port with a default-circuit ride of the same placement
+- [x] Best-effort wiring for non-contiguous placement: unwirable ring edges
+      ride the shared fabric as multi-hop instead of vetoing the placement
+      (the old veto restricted non-contiguous side lengths to {1, 2, 4, 8})
+- [x] Tile packing with cube sharing: per-tile in-cube offsets, same- and
+      cross-job cube sharing on disjoint chips, fragmented-cube-first order
+- [x] Fragmentation-first ranking `(frag, cubes, multihop, cost)` shipped
+      as the default; the contiguity tier removed after losing every probe
+      cell (up to −15% mean JCT)
+- [x] Single version: rfoldv1 and every superseded study arm (uniform-seams,
+      fidelity-first, cost-model, max-defrag, ocs-priced scorer) deleted;
+      `rfold` is the only policy name
 - [x] Micro-benchmark layer: `tests/scheduling/rdcn_check.hh` legality
       checker + `microbench_rfold` scenarios (metrics in the ctest log)
-- [ ] Decide the reconfiguration-count definition (item S1.3)
+- [x] Thesis prose (`docs/algo.tex`) updated to the final algorithm and
+      agreed terminology
 - [ ] Mirrored tile traversal (optional exploitation of polarity freedom)
-- [ ] Update thesis prose (`docs/algo.tex`) to the RDCN model
-- [ ] OPEN (user decision): EASY-admission fairness tradeoff — gluing
-      places big jobs earlier (big-job wait −15%) at small jobs' expense
-      (mean JCT +27% at easy-0.90); options: accept, or queue-aware glue
-      gating
+- [ ] OPEN (user decision): EASY-admission fairness at full trace length —
+      at 20k jobs the earlier (tiered) config traded small-job wait for
+      big-job wait (mean +27% at easy-0.90); the tier-free ranking improved
+      easy-0.90 in 5k-job probes, but a full-length re-validation is
+      pending
 
 ### Validation (20k-job cells, mean JCT seconds, 0 drops everywhere)
 

@@ -6,7 +6,6 @@ LICENSE file in the root directory of this source tree.
 #define __ASTRASIM_SCHEDULING_BLOCKMODEL_HH__
 
 #include <array>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -18,16 +17,17 @@ namespace Scheduling {
 // 4x4x2). x-fastest: id = z*Dy*Dx + y*Dx + x.
 class BlockModel {
   public:
-    // polarity_free: corrected-R3 circuit legality (2026-07-21) — a cross-
-    // block circuit may join any two face ports of one axis at matching
-    // within-face position, same polarity included (+x<->+x between distinct
-    // blocks; a real OCS light path is polarity-blind, cf. twisted tori).
-    // Same-block pairs remain opposite-face-only (the 1-block ring wrap).
-    // Defaults to false so rfoldv1 and existing call sites keep the strict
-    // pre-2026-07 behavior bit-for-bit.
+    // ocs_enabled: true = the RDCN model — corrected-R3 polarity-free circuit
+    // pairing (a cross-block circuit may join any two face ports of one axis
+    // at matching within-face position, same polarity included; a real OCS
+    // light path is polarity-blind, cf. twisted tori), R5 port accounting,
+    // and the DOR-tolerant + nested glue in callers. Same-block pairs remain
+    // opposite-face-only (the 1-block ring wrap). false = no OCS exists
+    // (whole-torus block): strict opposite-face predicates and no port
+    // sharing — the folding-only semantics. Defaults to false.
     BlockModel(std::array<int, 3> dims,
                std::array<int, 3> block,
-               bool polarity_free = false);
+               bool ocs_enabled = false);
     bool valid() const;  // every block dim > 0 and divides its torus dim
     std::array<int, 3> coord(int id) const;  // (x, y, z)
     std::array<int, 3> block_of(
@@ -53,11 +53,6 @@ class BlockModel {
     // one axis with matching within-block coords on the other two axes. Looser
     // than ocs_realizable, which also requires perpendicular block alignment.
     bool ocs_realizable_scatter(int u, int v) const;
-    // Number of DISTINCT torus-adjacent blocks (block-grid neighbors, wrapped)
-    // that contain at least one free NPU. Lower = more isolated. Used by the
-    // max-defrag block ranking.
-    int free_neighbor_blocks(std::array<int, 3> blk,
-                             const std::unordered_set<int>& free) const;
     // True iff no node is the endpoint of two OCS edges on the same
     // (axis, +/-direction). Holds by construction for a valid embedding;
     // asserted as a safety net. Caller contract: pass only scatter-realizable
@@ -66,8 +61,8 @@ class BlockModel {
     // conflict).
     bool directions_disjoint(
         const std::vector<std::pair<int, int>>& ocs_edges) const;
-    // RDCN R5 port accounting (polarity_free mode only; identity otherwise
-    // for rfoldv1 bit-compat). A face port holds ONE circuit: a ring edge
+    // RDCN R5 port accounting (ocs_enabled mode only; identity in the no-OCS
+    // folding-only mode). A face port holds ONE circuit: a ring edge
     // riding a cross-block torus adjacency occupies both endpoints' facing
     // ports (that adjacency IS the boot-configuration circuit), so a wire
     // needing an occupied port cannot coexist with it in one placement.
@@ -81,17 +76,17 @@ class BlockModel {
     std::array<int, 3> block_dims() const {
         return block_;
     }
-    // True in corrected-R3 / RDCN mode (rfoldv2); false = strict pre-2026-07
-    // semantics (rfoldv1 bit-compat). Gates polarity-free circuit pairing,
-    // R5 port accounting, and the scatter path's DOR tolerance.
-    bool polarity_free() const {
-        return polarity_free_;
+    // True in corrected-R3 / RDCN mode (the machine has an OCS); false = the
+    // strict no-OCS (folding-only) semantics. Gates polarity-free circuit
+    // pairing, R5 port accounting, and the scatter path's DOR tolerance.
+    bool ocs_enabled() const {
+        return ocs_enabled_;
     }
 
   private:
     std::array<int, 3> dims_;
     std::array<int, 3> block_;
-    bool polarity_free_;
+    bool ocs_enabled_;
     // The single axis along which u,v form a realizable OCS face pair, or -1.
     int ocs_axis(int u, int v) const;
 };

@@ -59,41 +59,24 @@ std::unique_ptr<PlacementPolicy> make_placement_policy(
     if (policy_name == "topomatch") {
         return std::make_unique<TopoMatch>();
     }
-    // rfoldv2 (default; `rfold` is an alias for it) and rfoldv1 share every
-    // moving part; the version only picks the two knobs the 2026-07-18
-    // investigation changed:
-    //   v1: comm-first ranking (wall-hugging residual key) + orientation-
-    //       locked scatter — bit-compatible with pre-2026-07 rfold sweeps
-    //   v2: comm-first-no-residual + scatter tries all 6 rotations
-    // An explicit --rfold-ranking overrides either version's default.
-    if (policy_name == "rfold" || policy_name == "rfoldv1" ||
-        policy_name == "rfoldv2") {
-        const bool v2 = policy_name != "rfoldv1";
+    if (policy_name == "rfold") {
         auto scorer =
             make_fragmentation_scorer(cfg.defrag_metric, cfg.block_size);
         if (!scorer) {
             return nullptr;  // unknown --defrag-metric
         }
-        auto selector = make_block_selector(
-            cfg.rfold_selector, cfg.rfold_search_budget, /*rotate_scatter=*/v2);
+        auto selector =
+            make_block_selector(cfg.rfold_selector, cfg.rfold_search_budget);
         if (!selector) {
             return nullptr;  // unknown --rfold-selector
         }
-        const std::string ranking =
-            cfg.rfold_ranking != "auto"
-                ? cfg.rfold_ranking
-                : (v2 ? "comm-first-no-residual" : "comm-first");
-        auto ranker = make_placement_ranker(ranking, cfg);
+        auto ranker = make_placement_ranker(cfg.rfold_ranking, cfg);
         if (!ranker) {
             return nullptr;  // unknown --rfold-ranking
         }
-        PlacementConfig vcfg = cfg;
-        // Corrected-R3 circuit legality is a v2 default; v1 keeps the strict
-        // opposite-face predicate for pre-2026-07 bit-compatibility.
-        vcfg.rfold_polarity_free = v2;
         return std::make_unique<RFold>(cfg.block_size, std::move(selector),
                                        std::move(scorer), std::move(ranker),
-                                       vcfg);
+                                       cfg);
     }
     return nullptr;
 }

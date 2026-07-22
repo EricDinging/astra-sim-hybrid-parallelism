@@ -88,26 +88,14 @@ ClusterView SchedRuntime::snapshot_cluster_view() const {
                        failed_npus_);
 }
 
-// Deliberate choice: `queued` is FCFS-ordered (arrival, then id) regardless
-// of the admission policy. The cost-model proxy reads only depth + mean
-// service time (order-independent); the lookahead arm probes the FCFS head,
-// which approximates "the jobs that have waited longest" rather than the
-// admission policy's next picks. Revisit if cost-model is ever swept against
-// non-FCFS admission (sjdf/swf/lwf) and the lookahead arm matters there.
 SchedContext SchedRuntime::make_sched_context(
     const JobInstance* placing) const {
     SchedContext ctx;
-    std::vector<JobInstance*> q = pending_;
-    std::sort(q.begin(), q.end(), fcfs_less);
-    for (const JobInstance* j : q) {
-        if (j == placing) {
-            continue;
+    for (const JobInstance* j : pending_) {
+        if (j != placing) {
+            ++ctx.queue_depth;
         }
-        ctx.queued.push_back(
-            {j->shape, j->num_ranks,
-             static_cast<double>(j->est_duration.value_or(0)) / 1e9});
     }
-    ctx.queue_depth = static_cast<int>(ctx.queued.size());
     return ctx;
 }
 

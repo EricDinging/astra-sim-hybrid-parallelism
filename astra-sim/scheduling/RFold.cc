@@ -36,42 +36,6 @@ bool fits_cluster(std::array<int, 3> fp, const std::vector<int>& dims) {
 constexpr int kSnakeBudget = 200000;
 }  // namespace
 
-namespace detail {
-void apply_lookahead(std::vector<Placement>& cands,
-                     int k,
-                     int q,
-                     double gamma,
-                     const SchedContext& ctx,
-                     const std::unordered_set<int>& free) {
-    if (k <= 0) {
-        return;
-    }
-    if (static_cast<int>(cands.size()) > k) {
-        cands.resize(k);
-    }
-    for (auto& c : cands) {
-        std::unordered_set<int> after(free);
-        for (int n : c.rank_map) {
-            after.erase(n);
-        }
-        double charge = 0.0;
-        int probed = 0;
-        for (const auto& jq : ctx.queued) {
-            if (probed++ >= q) {
-                break;
-            }
-            if (!ctx.probe(jq.shape, jq.num_ranks, free)) {
-                continue;  // not placeable even now: nothing to flip
-            }
-            if (!ctx.probe(jq.shape, jq.num_ranks, after)) {
-                charge += gamma * jq.est_duration_s;
-            }
-        }
-        c.lookahead_ext_s = charge;
-    }
-}
-}  // namespace detail
-
 PlacementResult RFold::try_place(const JobInstance& job,
                                  const ClusterView& view) {
     PlacementResult r;
@@ -81,14 +45,12 @@ PlacementResult RFold::try_place(const JobInstance& job,
         r.reason = "rfold requires 3-D physical_dims (--npus-per-dim)";
         return r;
     }
-    // RDCN mode needs an OCS to exist: at whole-torus block (the folding-only
-    // arm) there are no inter-block seams to re-wire, so the corrected-R3 /
-    // DOR-tolerant machinery must stay off and folding semantics (including
-    // the odd-ring DROP catalog) remain exactly pre-RDCN.
+    // The RDCN machinery requires an OCS to exist: at whole-torus block (the
+    // folding-only arm) there are no inter-block links to re-wire, so strict
+    // semantics (including the odd-ring DROP catalog) apply.
     const bool has_ocs =
         block_[0] < dims[0] || block_[1] < dims[1] || block_[2] < dims[2];
-    BlockModel cm({dims[0], dims[1], dims[2]}, block_,
-                  polarity_free_ && has_ocs);
+    BlockModel cm({dims[0], dims[1], dims[2]}, block_, has_ocs);
     if (!cm.valid()) {
         r.outcome = PlacementOutcome::DROP;
         r.reason = "--block-size must divide every torus dim per axis";
@@ -108,13 +70,10 @@ PlacementResult RFold::try_place(const JobInstance& job,
     // selector) and the final 1-hop routes.
     const auto ring = FootprintRouter::ring_edges(job.shape);
 
-    // Per-decision ranker context: runtime queue state (when installed)
-    // enriched with current-job facts. Cleared on every exit path — the
-    // ranker must never hold a pointer into this stack frame.
+    // Per-decision ranker context: runtime queue state (when installed).
+    // Cleared on every exit path — the ranker must never hold a pointer into
+    // this stack frame.
     SchedContext ctx = runtime_ctx_ ? *runtime_ctx_ : SchedContext{};
-    ctx.current_est_duration_s =
-        static_cast<double>(job.est_duration.value_or(0)) / 1e9;
-    ctx.current_total_ring_edges = static_cast<int>(ring.size());
     ranker_->set_context(&ctx);
     struct CtxClear {
         PlacementRanker* r;
@@ -133,34 +92,6 @@ PlacementResult RFold::try_place(const JobInstance& job,
         if (p) {
             candidates.push_back(std::move(*p));
         }
-    }
-    const int k = ranker_->lookahead_finalists();
-    if (k > 0 && candidates.size() > 1 && !ctx.queued.empty()) {
-        // Pre-screen by the ranker (charges still 0), then charge the
-        // finalists. Default probe: re-run enumerate+select on the
-        // hypothetical free set; tests may inject ctx.probe.
-        std::stable_sort(candidates.begin(), candidates.end(),
-                         [&](const Placement& a, const Placement& b) {
-                             return ranker_->better(a, b);
-                         });
-        if (!ctx.probe) {
-            ctx.probe = [&](const std::array<int, 3>& shape, int nr,
-                            const std::unordered_set<int>& f) {
-                if (nr > static_cast<int>(f.size())) {
-                    return false;
-                }
-                const auto rq = FootprintRouter::ring_edges(shape);
-                for (const auto& vv :
-                     FoldEnumerator::enumerate(shape, multifold_)) {
-                    if (selector_->select(vv, f, dims, cm, *scorer_, *ranker_,
-                                          rq)) {
-                        return true;
-                    }
-                }
-                return false;
-            };
-        }
-        detail::apply_lookahead(candidates, k, lookahead_q_, gamma_, ctx, free);
     }
     std::optional<Placement> best;
     int best_idx = -1;

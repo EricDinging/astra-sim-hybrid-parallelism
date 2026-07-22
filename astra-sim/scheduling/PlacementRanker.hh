@@ -24,28 +24,22 @@ class PlacementRanker {
     virtual ~PlacementRanker() = default;
     // True iff a is strictly better than b.
     virtual bool better(const Placement& a, const Placement& b) const = 0;
-    // State hook for context-aware rankers (cost-model, switch). The pointer
-    // is valid only until the next call; callers re-install per decision and
-    // clear with nullptr afterwards. Fixed rankers ignore it.
+    // State hook for context-aware rankers (switch). The pointer is valid
+    // only until the next call; callers re-install per decision and clear
+    // with nullptr afterwards. Fixed rankers ignore it.
     virtual void set_context(const SchedContext* ctx) {
         (void)ctx;
     }
     // True iff set_context is actually consumed. Lets SchedRuntime skip
-    // building the sched context (a copy + sort of the whole pending queue)
-    // for the fixed rankers, which never read it.
+    // building the sched context for the fixed rankers, which never read it.
     virtual bool wants_context() const {
         return false;
     }
     // When false, MinReconfig's "fully-closed contiguous wins immediately"
-    // early-return is skipped so scatter can compete in the ranker
-    // (cost-model with the scatter guard off). Everything else returns true.
+    // early-return is skipped so scatter can compete in the ranker.
+    // Everything else returns true.
     virtual bool scatter_never_beats_closed() const {
         return true;
-    }
-    // Top-K finalists the policy should probe in the lookahead pass before
-    // the final rank; 0 = no lookahead. Only cost-model overrides.
-    virtual int lookahead_finalists() const {
-        return 0;
     }
 };
 
@@ -54,26 +48,29 @@ class PlacementRanker {
 //   1 open:      contiguous, some edges ride DOR
 //   2 scattered: strictly last — scatter only when nothing contiguous
 //                of any fold variant fits
-// Within-class key (classes 0/1):
-//   (dor_edges, blocks_touched[, ocs_links][, residual_frag], cost)
-// The optional keys are the rfoldv1/rfoldv2 split (both on for v1, both off
-// for v2):
-//  - residual_frag ("wall-hugging"): root-caused 2026-07-18 as the
-//    blocksize-valley fragmenter (steers placements toward enclosed pockets,
-//    shredding the free space big jobs need).
-//  - ocs_links (circuit frugality): dropped 2026-07-21 under the RDCN model
-//    revision — every inter-block seam is an optical circuit (the default
-//    torus is just the boot configuration), so "prefer default seams" prices
-//    an adjacency that does not exist on the real machine.
-// v1 keeps both for bit-compatibility with pre-2026-07 sweeps. (The 2026-06
-// stage-2 ablation arms — ocs-first, legacy — were deleted with their study.)
+// Within-class key (classes 0/1): (dor_edges, blocks_touched, cost).
+// Scatter class (2) leads with frag_delta — newly-fragmented blocks — then
+// (blocks_touched, dor_edges, cost).
 class CommFirst : public PlacementRanker {
   public:
-    explicit CommFirst(bool v1_keys = true) : v1_keys_(v1_keys) {}
     bool better(const Placement& a, const Placement& b) const override;
+};
 
-  private:
-    bool v1_keys_;
+// The default ranking (2026-07-22): fragmentation-first, no contiguity
+// tier. Every placement, solid box or tiled, ranks by (frag_delta,
+// blocks_touched, dor_edges, cost): fewest newly-fragmented cubes, then
+// fewest cubes, then communication, then the scorer tiebreak. Under the
+// RDCN model there is no proximity, so contiguous-vs-non-contiguous is not
+// a first-principles distinction; with tile nesting keeping non-contiguous
+// placements frugal, the tier measurably only cost performance (5k-job
+// probes, mean JCT: fifo-0.60 -4.8%, fifo-0.90 -15%, easy-0.90 -2.5% from
+// dropping it).
+class FragFirst : public PlacementRanker {
+  public:
+    bool better(const Placement& a, const Placement& b) const override;
+    bool scatter_never_beats_closed() const override {
+        return false;  // tiled placements compete as equals, always searched
+    }
 };
 
 // The pre-unification rfold ranking, bit-compatible: (blocks_touched,
@@ -89,54 +86,6 @@ class CommFirst : public PlacementRanker {
 class PackingFirst : public PlacementRanker {
   public:
     bool better(const Placement& a, const Placement& b) const override;
-};
-
-// State-aware scalar ranking (spec 2026-06-11 §4): cost in seconds,
-//   cost(p) = C_comm + C_ext + C_rcfg
-//   C_comm = kappa * dor_edges * est_dur_s / total_ring_edges
-//            (kappa ABSORBS the spec's comm_fraction(job) — the roofline
-//            estimator exposes no compute/comm split — so kappa is an
-//            empirically-calibrated constant, not a pure unit factor)
-//   C_ext  = EITHER the proxy term (when cm_lookahead_k == 0):
-//            beta * residual_frag/(6*blocks), with beta = c_ext * Q *
-//            mean(t_svc) (dynamic) or the frozen cm_beta_const_s constant
-//            (the "cost-model-static" ablation arm)
-//            OR lookahead_ext_s (when probing is on, cm_lookahead_k > 0) --
-//            the lookahead arm REPLACES the proxy so the sweep arms compare
-//            cleanly; they are alternative C_ext implementations, never summed
-//   C_rcfg = t_reconfig_s * ocs_links
-// Interpolates the fixed rankers: Q=0 behaves comm-first-like, deep
-// backlog behaves packing-first-like. Scatter-last stays a HARD guard
-// unless cm_scatter_guard is off (the externality term polices it then).
-class CostModelRanker : public PlacementRanker {
-  public:
-    explicit CostModelRanker(const PlacementConfig& cfg)
-        : kappa_(cfg.cm_kappa),
-          c_ext_(cfg.cm_c_ext),
-          t_reconfig_s_(cfg.cm_t_reconfig_s),
-          beta_const_s_(cfg.cm_beta_const_s),
-          guard_(cfg.cm_scatter_guard),
-          lookahead_k_(cfg.cm_lookahead_k) {}
-    bool better(const Placement& a, const Placement& b) const override;
-    void set_context(const SchedContext* ctx) override {
-        ctx_ = ctx;
-    }
-    bool wants_context() const override {
-        return true;
-    }
-    bool scatter_never_beats_closed() const override {
-        return guard_;
-    }
-    int lookahead_finalists() const override {
-        return lookahead_k_;
-    }
-    double cost_of(const Placement& p) const;  // exposed for tests
-
-  private:
-    double kappa_, c_ext_, t_reconfig_s_, beta_const_s_;
-    bool guard_;
-    int lookahead_k_;
-    const SchedContext* ctx_ = nullptr;
 };
 
 // Evaluation baseline: comm-first when the queue is shallow, packing-first
@@ -166,8 +115,8 @@ class DynamicSwitch : public PlacementRanker {
     const SchedContext* ctx_ = nullptr;
 };
 
-// name in {comm-first, comm-first-no-residual, packing-first, cost-model,
-// switch}. Returns nullptr on unknown name.
+// name in {comm-first, frag-first, packing-first, switch}. Returns nullptr
+// on unknown name.
 std::unique_ptr<PlacementRanker> make_placement_ranker(
     const std::string& name, const PlacementConfig& cfg = PlacementConfig{});
 

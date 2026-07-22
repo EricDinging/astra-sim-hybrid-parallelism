@@ -76,32 +76,7 @@ TEST(Factory, KnownAndUnknown) {
     EXPECT_NE(make_fragmentation_scorer("fewest-blocks", {4, 4, 4}), nullptr);
     EXPECT_NE(make_fragmentation_scorer("compactness", {4, 4, 4}), nullptr);
     EXPECT_EQ(make_fragmentation_scorer("nope", {4, 4, 4}), nullptr);
-}
-
-TEST(FewestBlocksOcs, MoreOcsCostsMore) {
-    AstraSim::Scheduling::FewestBlocksThenOcsLinks s({4, 4, 4});
-    std::vector<int> dims = {8, 8, 8};
-    std::vector<int> npus = {0, 1};  // both in block (0,0,0)
-    AstraSim::Scheduling::ScoredPlacement a{&npus, &dims, {2, 1, 1}};
-    AstraSim::Scheduling::ScoredPlacement b{&npus, &dims, {2, 1, 1}};
-    b.ocs_links = 2;
-    EXPECT_LT(s.cost(a), s.cost(b));
-}
-
-TEST(FewestBlocksOcs, BlocksDominateOcs) {
-    AstraSim::Scheduling::FewestBlocksThenOcsLinks s({4, 4, 4});
-    std::vector<int> dims = {8, 8, 8};
-    std::vector<int> one = {0, 1};  // 1 block, but many OCS links
-    std::vector<int> two = {3, 4};  // x=3 block0, x=4 block1 -> 2 blocks, 0 OCS
-    AstraSim::Scheduling::ScoredPlacement a{&one, &dims, {2, 1, 1}};
-    a.ocs_links = 100;
-    AstraSim::Scheduling::ScoredPlacement b{&two, &dims, {2, 1, 1}};
-    EXPECT_LT(s.cost(a),
-              s.cost(b));  // 1 block beats 2 blocks regardless of OCS
-}
-
-TEST(FewestBlocksOcs, Factory) {
-    EXPECT_NE(AstraSim::Scheduling::make_fragmentation_scorer(
-                  "fewest-blocks-ocs", {4, 4, 4}),
+    // deleted with the RDCN model (OCS links cost nothing)
+    EXPECT_EQ(make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4}),
               nullptr);
 }

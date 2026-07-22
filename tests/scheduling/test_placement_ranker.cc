@@ -26,7 +26,7 @@ Placement P(bool identity,
 }
 }  // namespace
 
-// v2 (spec 2026-06-11 §3): identity is demoted from absolute-first. It no
+// Spec 2026-06-11 §3: identity is demoted from absolute-first. It no
 // longer beats a better-packed, higher-fidelity fold "despite worse
 // everything": the closed fold (class 0, dor 0) outranks an identity that
 // rides DOR (class 1, dor 2) and touches more blocks.
@@ -61,9 +61,8 @@ TEST(CommFirst, OpenFoldBeatsScatterEvenWhenScatterFullyClosed) {
     EXPECT_TRUE(r.better(open, scatter));
 }
 
-// v2 (spec 2026-06-11 §3): within the open class the key is
-// (dor_edges, blocks_touched, ocs_links, residual_frag, cost) — dor leads,
-// not blocks. (v1 led with blocks here.)
+// Within the open class the key is (dor_edges, blocks_touched, cost) — dor
+// leads, not blocks.
 TEST(CommFirst, WithinOpenClassDorThenPackingThenCost) {
     CommFirst r;
     // Same class (open fold): fewer dor edges wins, even with more blocks.
@@ -125,21 +124,29 @@ TEST(PlacementRankerFactory, KnownAndUnknown) {
     EXPECT_EQ(make_placement_ranker("nope"), nullptr);
 }
 
+// frag-first: no contiguity tier — a tiled placement that fragments fewer
+// idle cubes beats a solid box that fragments more, and tiled candidates are
+// always searched (scatter_never_beats_closed false).
+TEST(FragFirst, FragmentationOutranksContiguity) {
+    auto r = make_placement_ranker("frag-first");
+    ASSERT_TRUE(r);
+    EXPECT_FALSE(r->scatter_never_beats_closed());
+    auto box = P(false, true, false, /*blocks=*/4, /*dor=*/0, /*cost=*/0.0);
+    box.frag_delta = 4;
+    auto tiled = P(false, true, true, /*blocks=*/2, /*dor=*/9, /*cost=*/9.0);
+    tiled.frag_delta = 2;
+    EXPECT_TRUE(r->better(tiled, box));
+    // Equal fragmentation: fewer cubes, then fewer multi-hop edges.
+    auto a = P(false, true, true, 2, 3, 0.0);
+    auto b = P(false, true, false, 2, 1, 0.0);
+    EXPECT_TRUE(r->better(b, a));
+}
+
 namespace {
-Placement mk(int blocks,
-             int dor,
-             int ocs,
-             int residual,
-             double cost,
-             bool identity,
-             bool scattered) {
+Placement mk(int blocks, int dor, double cost, bool identity, bool scattered) {
     Placement p;
     p.blocks_touched = blocks;
     p.dor_edges = dor;
-    for (int i = 0; i < ocs; ++i) {
-        p.ocs_edges.push_back({2 * i, 2 * i + 1});
-    }
-    p.residual_frag = residual;
     p.cost = cost;
     p.identity = identity;
     p.scattered = scattered;
@@ -147,125 +154,52 @@ Placement mk(int blocks,
 }
 }  // namespace
 
-// v2: identity is no longer its own class — a better-packed fully-closed
-// fold beats an identity strip (comm-identical in-sim, better packing).
-TEST(CommFirstV2, PackedClosedFoldBeatsIdentityStrip) {
+// Identity is not its own class — a better-packed fully-closed fold beats
+// an identity strip (comm-identical in-sim, better packing).
+TEST(CommFirst, PackedClosedFoldBeatsIdentityStrip) {
     CommFirst r;
-    auto fold = mk(2, 0, 1, 0, 0.0, false, false);
-    auto identity = mk(3, 0, 0, 0, 0.0, true, false);
+    auto fold = mk(2, 0, 0.0, false, false);
+    auto identity = mk(3, 0, 0.0, true, false);
     EXPECT_TRUE(r.better(fold, identity));
 }
 
-// Identity wins class-0 ties at equal packing via ocs_links == 0.
-TEST(CommFirstV2, IdentityWinsTiesViaZeroOcs) {
-    CommFirst r;
-    auto identity = mk(2, 0, 0, 0, 0.0, true, false);
-    auto fold = mk(2, 0, 1, 0, 0.0, false, false);
-    EXPECT_TRUE(r.better(identity, fold));
-}
-
 // Class order is hard: full fidelity < open < scattered, regardless of keys.
-TEST(CommFirstV2, ClassOrderDominates) {
+TEST(CommFirst, ClassOrderDominates) {
     CommFirst r;
-    auto full_wide = mk(8, 0, 4, 99, 9e9, false, false);
-    auto open_tight = mk(1, 1, 0, 0, 0.0, false, false);
-    auto scat_perfect = mk(1, 0, 0, 0, 0.0, false, true);
+    auto full_wide = mk(8, 0, 9e9, false, false);
+    auto open_tight = mk(1, 1, 0.0, false, false);
+    auto scat_perfect = mk(1, 0, 0.0, false, true);
     EXPECT_TRUE(r.better(full_wide, open_tight));
     EXPECT_TRUE(r.better(open_tight, scat_perfect));
 }
 
-// Wall-hugging: equal blocks/ocs => lower residual_frag wins, and the key
-// sits BEFORE cost (crumb's worse cost must not matter).
-TEST(CommFirstV2, ResidualFragBreaksTies) {
-    CommFirst r;
-    auto crumb = mk(2, 0, 1, 3, 5.0, false, false);
-    auto middle = mk(2, 0, 1, 11, 0.0, false, false);
-    EXPECT_TRUE(r.better(crumb, middle));
-}
-
 // dor_edges leads inside the open class.
-TEST(CommFirstV2, DorLeadsOpenClass) {
+TEST(CommFirst, DorLeadsOpenClass) {
     CommFirst r;
-    auto one_seam = mk(9, 1, 0, 0, 9.0, false, false);
-    auto two_seams = mk(1, 2, 0, 0, 0.0, false, false);
+    auto one_seam = mk(9, 1, 9.0, false, false);
+    auto two_seams = mk(1, 2, 0.0, false, false);
     EXPECT_TRUE(r.better(one_seam, two_seams));
 }
 
-// The residual (wall-hugging) key is the rfoldv1/rfoldv2 split: v1's
-// comm-first keeps it, v2's comm-first-no-residual drops it.
-// RDCN revision 2026-07-21: v2 also drops the ocs_links circuit-frugality
-// key — every inter-block seam is a circuit on the real machine, so "prefer
-// default seams" prices an adjacency that does not exist. v1 keeps it.
-TEST(CommFirstV2, OcsKeyIsAlsoV1Only) {
-    auto v2 = make_placement_ranker("comm-first-no-residual");
-    ASSERT_TRUE(v2);
-    auto few_ocs = mk(2, 0, 0, 0, 1.0, false, false);
-    auto many_ocs = mk(2, 0, 5, 0, 0.0, false, false);
-    EXPECT_TRUE(v2->better(many_ocs, few_ocs));  // ocs ignored => cost decides
-    EXPECT_TRUE(make_placement_ranker("comm-first")->better(few_ocs, many_ocs));
-}
-
-TEST(CommFirstV2, ResidualKeyIsTheV1V2Split) {
-    auto no_resid = make_placement_ranker("comm-first-no-residual");
-    ASSERT_TRUE(no_resid);
-    auto c = mk(2, 0, 1, 50, 0.0, false, false);
-    auto d = mk(2, 0, 1, 0, 1.0, false, false);
-    EXPECT_TRUE(no_resid->better(c, d));  // residual ignored => cost decides
-    EXPECT_TRUE(make_placement_ranker("comm-first")->better(d, c));  // v1 keeps
-}
-
-// Q=0: only C_comm + C_rcfg matter => comm-first-like choice.
-TEST(CostModel, EmptyQueueReducesToCommLike) {
-    PlacementConfig cfg;
-    auto r = make_placement_ranker("cost-model", cfg);
-    ASSERT_TRUE(r);
-    SchedContext ctx;
-    ctx.queue_depth = 0;
-    ctx.current_est_duration_s = 10.0;
-    ctx.current_total_ring_edges = 6;
-    r->set_context(&ctx);
-    auto closed_wide = mk(4, 0, 2, 8, 0.0, false, false);  // rcfg only: 0.02
-    auto open_tight = mk(1, 3, 0, 0, 0.0, false, false);   // comm: 1*3*10/6=5
-    EXPECT_TRUE(r->better(closed_wide, open_tight));
-    r->set_context(nullptr);
-}
-
-// Deep queue: the externality term dominates => packing-first-like choice.
-TEST(CostModel, DeepQueueFlipsToPackingLike) {
-    PlacementConfig cfg;
-    auto r = make_placement_ranker("cost-model", cfg);
-    SchedContext ctx;
-    ctx.queue_depth = 20;
-    for (int i = 0; i < 20; ++i) {
-        ctx.queued.push_back({{2, 2, 2}, 8, 10.0});  // t_svc mean = 10s
-    }
-    ctx.current_est_duration_s = 10.0;
-    ctx.current_total_ring_edges = 6;
-    r->set_context(&ctx);
-    // dfrag = 12/(6*2) = 1.0 => ext = 1*20*10*1 = 200s  vs  comm 5s
-    auto closed_fragmenting = mk(2, 0, 0, 12, 0.0, false, false);
-    auto open_wallhug = mk(2, 3, 0, 0, 0.0, false, false);
-    EXPECT_TRUE(r->better(open_wallhug, closed_fragmenting));
-    r->set_context(nullptr);
-}
-
-// Guard on (default): scatter never beats contiguous, whatever the scalars.
-TEST(CostModel, ScatterGuardIsHard) {
-    PlacementConfig cfg;
-    auto on = make_placement_ranker("cost-model", cfg);
-    cfg.cm_scatter_guard = false;
-    auto off = make_placement_ranker("cost-model", cfg);
-    SchedContext ctx;  // empty queue: costs are rcfg-only
-    on->set_context(&ctx);
-    off->set_context(&ctx);
-    auto contiguous_pricey = mk(9, 5, 9, 0, 0.0, false, false);
-    auto scatter_free = mk(1, 0, 0, 0, 0.0, false, true);
-    EXPECT_TRUE(on->better(contiguous_pricey, scatter_free));
-    EXPECT_TRUE(on->scatter_never_beats_closed());
-    EXPECT_TRUE(off->better(scatter_free, contiguous_pricey));
-    EXPECT_FALSE(off->scatter_never_beats_closed());
-    on->set_context(nullptr);
-    off->set_context(nullptr);
+// Scatter-class key order is (frag_delta, blocks_touched, dor_edges, cost):
+// newly-fragmented blocks lead, each later key only breaks earlier ties.
+TEST(CommFirst, ScatterClassLeadsWithDirtyDelta) {
+    CommFirst r;
+    auto clean = mk(9, 9, 9.0, false, true);
+    clean.frag_delta = 0;
+    auto dirty = mk(1, 0, 0.0, false, true);
+    dirty.frag_delta = 1;
+    EXPECT_TRUE(r.better(clean, dirty));  // frag_delta beats all later keys
+    // Equal frag_delta: fewer blocks, then fewer dor edges, then cost.
+    auto a = mk(1, 5, 9.0, false, true);
+    auto b = mk(2, 0, 0.0, false, true);
+    EXPECT_TRUE(r.better(a, b));
+    auto c = mk(2, 1, 9.0, false, true);
+    auto d = mk(2, 2, 0.0, false, true);
+    EXPECT_TRUE(r.better(c, d));
+    auto e = mk(2, 2, 1.0, false, true);
+    auto f = mk(2, 2, 2.0, false, true);
+    EXPECT_TRUE(r.better(e, f));
 }
 
 // DynamicSwitch: comm-first when idle, packing-first when backlogged.
@@ -273,8 +207,8 @@ TEST(DynamicSwitch, DelegatesByQueueDepth) {
     PlacementConfig cfg;  // switch_theta = 1
     auto r = make_placement_ranker("switch", cfg);
     ASSERT_TRUE(r);
-    auto closed_two_blocks = mk(2, 0, 0, 0, 0.0, false, false);
-    auto open_one_block = mk(1, 2, 0, 0, 0.0, false, false);
+    auto closed_two_blocks = mk(2, 0, 0.0, false, false);
+    auto open_one_block = mk(1, 2, 0.0, false, false);
     SchedContext idle;  // depth 0 -> comm-first: class 0 beats class 1
     r->set_context(&idle);
     EXPECT_TRUE(r->better(closed_two_blocks, open_one_block));
@@ -285,69 +219,15 @@ TEST(DynamicSwitch, DelegatesByQueueDepth) {
     r->set_context(nullptr);
 }
 
-// Pin the formula structure, not just orderings. The externality term uses
-// the MEAN queued service time (a sum would scale C_ext as Q^2 and silently
-// break the load-interpolation thesis), and C_rcfg charges exactly
-// t_reconfig_s per OCS link.
-TEST(CostModel, CostOfPinsMeanTsvcAndRcfgScale) {
-    PlacementConfig cfg;  // kappa=1, c_ext=1, t_reconfig=0.010
-    CostModelRanker r(cfg);
-    SchedContext ctx;
-    ctx.queue_depth = 4;
-    // Mixed durations: mean = (2+4+6+8)/4 = 5s; a sum-bug would yield 20s.
-    ctx.queued = {{{2, 2, 2}, 8, 2.0},
-                  {{2, 2, 2}, 8, 4.0},
-                  {{2, 2, 2}, 8, 6.0},
-                  {{2, 2, 2}, 8, 8.0}};
-    ctx.current_est_duration_s = 0.0;  // no comm term
-    ctx.current_total_ring_edges = 6;
-    r.set_context(&ctx);
-    // dfrag = 6/(6*1) = 1.0 => C_ext = 1 * 4 * 5 * 1 = 20s; C_rcfg = 0.030.
-    auto p = mk(1, 0, 3, 6, 0.0, false, false);
-    EXPECT_DOUBLE_EQ(r.cost_of(p), 20.0 + 3 * 0.010);
-    r.set_context(nullptr);
-    // Without context: only C_rcfg remains.
-    EXPECT_DOUBLE_EQ(r.cost_of(p), 3 * 0.010);
-}
-
-// Two contiguous candidates differing ONLY in ocs_links: the reconfiguration
-// charge must decide (pins that C_rcfg is present and lower-is-better).
-TEST(CostModel, RcfgTermBreaksTies) {
-    PlacementConfig cfg;
-    auto r = make_placement_ranker("cost-model", cfg);
-    SchedContext ctx;  // empty queue
-    r->set_context(&ctx);
-    auto few_links = mk(2, 0, 1, 0, 0.0, false, false);
-    auto many_links = mk(2, 0, 5, 0, 0.0, false, false);
-    EXPECT_TRUE(r->better(few_links, many_links));
-    r->set_context(nullptr);
-}
-
 // Boundary: depth == theta flips to packing-first (>= semantics).
 TEST(DynamicSwitch, FlipsExactlyAtTheta) {
     PlacementConfig cfg;  // switch_theta = 1
     auto r = make_placement_ranker("switch", cfg);
-    auto closed_two_blocks = mk(2, 0, 0, 0, 0.0, false, false);
-    auto open_one_block = mk(1, 2, 0, 0, 0.0, false, false);
+    auto closed_two_blocks = mk(2, 0, 0.0, false, false);
+    auto open_one_block = mk(1, 2, 0.0, false, false);
     SchedContext at_theta;
     at_theta.queue_depth = 1;  // == theta -> already packing-first
     r->set_context(&at_theta);
     EXPECT_TRUE(r->better(open_one_block, closed_two_blocks));
     r->set_context(nullptr);
-}
-
-// Frozen beta ("cost-model-static" arm): with cm_beta_const_s > 0 the
-// externality is state-independent — charged even at Q=0, replacing the
-// dynamic c_ext*Q*mean(t_svc) coefficient.
-TEST(CostModel, StaticBetaFreezesExternality) {
-    PlacementConfig cfg;
-    cfg.cm_beta_const_s = 7.0;
-    CostModelRanker r(cfg);
-    SchedContext ctx;  // empty queue: dynamic beta would be 0
-    r.set_context(&ctx);
-    // dfrag = 6/(6*1) = 1.0 => C_ext = 7.0; C_rcfg = 0.
-    auto p = mk(1, 0, 0, 6, 0.0, false, false);
-    EXPECT_DOUBLE_EQ(r.cost_of(p), 7.0);
-    r.set_context(nullptr);
-    EXPECT_DOUBLE_EQ(r.cost_of(p), 7.0);  // truly context-independent
 }

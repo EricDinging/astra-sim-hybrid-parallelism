@@ -9,10 +9,10 @@ LICENSE file in the root directory of this source tree.
 // log. Runtime budget: a couple of seconds per scenario.
 //
 // Metrics printed here are the analytic census's vocabulary
-// (docs/rdcn-model.md): dirty cubes = cubes a placement occupies partially;
-// the improvement stack (dirt-seeking cube choice, tile co-residence,
-// dirty-delta ranking) should tighten the EXPECT bounds scenario by
-// scenario.
+// (docs/rdcn-model.md): fragmented cubes = cubes a placement occupies
+// partially; heuristic changes (candidate ordering, cube sharing, the
+// ranking key) should tighten the EXPECT bounds scenario
+// by scenario.
 #include "astra-sim/scheduling/BlockModel.hh"
 #include "astra-sim/scheduling/ClusterView.hh"
 #include "astra-sim/scheduling/Common.hh"
@@ -49,7 +49,7 @@ struct Driver {
     std::unique_ptr<PlacementPolicy> policy =
         make_placement_policy("rfold", PlacementConfig{});
     std::set<int> free;
-    BlockModel cm{kDims, kBlock, /*polarity_free=*/true};
+    BlockModel cm{kDims, kBlock, /*ocs_enabled=*/true};
 
     Driver() {
         for (int i = 0; i < kDims[0] * kDims[1] * kDims[2]; ++i) {
@@ -87,36 +87,34 @@ struct Driver {
 }  // namespace
 
 // The 72-chip family (2x6x6): the largest chip-mass family of the pareto128
-// trace. On an idle torus the class gate picks a CONTIGUOUS box, which
-// spreads over its ceil-box (4 cubes, all partial) — per-placement dirt the
-// design accepts because contiguous dirt is reusable by the next contiguous
-// neighbor. This scenario documents that behavior; the glue path's tighter
-// economics are asserted in ForcedGlue72 below.
-TEST(Microbench, DirtyCube72FamilyContiguous) {
+// trace, and the one where the tiling never divides cleanly. Five jobs
+// placed back-to-back measure the whole ranking's fragmentation economy;
+// under the old contiguity-tiered ranking the sequence fragmented 20 cubes,
+// under frag-first it fragments 11 (floor 5).
+TEST(Microbench, Frag72FamilySequence) {
     Driver d;
-    int total_dirty = 0;
+    int total_frag = 0;
     for (int i = 0; i < 5; ++i) {
         auto rep = d.place(job(i, 72, {2, 6, 6}));
         ASSERT_GE(rep.cubes_touched, 0) << "job " << i << " failed to place";
-        EXPECT_LE(rep.dirty_cubes, 4);  // contiguous ceil-box bound
-        total_dirty += rep.dirty_cubes;
+        EXPECT_LE(rep.frag_cubes, 4);  // contiguous ceil-box bound
+        total_frag += rep.frag_cubes;
     }
-    std::printf("[metric] 72-chip x5 contiguous: total dirty cubes = %d "
-                "(glue floor 10, nest floor 5)\n",
-                total_dirty);
+    std::printf("[metric] 72-chip x5: total fragmented cubes = %d "
+                "(floor 5)\n",
+                total_frag);
 }
 
-// Forced glue for the 72-chip family: only two far-apart whole cubes are
-// free, so no contiguous variant fits and the glue path must serve.
+// Non-contiguous placement for the 72-chip family: only two far-apart idle
+// cubes are free, so no solid box fits anywhere.
 //
-// Under the strict pre-RDCN gate this DEFERRED: grid gluing required every
-// ring edge realizable, restricting glueable dims to {1, 2, 4, 8} — any dim
-// with a factor of 3 (the whole 72-chip family, ~10% of pareto128 chip-mass
-// and much more of pareto256/512) could not glue at all. DOR-tolerant glue
-// (RDCN mode, 2026-07-21) unlocks it: unwirable fold turns and closures
-// ride the shared fabric (S3) and are paid as dor_edges. Nesting should
-// later reach dirty == 1 (the 64+8 split).
-TEST(Microbench, ForcedGlue72Places) {
+// Under the old all-edges-must-wire veto this DEFERRED forever: the veto
+// restricted non-contiguous side lengths to {1, 2, 4, 8}, so any dim with a
+// factor of 3 (the whole 72-chip family, ~10% of pareto128 chip-mass and
+// much more of pareto256/512) could not place non-contiguously at all.
+// Best-effort wiring unlocks it: unwirable fold turns and ring closures
+// ride the shared fabric and are priced as multihop.
+TEST(Microbench, NonContiguous72Places) {
     Driver d;
     d.occupy({0, 0, 0}, {8, 8, 8});
     for (auto c : {std::array<int, 3>{0, 0, 0}, std::array<int, 3>{4, 4, 4}}) {
@@ -129,20 +127,19 @@ TEST(Microbench, ForcedGlue72Places) {
         }
     }
     auto rep = d.place(job(0, 72, {2, 6, 6}));
-    ASSERT_GE(rep.cubes_touched, 0) << "forced glue failed to place";
+    ASSERT_GE(rep.cubes_touched, 0) << "non-contiguous placement failed";
     EXPECT_EQ(rep.cubes_touched, 2);
-    EXPECT_LE(rep.dirty_cubes, 2);  // nesting target: 1
-    std::printf("[metric] forced-glue 72: cubes=%d dirty=%d wired=%d "
+    EXPECT_LE(rep.frag_cubes, 2);
+    std::printf("[metric] non-contiguous 72: cubes=%d frag=%d wired=%d "
                 "multihop=%d\n",
-                rep.cubes_touched, rep.dirty_cubes, rep.wired, rep.multihop);
+                rep.cubes_touched, rep.frag_cubes, rep.wired, rep.multihop);
 }
 
-// Tile nesting across sequential jobs: three clean cubes, two 72-chip jobs
-// (144 chips). Without nesting each job grid-glues into 2 fresh cubes -> 4
-// cubes, 4 dirty (needs a 4th cube). With nesting job B reuses job A's
-// leftovers: total 3 cubes, all dirty but none wasted — and the placement
-// FITS where the unnested version cannot.
-TEST(Microbench, TwoJobNestedGlue) {
+// Cube sharing across sequential jobs: three idle cubes, two 72-chip jobs
+// (144 chips). Without cube sharing each job needs 2 fresh cubes -> 4
+// cubes, so the second job cannot fit. With it, job B packs its tiles into
+// job A's leftovers: both jobs fit in 3 cubes with zero wasted chips.
+TEST(Microbench, TwoJobCubeSharing) {
     Driver d;
     d.occupy({0, 0, 0}, {8, 8, 8});
     for (auto c : {std::array<int, 3>{0, 0, 0}, std::array<int, 3>{4, 0, 0},
@@ -159,17 +156,17 @@ TEST(Microbench, TwoJobNestedGlue) {
     ASSERT_GE(a.cubes_touched, 0) << "job A failed";
     auto b = d.place(job(1, 72, {2, 6, 6}));
     ASSERT_GE(b.cubes_touched, 0)
-        << "job B failed — nesting should fit both jobs in 3 cubes";
-    std::printf("[metric] two-job nest: free left=%zu (of 192)\n",
+        << "job B failed — cube sharing should fit both jobs in 3 cubes";
+    std::printf("[metric] two-job cube sharing: free left=%zu (of 192)\n",
                 d.free.size());
     EXPECT_EQ(d.free.size(), 192u - 144u);
 }
 
-// Non-adjacent whole-cube gluing: only cubes (0,0,0) and (1,1,1) are free —
-// no contiguous 128-chip box exists anywhere. RDCN says the two far cubes
-// are as good as adjacent ones: the job must place, fully wired, with ZERO
-// dirty cubes and zero multihop edges.
-TEST(Microbench, FragmentedFabricWholeCubeGlue) {
+// Whole-cube placement across far cubes: only cubes (0,0,0) and (1,1,1)
+// are free — no solid 128-chip box exists anywhere. Under the RDCN model
+// the two far cubes are as good as adjacent ones: the job must place,
+// fully wired, with ZERO fragmented cubes and zero multihop edges.
+TEST(Microbench, FarCubeWholeCubePlacement) {
     Driver d;
     d.occupy({0, 0, 0}, {8, 8, 8});
     for (auto c : {std::array<int, 3>{0, 0, 0}, std::array<int, 3>{4, 4, 4}}) {
@@ -182,42 +179,43 @@ TEST(Microbench, FragmentedFabricWholeCubeGlue) {
         }
     }
     auto rep = d.place(job(0, 128, {8, 4, 4}));
-    ASSERT_GE(rep.cubes_touched, 0) << "glue across far cubes failed";
-    EXPECT_EQ(rep.dirty_cubes, 0);
+    ASSERT_GE(rep.cubes_touched, 0) << "far-cube placement failed";
+    EXPECT_EQ(rep.frag_cubes, 0);
     EXPECT_EQ(rep.multihop, 0);
-    std::printf("[metric] far-cube glue: wired=%d default_seam=%d intra=%d\n",
-                rep.wired, rep.default_seam, rep.intra_cube);
+    std::printf(
+        "[metric] far-cube placement: wired=%d default_circuit=%d intra=%d\n",
+        rep.wired, rep.default_seam, rep.intra_cube);
 }
 
-// Cross-job dirt concentration: job A dirties a cube; an identical job B
-// arrives. Ideal cube choice nests B's partial tiles into A's dirty cubes
-// (chips permitting) instead of wounding fresh ones. Prints the reuse count;
-// bound is loose until dirt-seeking cube choice lands.
-TEST(Microbench, CornerCollisionCrossJob) {
+// Cross-job fragmentation concentration: job A fragments cubes; an
+// identical job B arrives. The fragmented-cubes-first candidate order packs
+// B's partial tiles into A's fragmented cubes (chips permitting) instead of
+// breaking into fresh idle ones.
+TEST(Microbench, CrossJobFragConcentration) {
     Driver d;
     auto a = d.place(job(0, 72, {2, 6, 6}));
     ASSERT_GE(a.cubes_touched, 0);
-    // Record cubes dirtied by A (partially occupied now).
-    std::set<std::array<int, 3>> dirty_before;
+    // Record cubes A fragmented (partially occupied now).
+    std::set<std::array<int, 3>> frag_before;
     for (int n = 0; n < 512; ++n) {
         if (d.free.count(n) == 0) {
-            dirty_before.insert(d.cm.block_of(n));
+            frag_before.insert(d.cm.block_of(n));
         }
     }
     auto b = d.place(job(1, 72, {2, 6, 6}));
     ASSERT_GE(b.cubes_touched, 0);
-    // How many cubes did B touch that A had already wounded?
+    // How many fresh idle cubes did B break into?
     std::set<std::array<int, 3>> b_cubes;
     for (int n = 0; n < 512; ++n) {
         if (d.free.count(n) == 0) {
             b_cubes.insert(d.cm.block_of(n));
         }
     }
-    int fresh = static_cast<int>(b_cubes.size() - dirty_before.size());
+    int fresh = static_cast<int>(b_cubes.size() - frag_before.size());
     std::printf(
-        "[metric] cross-job: A touched %d cubes, B wounded %d fresh cubes\n",
-        static_cast<int>(dirty_before.size()), fresh);
-    EXPECT_LE(fresh, 4);  // loose today; tighten with dirt-seeking choice
+        "[metric] cross-job: A touched %d cubes, B broke %d fresh cubes\n",
+        static_cast<int>(frag_before.size()), fresh);
+    EXPECT_LE(fresh, 1);  // fragmented-cubes-first keeps B out of idle cubes
 }
 
 // Workload generality (user 2026-07-21): the heuristics must help larger
@@ -235,9 +233,9 @@ TEST(Microbench, BigShapeGenerality) {
         auto rep = d.place(job(0, c.ranks, c.s));
         ASSERT_GE(rep.cubes_touched, 0)
             << c.s[0] << "x" << c.s[1] << "x" << c.s[2] << " failed";
-        EXPECT_LE(rep.dirty_cubes, c.dirty_bound);
-        std::printf("[metric] %dx%dx%d: cubes=%d dirty=%d multihop=%d\n",
-                    c.s[0], c.s[1], c.s[2], rep.cubes_touched, rep.dirty_cubes,
+        EXPECT_LE(rep.frag_cubes, c.dirty_bound);
+        std::printf("[metric] %dx%dx%d: cubes=%d frag=%d multihop=%d\n", c.s[0],
+                    c.s[1], c.s[2], rep.cubes_touched, rep.frag_cubes,
                     rep.multihop);
     }
 }

@@ -42,7 +42,7 @@ std::unique_ptr<RFold> make_wt(std::array<int, 3> dims,
                                const std::string& ranking = "comm-first") {
     return std::make_unique<RFold>(
         dims, make_block_selector("min-reconfig"),
-        make_fragmentation_scorer("fewest-blocks-ocs", dims),
+        make_fragmentation_scorer("fewest-blocks", dims),
         make_placement_ranker(ranking));
 }
 // Sorted per-axis extents of a placement's coordinates on torus dims D.
@@ -63,12 +63,11 @@ std::array<int, 3> extents(const std::vector<int>& npus, std::array<int, 3> D) {
 }
 }  // namespace
 
-// comm-first v2 (spec 2026-06-11 section 3): identity is demoted. The
-// length-4 identity strip (1x1x4) does NOT wrap on the size-8 torus -- its
-// closure has a gap of 3 and rides DOR, making it class 1 (open). The 2x2
-// hairpin closes every edge in 1-hop links (class 0), so it now wins on the
-// hard class order. (v1 classed identity absolute-first and kept the strip;
-// the old comment's "full-axis wrap" premise was false for a length-4 ring.)
+// comm-first (spec 2026-06-11 section 3): identity is demoted from
+// absolute-first. The length-4 identity strip (1x1x4) does NOT wrap on the
+// size-8 torus -- its closure has a gap of 3 and rides DOR, making it
+// class 1 (open). The 2x2 hairpin closes every edge in 1-hop links
+// (class 0), so it wins on the hard class order.
 TEST(RFoldWholeTorus, IdentityDemotedFoldsTheLengthFourRing) {
     auto p = make_wt({8, 8, 8});
     auto v = full(8, 8, 8);
@@ -80,9 +79,9 @@ TEST(RFoldWholeTorus, IdentityDemotedFoldsTheLengthFourRing) {
 
 // packing-first (the legacy knob) also folds the length-4 ring to the 2x2
 // hairpin: equal packing (one block either way), and the hairpin has
-// dor_edges 0 vs the identity strip's open partial-axis closure. Under
-// comm-first v2 the two rankers now agree here (identity demotion); this
-// pins that packing-first reaches the same fold via its packing key.
+// dor_edges 0 vs the identity strip's open partial-axis closure. The two
+// rankers agree here (identity demotion); this pins that packing-first
+// reaches the same fold via its packing key.
 TEST(RFoldWholeTorus, PackingFirstFoldsTheLengthFourRing) {
     auto p = make_wt({8, 8, 8}, "packing-first");
     auto v = full(8, 8, 8);
@@ -124,7 +123,7 @@ TEST(RFoldWholeTorus, FoldsToFitWhereFirstFitWouldDefer) {
 TEST(RFoldWholeTorus, OneDSnakesWhenNoFoldFits) {
     auto p = std::make_unique<RFold>(
         std::array<int, 3>{4, 4, 4}, make_block_selector("contiguous"),
-        make_fragmentation_scorer("fewest-blocks-ocs", {4, 4, 4}),
+        make_fragmentation_scorer("fewest-blocks", {4, 4, 4}),
         make_placement_ranker("comm-first"));
     auto v = full(4, 4, 4);
     auto r = p->try_place(job(4, 14, {14, 1, 1}), v);

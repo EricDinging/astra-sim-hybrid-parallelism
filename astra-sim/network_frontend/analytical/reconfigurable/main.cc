@@ -390,9 +390,9 @@ int main(int argc, char* argv[]) {
                          "from placement only (direct routes never transit "
                          "them)");
         }
-        if (placement_policy.rfind("rfold", 0) == 0) {
+        if (placement_policy == "rfold") {
             logger->critical("--fullmesh is incompatible with "
-                             "--placement-policy=rfold* (OCS rewiring assumes "
+                             "--placement-policy=rfold (OCS rewiring assumes "
                              "sparse torus connectivity)");
             std::exit(1);
         }
@@ -479,19 +479,6 @@ int main(int argc, char* argv[]) {
         cmd_line_parser.get<std::string>("rfold-ranking");
     placement_cfg.rfold_multifold =
         cmd_line_parser.get<bool>("rfold-multifold");
-    placement_cfg.cm_kappa = cmd_line_parser.get<double>("cost-model-kappa");
-    placement_cfg.cm_c_ext = cmd_line_parser.get<double>("cost-model-c-ext");
-    placement_cfg.cm_t_reconfig_s =
-        cmd_line_parser.get<double>("cost-model-t-reconfig");
-    placement_cfg.cm_gamma = cmd_line_parser.get<double>("cost-model-gamma");
-    placement_cfg.cm_lookahead_k =
-        cmd_line_parser.get<int>("cost-model-lookahead-k");
-    placement_cfg.cm_lookahead_q =
-        cmd_line_parser.get<int>("cost-model-lookahead-q");
-    placement_cfg.cm_beta_const_s =
-        cmd_line_parser.get<double>("cost-model-beta-const");
-    placement_cfg.cm_scatter_guard =
-        cmd_line_parser.get<bool>("cost-model-scatter-guard");
     placement_cfg.switch_theta = cmd_line_parser.get<int>("switch-theta");
     auto policy = AstraSim::Scheduling::make_placement_policy(placement_policy,
                                                               placement_cfg);
@@ -531,23 +518,18 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-    // Duration-based admission AND the cost-model placement ranking both
-    // build a roofline estimator; either path needs positive rates (a zero
-    // peak-perf would make the estimator divide by zero). `switch` reads
-    // only queue depth, so it needs no estimator.
-    const bool ranking_needs_estimator =
-        placement_policy.rfind("rfold", 0) == 0 &&
-        placement_cfg.rfold_ranking == "cost-model";
+    // Duration-based admission builds a roofline estimator, which needs
+    // positive rates (a zero peak-perf would make the estimator divide by
+    // zero).
     if ((admission_policy == "sjdf" || admission_policy == "ljdf" ||
          admission_policy == "swf" || admission_policy == "easy" ||
-         admission_policy == "lwf" || ranking_needs_estimator) &&
+         admission_policy == "lwf") &&
         (admission_cfg.peak_perf <= 0.0 || admission_cfg.local_mem_bw <= 0.0 ||
          admission_cfg.max_link_bw <= 0.0)) {
         logger->critical(
-            "--admission-policy={} / --rfold-ranking={} requires peak-perf "
-            "and local-mem-bw in --system-configuration and a positive "
-            "bandwidth schedule",
-            admission_policy, placement_cfg.rfold_ranking);
+            "--admission-policy={} requires peak-perf and local-mem-bw in "
+            "--system-configuration and a positive bandwidth schedule",
+            admission_policy);
         std::exit(1);
     }
     auto admission = AstraSim::Scheduling::make_admission_policy(
@@ -573,14 +555,6 @@ int main(int argc, char* argv[]) {
         logger->info(
             "preserve-placement-order ON: collective rings follow the "
             "placement policy's emitted NPU order, not sorted-id order");
-    }
-    // Context-aware rankings need per-job duration estimates regardless of
-    // the admission policy; reuse the same roofline estimator parameters
-    // (validated above when ranking_needs_estimator).
-    if (ranking_needs_estimator) {
-        runtime.set_ctx_estimator(AstraSim::Scheduling::make_duration_estimator(
-            duration_estimator, admission_cfg.peak_perf,
-            admission_cfg.local_mem_bw, admission_cfg.max_link_bw));
     }
     // Deadlock post-mortem (fires only if the liveness valve in
     // SchedRuntime::run could not make progress): dump every non-empty
