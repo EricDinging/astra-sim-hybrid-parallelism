@@ -172,3 +172,8 @@ add_executable(test_rfold_whole_torus test_rfold_whole_torus.cc)
 target_link_libraries(test_rfold_whole_torus PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
 target_include_directories(test_rfold_whole_torus PRIVATE ${CMAKE_SOURCE_DIR})
 gtest_discover_tests(test_rfold_whole_torus)
+
+add_executable(microbench_rfold microbench_rfold.cc)
+target_link_libraries(microbench_rfold PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(microbench_rfold PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(microbench_rfold)

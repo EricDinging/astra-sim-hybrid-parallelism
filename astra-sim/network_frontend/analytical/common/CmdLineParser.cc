@@ -81,8 +81,7 @@ void CmdLineParser::define_options() noexcept {
         cxxopts::value<std::string>()->default_value("min-reconfig"))(
         "rfold-ranking",
         "auto (rfoldv1 -> comm-first, rfoldv2 -> comm-first-no-residual) | "
-        "comm-first[-no-residual] | fidelity-first (experimental) | "
-        "packing-first | cost-model | switch",
+        "comm-first[-no-residual] | packing-first | cost-model | switch",
         cxxopts::value<std::string>()->default_value("auto"))(
         "rfold-search-budget",
         "Bounded-search expansion cap for rfold scatter selectors",

@@ -42,6 +42,7 @@ class RFold : public PlacementPolicy {
           scorer_(std::move(scorer)),
           ranker_(std::move(ranker)),
           multifold_(cfg.rfold_multifold),
+          polarity_free_(cfg.rfold_polarity_free),
           lookahead_q_(cfg.cm_lookahead_q),
           gamma_(cfg.cm_gamma) {}
     PlacementResult try_place(const JobInstance& job,
@@ -80,6 +81,7 @@ class RFold : public PlacementPolicy {
     std::map<std::array<int, 3>, bool> idle_ok_;
     const SchedContext* runtime_ctx_ = nullptr;
     bool multifold_;
+    bool polarity_free_;
     // Consumed by the cost-model lookahead pass in try_place.
     int lookahead_q_;
     double gamma_;

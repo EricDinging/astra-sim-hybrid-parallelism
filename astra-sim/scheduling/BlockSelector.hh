@@ -41,6 +41,11 @@ struct Placement {
     // PRE-placement free set: lower = the placement consumes already-isolated
     // blocks (wall-hugging). Final fixed-ranking tiebreak before cost.
     int residual_frag = 0;
+    // Blocks this placement newly wounds: clean before (every chip free),
+    // partially occupied after. The RDCN damage metric — dirtying an
+    // already-dirty block or cleanly consuming a whole one costs nothing.
+    // Leads the v2 scatter-class key (CommFirst).
+    int dirty_delta = 0;
     // Queue-externality charge filled by RFold's cost-model lookahead pass;
     // 0 otherwise. Read only by CostModelRanker.
     double lookahead_ext_s = 0.0;

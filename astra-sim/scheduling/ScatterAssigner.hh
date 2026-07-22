@@ -34,6 +34,22 @@ std::optional<std::vector<int>> scatter_assign(
     const std::function<double(const std::array<int, 3>&)>& block_rank,
     int budget);
 
+// RDCN-mode tile nesting (2026-07-21, cm.polarity_free() callers only):
+// like scatter_assign, but each tile independently picks (block, in-block
+// offset) — any offset that fits, not the origin lock — several tiles may
+// share one block on disjoint chips, and candidates preferring already-dirty
+// blocks come first so partial tiles concentrate dirt instead of wounding
+// clean blocks. Communication legality is DOR-tolerant: seams that cannot
+// be wired ride the shared fabric and are priced by the caller's ranking
+// (build_placement wires the realizable, port-disjoint subset).
+std::optional<std::vector<int>> scatter_assign_nested(
+    const FoldVariant& v,
+    const std::unordered_set<int>& free,
+    const std::vector<int>& dims,
+    const BlockModel& cm,
+    const std::vector<std::pair<int, int>>& ring,
+    int budget);
+
 }  // namespace Scheduling
 }  // namespace AstraSim
 #endif

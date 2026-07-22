@@ -63,3 +63,32 @@ TEST(BlockModelScatter, DirectionsDisjoint) {
                                            {id8(3, 4, 0), id8(4, 4, 0)}};
     EXPECT_TRUE(cm.directions_disjoint(ok));
 }
+
+// Corrected R3 (RDCN model, 2026-07-21): with polarity_free, a cross-block
+// circuit may join any two face ports of one axis at matching within-face
+// position — same polarity included. Same-block pairs stay opposite-face
+// (they are so by construction), interiors stay illegal, and the strict
+// default is unchanged for rfoldv1 bit-compatibility.
+TEST(BlockModelScatter, PolarityFreeCrossBlockPairs) {
+    BlockModel strict({8, 8, 8}, {4, 4, 4});
+    BlockModel relaxed({8, 8, 8}, {4, 4, 4}, /*polarity_free=*/true);
+    // +x face of block (0,0,0) to +x face of block (1,0,0), matching (y,z).
+    int up = id8(3, 1, 1);
+    int vp = id8(7, 1, 1);
+    EXPECT_FALSE(strict.ocs_realizable_scatter(up, vp));
+    EXPECT_TRUE(relaxed.ocs_realizable_scatter(up, vp));
+    EXPECT_FALSE(strict.ocs_realizable(up, vp));
+    EXPECT_TRUE(relaxed.ocs_realizable(up, vp));
+    // -x face to -x face across blocks is equally legal when relaxed.
+    EXPECT_TRUE(relaxed.ocs_realizable_scatter(id8(0, 1, 1), id8(4, 1, 1)));
+    // Perpendicular position mismatch stays illegal in both modes.
+    EXPECT_FALSE(relaxed.ocs_realizable_scatter(id8(3, 1, 1), id8(7, 2, 1)));
+    // Interior endpoints stay illegal in both modes.
+    EXPECT_FALSE(relaxed.ocs_realizable_scatter(id8(2, 1, 1), id8(7, 1, 1)));
+    // Opposite-face pairs remain legal in both modes (superset property).
+    EXPECT_TRUE(strict.ocs_realizable_scatter(id8(3, 1, 1), id8(4, 1, 1)));
+    EXPECT_TRUE(relaxed.ocs_realizable_scatter(id8(3, 1, 1), id8(4, 1, 1)));
+    // Same-block wrap (the 1-block-wide ring) is legal in both modes.
+    EXPECT_TRUE(strict.ocs_realizable_scatter(id8(0, 1, 1), id8(3, 1, 1)));
+    EXPECT_TRUE(relaxed.ocs_realizable_scatter(id8(0, 1, 1), id8(3, 1, 1)));
+}

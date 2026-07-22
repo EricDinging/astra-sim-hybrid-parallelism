@@ -193,6 +193,18 @@ TEST(CommFirstV2, DorLeadsOpenClass) {
 
 // The residual (wall-hugging) key is the rfoldv1/rfoldv2 split: v1's
 // comm-first keeps it, v2's comm-first-no-residual drops it.
+// RDCN revision 2026-07-21: v2 also drops the ocs_links circuit-frugality
+// key — every inter-block seam is a circuit on the real machine, so "prefer
+// default seams" prices an adjacency that does not exist. v1 keeps it.
+TEST(CommFirstV2, OcsKeyIsAlsoV1Only) {
+    auto v2 = make_placement_ranker("comm-first-no-residual");
+    ASSERT_TRUE(v2);
+    auto few_ocs = mk(2, 0, 0, 0, 1.0, false, false);
+    auto many_ocs = mk(2, 0, 5, 0, 0.0, false, false);
+    EXPECT_TRUE(v2->better(many_ocs, few_ocs));  // ocs ignored => cost decides
+    EXPECT_TRUE(make_placement_ranker("comm-first")->better(few_ocs, many_ocs));
+}
+
 TEST(CommFirstV2, ResidualKeyIsTheV1V2Split) {
     auto no_resid = make_placement_ranker("comm-first-no-residual");
     ASSERT_TRUE(no_resid);

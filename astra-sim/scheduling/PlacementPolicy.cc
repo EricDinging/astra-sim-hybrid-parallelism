@@ -87,9 +87,13 @@ std::unique_ptr<PlacementPolicy> make_placement_policy(
         if (!ranker) {
             return nullptr;  // unknown --rfold-ranking
         }
+        PlacementConfig vcfg = cfg;
+        // Corrected-R3 circuit legality is a v2 default; v1 keeps the strict
+        // opposite-face predicate for pre-2026-07 bit-compatibility.
+        vcfg.rfold_polarity_free = v2;
         return std::make_unique<RFold>(cfg.block_size, std::move(selector),
                                        std::move(scorer), std::move(ranker),
-                                       cfg);
+                                       vcfg);
     }
     return nullptr;
 }

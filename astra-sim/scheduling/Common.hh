@@ -49,6 +49,10 @@ struct PlacementConfig {
         "auto";  // --rfold-ranking (auto: per rfold version)
     int rfold_search_budget = 50000;  // --rfold-search-budget
     bool rfold_multifold = true;      // --rfold-multifold
+    // Corrected-R3 circuit legality (cross-block same-polarity pairings).
+    // Not a CLI flag: resolved from the rfold version (v2 true, v1 false)
+    // in make_placement_policy, like the ranking default.
+    bool rfold_polarity_free = true;
     // cost-model ranking knobs (--cost-model-*), spec 2026-06-11 §4
     double cm_kappa = 1.0;           // seam-penalty calibration
     double cm_c_ext = 1.0;           // externality coefficient

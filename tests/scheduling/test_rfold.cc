@@ -151,13 +151,20 @@ TEST(RFold, ScatterOnlyShapeDefersWhenBusy) {
     EXPECT_EQ(p->try_place(j, busy).outcome, PlacementOutcome::DEFER);
 }
 
+// The idle-torus oracle's DROP-vs-DEFER answer moved with the RDCN revision
+// (2026-07-21): under DOR-tolerant glue, 16x16x2 IS placeable on an idle
+// torus — its (16,8,4) fold variant tiles into exactly 8 full cubes, glued
+// with the unwirable ring edges riding the shared fabric — so v2 defers
+// while waiting for space. rfoldv1 keeps the strict gate and still drops.
 TEST(RFold, IdleUnplaceableShapeStillDropsWhenBusy) {
-    auto p = make_placement_policy("rfold", PlacementConfig{});
-    auto j = job(8, 512, {16, 16, 2});  // not placeable even on an idle torus
+    auto j = job(8, 512, {16, 16, 2});
     std::vector<int> few(32);
     std::iota(few.begin(), few.end(), 0);
     ClusterView busy(few, {8, 8, 8}, 512, 0);
-    EXPECT_EQ(p->try_place(j, busy).outcome, PlacementOutcome::DROP);
+    auto v1 = make_placement_policy("rfoldv1", PlacementConfig{});
+    EXPECT_EQ(v1->try_place(j, busy).outcome, PlacementOutcome::DROP);
+    auto v2 = make_placement_policy("rfold", PlacementConfig{});
+    EXPECT_EQ(v2->try_place(j, busy).outcome, PlacementOutcome::DEFER);
 }
 
 // Under permanent NPU failures "idle" means the degraded torus. On 4x4x4

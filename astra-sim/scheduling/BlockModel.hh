@@ -18,7 +18,16 @@ namespace Scheduling {
 // 4x4x2). x-fastest: id = z*Dy*Dx + y*Dx + x.
 class BlockModel {
   public:
-    BlockModel(std::array<int, 3> dims, std::array<int, 3> block);
+    // polarity_free: corrected-R3 circuit legality (2026-07-21) — a cross-
+    // block circuit may join any two face ports of one axis at matching
+    // within-face position, same polarity included (+x<->+x between distinct
+    // blocks; a real OCS light path is polarity-blind, cf. twisted tori).
+    // Same-block pairs remain opposite-face-only (the 1-block ring wrap).
+    // Defaults to false so rfoldv1 and existing call sites keep the strict
+    // pre-2026-07 behavior bit-for-bit.
+    BlockModel(std::array<int, 3> dims,
+               std::array<int, 3> block,
+               bool polarity_free = false);
     bool valid() const;  // every block dim > 0 and divides its torus dim
     std::array<int, 3> coord(int id) const;  // (x, y, z)
     std::array<int, 3> block_of(
@@ -57,13 +66,32 @@ class BlockModel {
     // conflict).
     bool directions_disjoint(
         const std::vector<std::pair<int, int>>& ocs_edges) const;
+    // RDCN R5 port accounting (polarity_free mode only; identity otherwise
+    // for rfoldv1 bit-compat). A face port holds ONE circuit: a ring edge
+    // riding a cross-block torus adjacency occupies both endpoints' facing
+    // ports (that adjacency IS the boot-configuration circuit), so a wire
+    // needing an occupied port cannot coexist with it in one placement.
+    // Claims the seam ports of `phys_ring_edges` (rank-mapped), then accepts
+    // `wires` in order, dropping any whose endpoint port is already claimed.
+    // Returns the accepted wires; callers turn the dropped ones into DOR
+    // edges (contiguous) or reject the assignment (scatter).
+    std::vector<std::pair<int, int>> wirable_subset(
+        const std::vector<std::pair<int, int>>& phys_ring_edges,
+        const std::vector<std::pair<int, int>>& wires) const;
     std::array<int, 3> block_dims() const {
         return block_;
+    }
+    // True in corrected-R3 / RDCN mode (rfoldv2); false = strict pre-2026-07
+    // semantics (rfoldv1 bit-compat). Gates polarity-free circuit pairing,
+    // R5 port accounting, and the scatter path's DOR tolerance.
+    bool polarity_free() const {
+        return polarity_free_;
     }
 
   private:
     std::array<int, 3> dims_;
     std::array<int, 3> block_;
+    bool polarity_free_;
     // The single axis along which u,v form a realizable OCS face pair, or -1.
     int ocs_axis(int u, int v) const;
 };

@@ -13,9 +13,12 @@ LICENSE file in the root directory of this source tree.
 namespace AstraSim {
 namespace Scheduling {
 
-BlockModel::BlockModel(std::array<int, 3> dims, std::array<int, 3> block)
+BlockModel::BlockModel(std::array<int, 3> dims,
+                       std::array<int, 3> block,
+                       bool polarity_free)
     : dims_(dims),
-      block_(block) {}
+      block_(block),
+      polarity_free_(polarity_free) {}
 
 bool BlockModel::valid() const {
     for (int d = 0; d < 3; ++d) {
@@ -84,9 +87,16 @@ bool BlockModel::ocs_realizable(int u, int v) const {
     if (axis == -1) {
         return false;
     }
-    // The two nodes must sit on opposite faces of `axis` (+face <-> -face).
     // Only `axis` differs, so the perpendicular coords are equal and the
-    // within-face position matches by construction.
+    // within-face position matches by construction. Strict mode: the nodes
+    // must sit on opposite faces of `axis` (+face <-> -face). Polarity-free
+    // (corrected R3): any two face ports of `axis` pair up; a same-block
+    // same-face pair would be the same node, which the u == v guard excludes.
+    const bool u_face = is_face_node(u, axis, +1) || is_face_node(u, axis, -1);
+    const bool v_face = is_face_node(v, axis, +1) || is_face_node(v, axis, -1);
+    if (polarity_free_) {
+        return u_face && v_face;
+    }
     return (is_face_node(u, axis, +1) && is_face_node(v, axis, -1)) ||
            (is_face_node(u, axis, -1) && is_face_node(v, axis, +1));
 }
@@ -106,6 +116,14 @@ int BlockModel::ocs_axis(int u, int v) const {
         int wv = b[ax] % block_[ax];
         bool opp = (wu == block_[ax] - 1 && wv == 0) ||
                    (wu == 0 && wv == block_[ax] - 1);
+        if (polarity_free_) {
+            // Corrected R3: cross-block circuits may join any two face ports
+            // at matching position, same polarity included (+x<->+x). A
+            // same-block pair with matching perpendicular coords and u != v
+            // is opposite faces by construction, so no extra check needed.
+            opp = (wu == 0 || wu == block_[ax] - 1) &&
+                  (wv == 0 || wv == block_[ax] - 1);
+        }
         if (!opp) {
             continue;
         }
@@ -161,6 +179,74 @@ int BlockModel::free_neighbor_blocks(
         }
     }
     return cnt;
+}
+
+std::vector<std::pair<int, int>> BlockModel::wirable_subset(
+    const std::vector<std::pair<int, int>>& phys_ring_edges,
+    const std::vector<std::pair<int, int>>& wires) const {
+    if (!polarity_free_) {
+        return wires;  // v1 model: torus links are hardware, no port sharing
+    }
+    // (node, axis, +1/-1) -> claimed. For 1-wide block axes every node holds
+    // both ports of the axis; mirror directions_disjoint's allowance with a
+    // per-(node, axis) degree cap of 2 instead of per-direction claims.
+    std::set<std::tuple<int, int, int>> used;
+    std::map<std::pair<int, int>, int> degree;
+    auto claim = [&](int node, int ax, int dir) -> bool {
+        if (block_[ax] == 1) {
+            return ++degree[{node, ax}] <= 2;
+        }
+        return used.insert({node, ax, dir}).second;
+    };
+    std::set<std::pair<int, int>> seams;  // dedup: rings list both directions
+    for (const auto& e : phys_ring_edges) {
+        if (!is_torus_adjacent(e.first, e.second) ||
+            same_block(e.first, e.second)) {
+            continue;  // wires handled below; intra-block edges use the mesh
+        }
+        seams.insert(
+            {std::min(e.first, e.second), std::max(e.first, e.second)});
+    }
+    for (const auto& e : seams) {
+        auto a = coord(e.first);
+        auto b = coord(e.second);
+        for (int ax = 0; ax < 3; ++ax) {
+            if (a[ax] == b[ax]) {
+                continue;
+            }
+            int fwd = (b[ax] - a[ax] + dims_[ax]) % dims_[ax];
+            int dir = fwd == 1 ? +1 : -1;
+            claim(e.first, ax, dir);
+            claim(e.second, ax, -dir);
+            break;
+        }
+    }
+    std::vector<std::pair<int, int>> kept;
+    for (const auto& w : wires) {
+        int ax = ocs_axis(w.first, w.second);
+        if (ax < 0) {
+            continue;  // not realizable at all; caller's predicate handles it
+        }
+        auto dir_of = [&](int node) {
+            return is_face_node(node, ax, +1) ? +1 : -1;
+        };
+        // Check both endpoints, then commit both — a dropped wire must not
+        // leave a half-claimed port behind. Endpoints are distinct nodes, so
+        // the two checks never alias.
+        const int du = dir_of(w.first);
+        const int dv = dir_of(w.second);
+        const bool ok =
+            block_[ax] == 1
+                ? degree[{w.first, ax}] < 2 && degree[{w.second, ax}] < 2
+                : used.count({w.first, ax, du}) == 0 &&
+                      used.count({w.second, ax, dv}) == 0;
+        if (ok) {
+            claim(w.first, ax, du);
+            claim(w.second, ax, dv);
+            kept.push_back(w);
+        }
+    }
+    return kept;
 }
 
 bool BlockModel::directions_disjoint(

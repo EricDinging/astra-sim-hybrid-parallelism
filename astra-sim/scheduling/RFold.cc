@@ -81,7 +81,14 @@ PlacementResult RFold::try_place(const JobInstance& job,
         r.reason = "rfold requires 3-D physical_dims (--npus-per-dim)";
         return r;
     }
-    BlockModel cm({dims[0], dims[1], dims[2]}, block_);
+    // RDCN mode needs an OCS to exist: at whole-torus block (the folding-only
+    // arm) there are no inter-block seams to re-wire, so the corrected-R3 /
+    // DOR-tolerant machinery must stay off and folding semantics (including
+    // the odd-ring DROP catalog) remain exactly pre-RDCN.
+    const bool has_ocs =
+        block_[0] < dims[0] || block_[1] < dims[1] || block_[2] < dims[2];
+    BlockModel cm({dims[0], dims[1], dims[2]}, block_,
+                  polarity_free_ && has_ocs);
     if (!cm.valid()) {
         r.outcome = PlacementOutcome::DROP;
         r.reason = "--block-size must divide every torus dim per axis";

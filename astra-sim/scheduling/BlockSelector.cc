@@ -11,6 +11,7 @@ LICENSE file in the root directory of this source tree.
 
 #include <algorithm>
 #include <array>
+#include <map>
 #include <set>
 #include <utility>
 
@@ -73,11 +74,54 @@ Placement build_placement(const std::vector<int>& rm,
                           const std::vector<std::pair<int, int>>& ring,
                           const std::unordered_set<int>& free) {
     auto oe = FootprintRouter::ocs_edges(ring, rm, cm);
+    // RDCN mode (DOR-tolerant glue): wire only the realizable, port-disjoint
+    // subset; the rest ride the shared fabric and are charged as dor_edges.
+    // Strict mode: scatter_assign's gate guarantees every edge is realizable
+    // and wirable_subset is the identity, so wired == oe and dor == 0 —
+    // bit-compatible with rfoldv1.
+    std::vector<std::pair<int, int>> wired;
+    for (const auto& e : oe) {
+        if (cm.ocs_realizable_scatter(e.first, e.second)) {
+            wired.push_back(e);
+        }
+    }
+    std::vector<std::pair<int, int>> phys_edges;
+    phys_edges.reserve(ring.size());
+    for (const auto& e : ring) {
+        phys_edges.push_back({rm[e.first], rm[e.second]});
+    }
+    wired = cm.wirable_subset(phys_edges, wired);
+    const int dor = static_cast<int>(oe.size() - wired.size());
+    // RDCN damage metric: blocks that were clean (every chip free) and end
+    // up partially occupied. P chips placed into a block that had F free of
+    // V total: clean before iff F == V; fully consumed after iff P == F.
+    std::map<std::array<int, 3>, int> placed_in;
+    for (int n : rm) {
+        ++placed_in[cm.block_of(n)];
+    }
+    const auto blk = cm.block_dims();
+    const int vol = blk[0] * blk[1] * blk[2];
+    int dirty_delta = 0;
+    for (const auto& [b, p] : placed_in) {
+        int f = 0;
+        for (int z = b[2] * blk[2]; z < (b[2] + 1) * blk[2]; ++z) {
+            for (int y = b[1] * blk[1]; y < (b[1] + 1) * blk[1]; ++y) {
+                for (int x = b[0] * blk[0]; x < (b[0] + 1) * blk[0]; ++x) {
+                    f += free.count(cm.id_of({x, y, z})) > 0 ? 1 : 0;
+                }
+            }
+        }
+        if (f == vol && p < f) {
+            ++dirty_delta;
+        }
+    }
     ScoredPlacement sp{&rm, &dims, v.footprint};
-    sp.ocs_links = static_cast<int>(oe.size());
+    sp.ocs_links = static_cast<int>(wired.size());
     double cost = scorer.cost(sp);
-    Placement p{rm, v.footprint, std::move(oe), cost};
+    Placement p{rm, v.footprint, std::move(wired), cost};
     p.blocks_touched = count_blocks(rm, cm);
+    p.dor_edges = dor;
+    p.dirty_delta = dirty_delta;
     p.identity = v.identity;
     p.ring_closes = v.ring_closes;
     p.residual_frag = residual_frag_of(rm, cm, free);
@@ -111,14 +155,21 @@ std::optional<Placement> ContiguousFirst::select(
             // keeps contiguous placeability maximal: any cuboid fit is
             // accepted.
             std::vector<std::pair<int, int>> realizable;
-            int dor = 0;
             for (const auto& e : oe) {
                 if (cm.ocs_realizable(e.first, e.second)) {
                     realizable.push_back(e);
-                } else {
-                    ++dor;
                 }
             }
+            // RDCN R5 (polarity-free mode): a wire whose face port is
+            // occupied by a default-seam ride of this same placement cannot
+            // be installed — it rides DOR instead. Identity in v1 mode.
+            std::vector<std::pair<int, int>> phys_edges;
+            phys_edges.reserve(ring_edges.size());
+            for (const auto& e : ring_edges) {
+                phys_edges.push_back({cand[e.first], cand[e.second]});
+            }
+            realizable = cm.wirable_subset(phys_edges, realizable);
+            int dor = static_cast<int>(oe.size() - realizable.size());
             ScoredPlacement sp{&cand, &dims, pf};
             sp.ocs_links = static_cast<int>(realizable.size());
             double c = scorer.cost(sp);
@@ -173,9 +224,15 @@ std::optional<Placement> MinReconfig::select(
         if (!tried_fp.insert(pv.footprint).second) {
             continue;  // symmetric footprint: identical tiling already tried
         }
-        auto rm = scatter_assign(
-            pv, free, dims, cm, ring_edges,
-            [](const std::array<int, 3>&) { return 0.0; }, budget_);
+        // RDCN mode: tile nesting (per-tile offsets, block sharing, dirty-
+        // block preference). Strict mode: the original origin-locked,
+        // one-tile-per-block assigner, bit-compatible with rfoldv1.
+        auto rm =
+            cm.polarity_free()
+                ? scatter_assign_nested(pv, free, dims, cm, ring_edges, budget_)
+                : scatter_assign(
+                      pv, free, dims, cm, ring_edges,
+                      [](const std::array<int, 3>&) { return 0.0; }, budget_);
         if (!rm) {
             continue;
         }

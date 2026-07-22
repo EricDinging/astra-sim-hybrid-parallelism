@@ -26,20 +26,21 @@ bool CommFirst::better(const Placement& a, const Placement& b) const {
         return ca < cb;
     }
     if (ca == 2) {
+        // v2 leads the scatter class with the RDCN damage metric: newly-
+        // wounded clean blocks. v1 key unchanged for bit-compat.
+        if (!v1_keys_) {
+            return std::make_tuple(a.dirty_delta, a.blocks_touched, a.dor_edges,
+                                   a.cost) <
+                   std::make_tuple(b.dirty_delta, b.blocks_touched, b.dor_edges,
+                                   b.cost);
+        }
         return std::make_tuple(a.blocks_touched, a.dor_edges, a.cost) <
                std::make_tuple(b.blocks_touched, b.dor_edges, b.cost);
     }
     const auto key = [&](const Placement& p) {
-        return std::make_tuple(p.dor_edges, p.blocks_touched, p.ocs_links(),
-                               use_residual_ ? p.residual_frag : 0, p.cost);
-    };
-    return key(a) < key(b);
-}
-
-bool FidelityFirst::better(const Placement& a, const Placement& b) const {
-    const auto key = [](const Placement& p) {
-        return std::make_tuple(p.identity ? 0 : 1, p.dor_edges,
-                               p.blocks_touched, p.ocs_links(), p.cost);
+        return std::make_tuple(p.dor_edges, p.blocks_touched,
+                               v1_keys_ ? p.ocs_links() : 0,
+                               v1_keys_ ? p.residual_frag : 0, p.cost);
     };
     return key(a) < key(b);
 }
@@ -91,13 +92,10 @@ bool CostModelRanker::better(const Placement& a, const Placement& b) const {
 std::unique_ptr<PlacementRanker> make_placement_ranker(
     const std::string& name, const PlacementConfig& cfg) {
     if (name == "comm-first") {
-        return std::make_unique<CommFirst>(/*use_residual=*/true);
+        return std::make_unique<CommFirst>(/*v1_keys=*/true);
     }
     if (name == "comm-first-no-residual") {
-        return std::make_unique<CommFirst>(/*use_residual=*/false);
-    }
-    if (name == "fidelity-first") {
-        return std::make_unique<FidelityFirst>();
+        return std::make_unique<CommFirst>(/*v1_keys=*/false);
     }
     if (name == "packing-first") {
         return std::make_unique<PackingFirst>();
