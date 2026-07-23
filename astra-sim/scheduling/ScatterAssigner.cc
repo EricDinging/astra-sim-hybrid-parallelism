@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/FootprintRouter.hh"
 
 #include <algorithm>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <set>
@@ -215,20 +216,92 @@ std::optional<std::vector<int>> scatter_assign_nested(
     }
 
     Tiling t = tile(fp, blk);
-    std::array<int, 3> gdim{dims[0] / blk[0], dims[1] / blk[1],
-                            dims[2] / blk[2]};
     const int vol = blk[0] * blk[1] * blk[2];
 
-    // Per-block free-chip count: 0 < count < vol marks a fragmented block —
-    // preferred hosts for partial tiles (concentrate fragmentation).
-    std::map<std::array<int, 3>, int> free_in_block;
+    // Per-block free-chip census: `count` (0 < count < vol marks a fragmented
+    // block — preferred host for partial tiles) plus a bitmask of the free
+    // chips (x-fastest in-block bit order), so the tile-fit checks in the DFS
+    // are word ops instead of per-chip hash probes.
+    const int words = (vol + 63) / 64;
+    struct BlockFree {
+        int count = 0;
+        std::vector<uint64_t> mask;
+    };
+    std::map<std::array<int, 3>, BlockFree> free_in_block;
     for (int n : free) {
-        ++free_in_block[cm.block_of(n)];
+        auto& fb = free_in_block[cm.block_of(n)];
+        if (fb.mask.empty()) {
+            fb.mask.assign(words, 0);
+        }
+        const int x = n % dims[0];
+        const int y = (n / dims[0]) % dims[1];
+        const int z = n / (dims[0] * dims[1]);
+        const int idx =
+            (x % blk[0]) + blk[0] * ((y % blk[1]) + blk[1] * (z % blk[2]));
+        fb.mask[idx >> 6] |= uint64_t{1} << (idx & 63);
+        ++fb.count;
     }
 
-    // taken[] tracks chips claimed by already-placed tiles of THIS job so
-    // co-resident tiles stay disjoint.
-    std::unordered_set<int> taken;
+    // Exact counting prune: a full tile occupies its entire block (count ==
+    // vol required, and `taken` then bars any other tile from that block), so
+    // the full tiles need pairwise-distinct wholly-free blocks. Fewer
+    // wholly-free blocks than full tiles means no assignment exists at all --
+    // skip the budgeted DFS, which would burn its whole budget backtracking
+    // to the same conclusion. This is the common doomed case on a fragmented
+    // cluster at high load.
+    {
+        int whole_free = 0;
+        for (const auto& [C, fb] : free_in_block) {
+            if (fb.count == vol) {
+                ++whole_free;
+            }
+        }
+        int full_tiles = 0;
+        for (const Block& tb : t.blocks) {
+            if (tb.shape[0] == blk[0] && tb.shape[1] == blk[1] &&
+                tb.shape[2] == blk[2]) {
+                ++full_tiles;
+            }
+        }
+        if (whole_free < full_tiles) {
+            return std::nullopt;
+        }
+    }
+
+    // Per-tile candidate offsets with their in-block need-masks, precomputed
+    // once — the DFS re-enters every level on each backtrack, and the offset
+    // grid never changes.
+    struct OffCand {
+        std::array<int, 3> o;
+        std::vector<uint64_t> need;
+    };
+    std::vector<std::vector<OffCand>> tile_offs(t.blocks.size());
+    for (size_t bi = 0; bi < t.blocks.size(); ++bi) {
+        const Block& tb = t.blocks[bi];
+        for (int oz = 0; oz + tb.shape[2] <= blk[2]; ++oz) {
+            for (int oy = 0; oy + tb.shape[1] <= blk[1]; ++oy) {
+                for (int ox = 0; ox + tb.shape[0] <= blk[0]; ++ox) {
+                    OffCand oc{{ox, oy, oz}, std::vector<uint64_t>(words, 0)};
+                    for (int z = 0; z < tb.shape[2]; ++z) {
+                        for (int y = 0; y < tb.shape[1]; ++y) {
+                            for (int x = 0; x < tb.shape[0]; ++x) {
+                                const int idx =
+                                    (ox + x) +
+                                    blk[0] * ((oy + y) + blk[1] * (oz + z));
+                                oc.need[idx >> 6] |= uint64_t{1} << (idx & 63);
+                            }
+                        }
+                    }
+                    tile_offs[bi].push_back(std::move(oc));
+                }
+            }
+        }
+    }
+
+    // Chips claimed by already-placed tiles of THIS job, as per-block masks,
+    // so co-resident tiles stay disjoint. An all-zero entry (left by a
+    // backtrack) is equivalent to an absent one.
+    std::map<std::array<int, 3>, std::vector<uint64_t>> taken;
     // tile -> (block, offset); rank_map derived at the end.
     std::vector<std::pair<std::array<int, 3>, std::array<int, 3>>> pick(
         t.blocks.size());
@@ -239,58 +312,40 @@ std::optional<std::vector<int>> scatter_assign_nested(
             return true;
         }
         const Block& tb = t.blocks[bi];
-        const bool full_tile = tb.shape[0] == blk[0] && tb.shape[1] == blk[1] &&
-                               tb.shape[2] == blk[2];
+        const int tvol = tb.shape[0] * tb.shape[1] * tb.shape[2];
         // Candidates: (rank, block, offset). Rank prefers fragmented blocks for
         // partial tiles; full tiles need a wholly-free block either way.
         struct Cand {
             double rank;
             std::array<int, 3> C;
             std::array<int, 3> o;
+            size_t oi;  // index into tile_offs[bi], for the consume masks
         };
         std::vector<Cand> cands;
-        for (int cz = 0; cz < gdim[2]; ++cz) {
-            for (int cy = 0; cy < gdim[1]; ++cy) {
-                for (int cx = 0; cx < gdim[0]; ++cx) {
-                    std::array<int, 3> C{cx, cy, cz};
-                    auto it = free_in_block.find(C);
-                    const int bf = it == free_in_block.end() ? 0 : it->second;
-                    if (bf == 0) {
-                        continue;
+        // Walk only blocks with free chips, skip blocks whose free count
+        // cannot cover the tile, and test each precomputed offset mask with
+        // word ops. The candidate set is unchanged from the per-chip-probe
+        // version (both feed the same total-order sort below).
+        for (const auto& [C, fb] : free_in_block) {
+            if (fb.count < tvol) {
+                continue;
+            }
+            const bool frag = fb.count < vol;
+            const auto tk = taken.find(C);
+            for (size_t oi = 0; oi < tile_offs[bi].size(); ++oi) {
+                const auto& oc = tile_offs[bi][oi];
+                bool ok = true;
+                for (int w = 0; w < words && ok; ++w) {
+                    uint64_t avail = fb.mask[w];
+                    if (tk != taken.end()) {
+                        avail &= ~tk->second[w];
                     }
-                    if (full_tile && bf < vol) {
-                        continue;
-                    }
-                    const bool frag = bf < vol;
-                    for (int oz = 0; oz + tb.shape[2] <= blk[2]; ++oz) {
-                        for (int oy = 0; oy + tb.shape[1] <= blk[1]; ++oy) {
-                            for (int ox = 0; ox + tb.shape[0] <= blk[0]; ++ox) {
-                                bool ok = true;
-                                for (int z = 0; z < tb.shape[2] && ok; ++z) {
-                                    for (int y = 0; y < tb.shape[1] && ok;
-                                         ++y) {
-                                        for (int x = 0; x < tb.shape[0] && ok;
-                                             ++x) {
-                                            int id = cm.id_of(
-                                                {C[0] * blk[0] + ox + x,
-                                                 C[1] * blk[1] + oy + y,
-                                                 C[2] * blk[2] + oz + z});
-                                            if (free.count(id) == 0 ||
-                                                taken.count(id) > 0) {
-                                                ok = false;
-                                            }
-                                        }
-                                    }
-                                }
-                                if (ok) {
-                                    // Fragmented blocks first, then origin-most
-                                    // offsets, then block order (determinism).
-                                    cands.push_back(
-                                        {frag ? 0.0 : 1.0, C, {ox, oy, oz}});
-                                }
-                            }
-                        }
-                    }
+                    ok = (oc.need[w] & avail) == oc.need[w];
+                }
+                if (ok) {
+                    // Fragmented blocks first, then origin-most offsets,
+                    // then block order (determinism).
+                    cands.push_back({frag ? 0.0 : 1.0, C, oc.o, oi});
                 }
             }
         }
@@ -308,27 +363,20 @@ std::optional<std::vector<int>> scatter_assign_nested(
             if (++spent > budget) {
                 return false;
             }
-            std::vector<int> ids;
-            ids.reserve(static_cast<size_t>(tb.shape[0]) * tb.shape[1] *
-                        tb.shape[2]);
-            for (int z = 0; z < tb.shape[2]; ++z) {
-                for (int y = 0; y < tb.shape[1]; ++y) {
-                    for (int x = 0; x < tb.shape[0]; ++x) {
-                        ids.push_back(cm.id_of({c.C[0] * blk[0] + c.o[0] + x,
-                                                c.C[1] * blk[1] + c.o[1] + y,
-                                                c.C[2] * blk[2] + c.o[2] + z}));
-                    }
-                }
+            const auto& need = tile_offs[bi][c.oi].need;
+            auto& tk = taken[c.C];
+            if (tk.empty()) {
+                tk.assign(words, 0);
             }
-            for (int id : ids) {
-                taken.insert(id);
+            for (int w = 0; w < words; ++w) {
+                tk[w] |= need[w];
             }
             pick[bi] = {c.C, c.o};
             if (dfs(bi + 1)) {
                 return true;
             }
-            for (int id : ids) {
-                taken.erase(id);
+            for (int w = 0; w < words; ++w) {
+                tk[w] &= ~need[w];
             }
         }
         return false;

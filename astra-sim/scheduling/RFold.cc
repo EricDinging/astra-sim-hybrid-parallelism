@@ -62,8 +62,12 @@ PlacementResult RFold::try_place(const JobInstance& job,
         return r;
     }
 
-    std::unordered_set<int> free(view.free_npus().begin(),
-                                 view.free_npus().end());
+    // Fewer free NPUs than ranks: no fold variant or snake placement can
+    // possibly succeed (each needs num_ranks distinct free NPUs), so skip
+    // every search below. Only any_fits — which drives the DEFER/DROP oracle
+    // decision and depends on the shape alone — still needs computing.
+    const bool too_full =
+        view.free_npus().size() < static_cast<size_t>(job.num_ranks);
 
     // The logical comm-ring edges depend only on the job shape (not the fold
     // variant), so compute them once and reuse for OCS scoring (in the
@@ -84,13 +88,25 @@ PlacementResult RFold::try_place(const JobInstance& job,
 
     bool any_fits = false;
     std::vector<Placement> candidates;
-    for (const auto& v : FoldEnumerator::enumerate(job.shape, multifold_)) {
-        if (fits_cluster(v.footprint, dims)) {
-            any_fits = true;
+    if (too_full) {
+        for (const auto& v : FoldEnumerator::enumerate(job.shape, multifold_)) {
+            if (fits_cluster(v.footprint, dims)) {
+                any_fits = true;
+                break;
+            }
         }
-        auto p = selector_->select(v, free, dims, cm, *scorer_, *ranker_, ring);
-        if (p) {
-            candidates.push_back(std::move(*p));
+    } else {
+        std::unordered_set<int> free(view.free_npus().begin(),
+                                     view.free_npus().end());
+        for (const auto& v : FoldEnumerator::enumerate(job.shape, multifold_)) {
+            if (fits_cluster(v.footprint, dims)) {
+                any_fits = true;
+            }
+            auto p =
+                selector_->select(v, free, dims, cm, *scorer_, *ranker_, ring);
+            if (p) {
+                candidates.push_back(std::move(*p));
+            }
         }
     }
     std::optional<Placement> best;
@@ -156,7 +172,7 @@ PlacementResult RFold::try_place(const JobInstance& job,
     // the sim at event-queue drain.
     const int non_unit =
         (job.shape[0] > 1) + (job.shape[1] > 1) + (job.shape[2] > 1);
-    if (non_unit <= 1) {
+    if (!too_full && non_unit <= 1) {
         auto cyc = FoldEnumerator::snake_1d(view.free_npus(), dims,
                                             job.num_ranks, kSnakeBudget);
         if (!cyc.empty()) {
