@@ -76,6 +76,13 @@ def mem_per_run_gb(capacity: int) -> int:
     legacy envelope (24 GB at 4096 NPUs, linear, 4 GB floor)."""
     if capacity == 512:
         return 3
+    if capacity == 4096:
+        # measured 2026-07-23: max VmHWM 2.65 GiB over 284 live 16x16x16 sims
+        # (all 7 policies, loads up to 1.00), flat across loads and
+        # plateau-shaped over time -- RSS tracks in-flight work (capacity),
+        # not queue depth or trace progress. 4 GiB = observed worst +50%;
+        # c6420-class hosts are CPU-bound at this value anyway.
+        return 4
     return max(4, 24 * capacity // 4096)
 
 

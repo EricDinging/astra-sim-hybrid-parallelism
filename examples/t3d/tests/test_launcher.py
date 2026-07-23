@@ -42,8 +42,8 @@ def test_slot_count_bounds():
 
 def test_mem_per_run_flat_at_512_legacy_elsewhere():
     assert launcher.mem_per_run_gb(512) == 3  # measured fleet-average mix
-    assert launcher.mem_per_run_gb(4096) == 24  # legacy envelope
-    assert launcher.mem_per_run_gb(2048) == 12
+    assert launcher.mem_per_run_gb(4096) == 4  # measured 2026-07-23 +50%
+    assert launcher.mem_per_run_gb(2048) == 12  # legacy envelope
     assert launcher.mem_per_run_gb(256) == 4  # floor
 
 
