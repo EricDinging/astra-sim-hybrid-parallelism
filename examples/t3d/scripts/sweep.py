@@ -49,7 +49,9 @@ ASTRA_SIM_BIN = os.path.join(
 )
 
 # trace length; override for quick dev tests, e.g. N_JOBS=20 ./reproduce.py gen ...
-N_JOBS = int(os.environ.get("N_JOBS", 100000))
+# 65k (down from 100k): prefix analysis on the 100k sweeps showed the
+# JCT-vs-load trend (knee + 8x crossing) is stable from ~50k jobs on.
+N_JOBS = int(os.environ.get("N_JOBS", 65000))
 # progress-poll (and work-steal) interval while launch blocks; override for
 # dev, e.g. POLL_SECS=10
 POLL_SECS = int(os.environ.get("POLL_SECS", 900))
