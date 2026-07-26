@@ -267,6 +267,8 @@ int main(int argc, char* argv[]) {
     const auto failure_prob = cmd_line_parser.get<double>("failure-prob");
     const auto route_cache_budget_gb =
         cmd_line_parser.get<double>("route-cache-budget-gb");
+    const auto congestion_model =
+        cmd_line_parser.get<std::string>("congestion-model");
 
     AstraSim::LoggerFactory::init(logging_configuration, logging_folder);
 
@@ -429,6 +431,14 @@ int main(int argc, char* argv[]) {
         npus_count, npus_count, event_queue.get(), std::move(bw_schedules),
         std::move(latency_schedules), npus_per_dim, !npus_per_dim.empty(), bidi,
         fullmesh);
+
+    if (congestion_model != "serial" && congestion_model != "fluid") {
+        logger->critical("unknown --congestion-model '{}' (want serial|fluid)",
+                         congestion_model);
+        std::exit(1);
+    }
+    tm->set_fluid_mode(congestion_model == "fluid");
+    logger->info("congestion model: {}", congestion_model);
 
     // DOR route-cache ceiling (on-demand routing; no-op in BFS mode).
     tm->set_route_cache_budget_bytes(static_cast<std::size_t>(
