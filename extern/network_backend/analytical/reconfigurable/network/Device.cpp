@@ -15,6 +15,8 @@ LICENSE file in the root directory of this source tree.
 using namespace NetworkAnalyticalReconfigurable;
 
 std::function<void()> Device::increment_callback = []() {};
+std::function<void(Link*)> Device::link_freed_hook = [](Link*) noexcept {};
+std::function<int(const Link*)> Device::flow_count_probe = [](const Link*) noexcept { return 0; };
 
 Device::Device(const DeviceId id) noexcept : device_id(id), topology_iteration(0) {
     assert(id >= 0);
@@ -46,6 +48,7 @@ void Device::link_become_free(DeviceId link_id) noexcept {
 
     // set link free
     links[link_id]->set_free();
+    link_freed_hook(links[link_id].get());
     // std::cout << "Device " << device_id << ": link to " << link_id << " is free at time " << Link::get_current_time()
     // << std::endl;
 
@@ -207,7 +210,7 @@ void Device::reconfigure(const BandwidthRow& bandwidth,
                 // free event here force-freed busy links (P0-2).
                 continue;
             }
-            if (link->is_busy()) {
+            if (link->is_busy() || flow_count_probe(link.get()) > 0) {
                 // Retuning a link mid-transmission would invalidate its
                 // in-flight completion events (P4-11: Link::reconfigure
                 // asserts !busy, aborting the run). Keep the old values and

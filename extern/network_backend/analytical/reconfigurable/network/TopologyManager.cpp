@@ -21,6 +21,7 @@ TopologyManager::TopologyManager(int npus_count,
     this->npus_count = npus_count;
     this->devices_count = devices_count;
     this->event_queue = event_queue;
+    flow_engine_ = std::make_unique<FlowEngine>(event_queue);
     this->bw_schedules = std::move(bw_schedules);
     this->latency_schedules = std::move(latency_schedules);
     debug_print("BW schedules size: " + std::to_string(this->bw_schedules.size()));
@@ -61,6 +62,14 @@ TopologyManager::TopologyManager(int npus_count,
     }
 }
 
+TopologyManager::~TopologyManager() noexcept {
+    // Unconditional reset: the hooks captured `this` iff set_fluid_mode(true)
+    // was ever called, but resetting unconditionally is cheap and correct
+    // either way, and a dying instance's hooks must never outlive it.
+    Device::link_freed_hook = [](Link*) noexcept {};
+    Device::flow_count_probe = [](const Link*) noexcept { return 0; };
+}
+
 std::shared_ptr<Device> TopologyManager::get_device(const DeviceId deviceId) noexcept {
     // Validate the device ID
     assert(deviceId >= 0 && deviceId < devices_count);
@@ -85,7 +94,7 @@ void TopologyManager::drain_network() noexcept {
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
         for (const auto& [id, link] : device->get_links()) {
-            if (id != i && !link->is_busy()) {
+            if (id != i && !link->is_busy() && (!fluid_ || flow_engine_->active_flows(link.get()) == 0)) {
                 increment_callback();
             }
         }
@@ -99,6 +108,18 @@ void TopologyManager::drain_network() noexcept {
 
 bool TopologyManager::is_reconfiguring() const noexcept {
     return reconfiguring;
+}
+
+void TopologyManager::set_fluid_mode(const bool enable) noexcept {
+    fluid_ = enable;
+    if (enable) {
+        // Fluid mode reads link occupancy from the engine, not Link::busy.
+        Device::link_freed_hook = [this](Link* link) noexcept { flow_engine_->on_link_updated(link); };
+        Device::flow_count_probe = [this](const Link* link) noexcept { return flow_engine_->active_flows(link); };
+    } else {
+        Device::link_freed_hook = [](Link*) noexcept {};
+        Device::flow_count_probe = [](const Link*) noexcept { return 0; };
+    }
 }
 
 void TopologyManager::increment_callback() noexcept {
@@ -148,6 +169,10 @@ void TopologyManager::increment_callback() noexcept {
         static const std::vector<Route> kNoRoutes;
         device->reconfigure(bw_schedules.at(cur_topo_id)[i], use_dor ? kNoRoutes : precomputed_routes[i],
                             latency_schedules.at(cur_topo_id)[i], reconfig_time);
+    }
+
+    if (fluid_) {
+        flow_engine_->resume();
     }
 }
 
@@ -205,6 +230,11 @@ bool TopologyManager::reconfigure(std::vector<BandwidthRow> bandwidths,
     }
 
     reconfiguring = true;
+    if (fluid_) {
+        // Defer new flows for the length of the drain; resume() runs in
+        // increment_callback once the post-drain retune is done.
+        flow_engine_->pause();
+    }
     this->cur_topo_id = topo_id;
     topology_iteration++;
     drain_network();
@@ -462,6 +492,11 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
     // }
     // printf("\n");
 
+    if (fluid_) {
+        flow_engine_->start_flow(std::move(chunk));
+        return;
+    }
+
     // Send the chunk through the topology
     topology->send(std::move(chunk));
 }
@@ -620,7 +655,9 @@ void TopologyManager::remove_job_wiring(const std::vector<std::pair<int, int>>& 
             continue;
         }
         if (du->get_links().at(v)->is_busy() || dv->get_links().at(u)->is_busy() || du->pending_chunks_count(v) > 0 ||
-            dv->pending_chunks_count(u) > 0) {
+            dv->pending_chunks_count(u) > 0 ||
+            (fluid_ && (flow_engine_->active_flows(du->get_links().at(v).get()) > 0 ||
+                        flow_engine_->active_flows(dv->get_links().at(u).get()) > 0))) {
             // Structural invariant broken: the owning job is drained, so its
             // OCS link cannot be carrying or queueing traffic. Leak the link
             // rather than erase it under an outstanding link-free event

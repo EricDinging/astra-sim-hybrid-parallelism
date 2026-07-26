@@ -42,6 +42,14 @@ class Device : public std::enable_shared_from_this<Device> {
 
     static std::function<void()> increment_callback;  // Callback to be invoked when a link becomes free
 
+    /// Fluid mode: notifies the FlowEngine that a link finished its
+    /// reconfig-downtime window (link_become_free). Default no-op.
+    static std::function<void(Link*)> link_freed_hook;
+
+    /// Fluid mode: active-flow count on a link (the fluid analogue of
+    /// Link::is_busy for the scoped-reconfigure guard). Default 0.
+    static std::function<int(const Link*)> flow_count_probe;
+
     /**
      * Get id of the device.
      *
