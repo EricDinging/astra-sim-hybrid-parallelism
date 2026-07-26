@@ -191,7 +191,10 @@ void FlowEngine::transmission_finished(void* const arg) noexcept {
 
     auto chunk = std::move(flow.chunk);
     const auto latency = flow.total_latency;
-    self->flows.erase(it);
+    // Erase by key, not by `it`: increment_callback() above can reentrantly
+    // complete a drain -> retune -> resume() -> begin_flow() -> flows.emplace(),
+    // and a rehash invalidates `it` (only references survive rehash).
+    self->flows.erase(guard->flow_id);
     self->recompute_flows_on(touched);
 
     if (latency > 0) {

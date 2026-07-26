@@ -55,7 +55,13 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     // process pending chunks if one exist
     if (pending_chunks[link_id].empty() ||
         pending_chunks[link_id].front()->get_topology_iteration() > topology_iteration) {
-        increment_callback();
+        // Each link must report drained exactly once. If fluid flows are still
+        // registered on this link (link_freed_hook above may have un-parked some
+        // of them), the FlowEngine's own link-empty notification is the single
+        // report for this link, so skip ours to avoid double-counting.
+        if (flow_count_probe(links[link_id].get()) == 0) {
+            increment_callback();
+        }
         return;
     }
 
