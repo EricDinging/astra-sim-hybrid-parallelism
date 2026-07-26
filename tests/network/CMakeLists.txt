@@ -1,0 +1,4 @@
+add_executable(test_flow_engine test_flow_engine.cc)
+target_link_libraries(test_flow_engine PRIVATE AstraSim Analytical_Reconfigurable gtest_main)
+target_include_directories(test_flow_engine PRIVATE ${CMAKE_SOURCE_DIR})
+gtest_discover_tests(test_flow_engine)

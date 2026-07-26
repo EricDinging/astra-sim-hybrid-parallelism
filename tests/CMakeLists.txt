@@ -6,5 +6,6 @@ include(GoogleTest)
 
 add_subdirectory(scheduling)
 add_subdirectory(system)
+add_subdirectory(network)
 # Future per-module unit-test subdirs land here:
 #   add_subdirectory(workload)
