@@ -98,7 +98,8 @@ void JobStatsWriter::emit_jobs_csv(const JobRegistry& registry) {
         std::exit(1);
     }
     out << "job_id,status,num_ranks,shape,arrival_time_ns,"
-           "execution_time_ns,completed_time_ns,queue_wait_ns,jct_ns\n";
+           "execution_time_ns,completed_time_ns,queue_wait_ns,jct_ns,"
+           "relaxed,relax_link_load\n";
 
     // job_id-ordered output for determinism.
     std::map<int, const JobInstance*> ordered;
@@ -124,7 +125,7 @@ void JobStatsWriter::emit_jobs_csv(const JobRegistry& registry) {
         if (ji->completed_time.has_value()) {
             out << (ji->completed_time.value() - ji->arrival_time);
         }
-        out << "\n";
+        out << "," << (ji->relaxed ? 1 : 0) << "," << ji->relax_link_load << "\n";
     }
 }
 

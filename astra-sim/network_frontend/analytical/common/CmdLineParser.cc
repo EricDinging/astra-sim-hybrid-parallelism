@@ -85,6 +85,19 @@ void CmdLineParser::define_options() noexcept {
         "rfold-multifold",
         "Enable multi-fold (serpentine) variant enumeration (rfold)",
         cxxopts::value<bool>()->default_value("true"))(
+        "rfold-relax",
+        "Shape-constraint relaxation (rfold): a job no fold variant places "
+        "right now, after waiting rfold-relax-min-wait, takes a "
+        "reconfiguration-aware degraded placement (brick-split slabs with "
+        "OCS-wired seams, then SFC scatter). Default OFF: harmful on the "
+        "unidirectional fabric (~+2% mean JCT at sustained load); intended "
+        "for --bidi, where it wins up to 11x at the capacity knee and beats "
+        "sfc at saturation.",
+        cxxopts::value<bool>()->default_value("false"))(
+        "rfold-relax-min-wait",
+        "Minimum accrued queue wait (seconds) before a job may take a "
+        "relaxed placement; screens jobs a fold would serve shortly anyway",
+        cxxopts::value<double>()->default_value("5"))(
         "switch-theta", "DynamicSwitch backlog threshold",
         cxxopts::value<int>()->default_value("1"))(
         "failure-prob",

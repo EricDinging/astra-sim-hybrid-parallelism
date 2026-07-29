@@ -52,6 +52,13 @@ class JobInstance {
     // Set from PlacementResult::ordered_rings at placement (Decision D4).
     bool ordered_rings = false;
 
+    // Set from PlacementResult::relaxed at placement: this job was placed by
+    // rfold's shape-constraint relaxation (scatter fallback). Summed over
+    // running jobs to enforce the relaxation budget.
+    bool relaxed = false;
+    // DOR-hop link-load price of the relaxed placement (0 when !relaxed).
+    int relax_link_load = 0;
+
     // The wiring this job was placed with (empty for non-reconfiguring
     // policies). Kept so detach_job can hand the same plan back to the
     // ReconfigHook for teardown -- the plan is the ownership record of the

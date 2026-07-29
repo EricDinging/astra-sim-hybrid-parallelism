@@ -39,6 +39,17 @@ struct PlacementResult {
     // policy. SchedRuntime applies it via a ReconfigHook before firing
     // workloads.
     ReconfigPlan reconfig_plan;
+    // True when rfold placed this job by relaxing the fold-shape constraint
+    // (scatter fallback, all edges on standard DOR). SchedRuntime copies it to
+    // the JobInstance so the concurrently-relaxed footprint can be budgeted.
+    bool relaxed = false;
+    // Link-load price of a relaxed placement: total unidirectional-DOR hops
+    // its comm-ring edges occupy on the shared fabric. A folded job's owned
+    // 1-hop edges cost 0. Denominates the relaxation budget in the units the
+    // damage actually occurs in (a scattered ring edge on an 8^3 torus rides
+    // ~12 links, not 1 -- rank-count budgets underprice scatter by that
+    // factor).
+    int relax_link_load = 0;
 };
 
 struct PlacementConfig {
@@ -49,6 +60,25 @@ struct PlacementConfig {
     int rfold_search_budget = 50000;              // --rfold-search-budget
     bool rfold_multifold = true;                  // --rfold-multifold
     int switch_theta = 1;  // DynamicSwitch backlog threshold
+    // Shape-constraint relaxation, master switch (--rfold-relax): a job no
+    // fold variant places right now, after waiting >= min_wait, takes a
+    // reconfiguration-aware degraded placement (brick-split slabs with
+    // OCS-wired seams, then SFC scatter). Need + stall floor are the whole
+    // gate: full-length bidi validation (design doc 10) showed every extra
+    // cap (link-load budget, stretch floor, clustered fallback) is neutral
+    // or harmful, so they were removed. DEFAULT OFF: on the unidirectional
+    // fabric the feature is measurably harmful at sustained load (~+2%
+    // mean JCT, doc 6.2); enable it with --bidi, where it wins up to 11x
+    // at the capacity knee and beats sfc at saturation.
+    bool rfold_relax = false;  // --rfold-relax
+    // Stall floor: a job may relax only after waiting at least this many
+    // seconds -- the one load-bearing knob (doc 10): low-load queues never
+    // reach it (provably inert), stalled queues pass it quickly.
+    double rfold_relax_min_wait = 5.0;  // --rfold-relax-min-wait
+    // Mirrors --bidi (routing-layer flag): relaxed residual edges then ride
+    // the shorter arc per dimension, so RFold prices link load in min-arc
+    // hops and doubles the budget denominator (6N directed links, not 3N).
+    bool bidi = false;
 };
 
 struct JobArrival {

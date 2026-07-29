@@ -11,6 +11,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/PlacementPolicy.hh"
 #include "astra-sim/scheduling/PlacementRanker.hh"
 #include "astra-sim/scheduling/SchedContext.hh"
+#include "astra-sim/scheduling/SpaceFillingCurve.hh"
 
 #include <array>
 #include <map>
@@ -41,7 +42,10 @@ class RFold : public PlacementPolicy {
           selector_(std::move(selector)),
           scorer_(std::move(scorer)),
           ranker_(std::move(ranker)),
-          multifold_(cfg.rfold_multifold) {}
+          multifold_(cfg.rfold_multifold),
+          relax_on_(cfg.rfold_relax),
+          relax_min_wait_ns_(static_cast<Tick>(cfg.rfold_relax_min_wait * 1e9)),
+          bidi_(cfg.bidi) {}
     PlacementResult try_place(const JobInstance& job,
                               const ClusterView& view) override;
     std::string name() const override {
@@ -78,6 +82,17 @@ class RFold : public PlacementPolicy {
     std::map<std::array<int, 3>, bool> idle_ok_;
     const SchedContext* runtime_ctx_ = nullptr;
     bool multifold_;
+    // Shape-constraint relaxation (--rfold-relax): when no fold variant
+    // places a job that has waited >= the stall floor, fall back to the
+    // lowest-link-load relaxed candidate (brick-split slabs with OCS-wired
+    // seams, then SFC scatter). Need + stall floor are the whole gate.
+    bool relax_on_;
+    Tick relax_min_wait_ns_;
+    // Bidirectional-DOR fabric (--bidi): relaxed residual edges ride the
+    // shorter arc per dimension, so link-load pricing (telemetry) must use
+    // min-arc hops.
+    bool bidi_;
+    SpaceFillingCurve relax_sfc_;
 };
 
 }  // namespace Scheduling

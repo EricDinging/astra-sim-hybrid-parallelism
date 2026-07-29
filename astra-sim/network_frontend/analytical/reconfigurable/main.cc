@@ -479,6 +479,10 @@ int main(int argc, char* argv[]) {
         cmd_line_parser.get<std::string>("rfold-ranking");
     placement_cfg.rfold_multifold =
         cmd_line_parser.get<bool>("rfold-multifold");
+    placement_cfg.rfold_relax = cmd_line_parser.get<bool>("rfold-relax");
+    placement_cfg.rfold_relax_min_wait =
+        cmd_line_parser.get<double>("rfold-relax-min-wait");
+    placement_cfg.bidi = bidi;
     placement_cfg.switch_theta = cmd_line_parser.get<int>("switch-theta");
     auto policy = AstraSim::Scheduling::make_placement_policy(placement_policy,
                                                               placement_cfg);
