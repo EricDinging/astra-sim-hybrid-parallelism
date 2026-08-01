@@ -19,8 +19,6 @@ void ETFeeder::removeNode(const NodeId& node_id) {
   }
 }
 
-
-
 std::vector<int> ETFeeder::traverse_comm_group() {
   std::vector<int> comm_group_ids;
   // Destructively consume the dependency graph.
@@ -41,7 +39,7 @@ std::vector<int> ETFeeder::traverse_comm_group() {
     if (node_name.size() >= 4) {
       std::string suffix = node_name.substr(node_name.size() - 4);
       if (suffix == "SEND" || suffix == "RECV") {
-      // Perform any additional logic if needed
+        // Perform any additional logic if needed
         int comm_group_id = -1;
         comm_group_ids.push_back(comm_group_id);
       }
@@ -54,7 +52,8 @@ std::vector<int> ETFeeder::traverse_comm_group() {
 
 // std::vector<int> ETFeeder::traverse_comm_group() {
 //   std::vector<int> comm_group_ids;
-//   std::unordered_set<int> seen; // deduplicate while preserving encounter order
+//   std::unordered_set<int> seen; // deduplicate while preserving encounter
+//   order
 //   // Destructively consume the dependency graph.
 //   while (this->hasNodesToIssue()) {
 //     auto node = this->getNextIssuableNode();
@@ -92,7 +91,15 @@ void ETFeeder::pushBackIssuableNode(const NodeId& node_id) {
 }
 
 std::shared_ptr<ETFeederNode> ETFeeder::lookupNode(const NodeId& node_id) {
-  return std::make_shared<ETFeederNode>(*this, node_id);
+  // Reuse one ETFeederNode per node so its memoized fields (cached_type,
+  // cached_is_cpu_op, weak chakra_node ref) survive across lookups. Memory
+  // is one small object per node per feeder, same order as index_map.
+  auto it = this->node_obj_cache_.find(node_id);
+  if (it != this->node_obj_cache_.end())
+    return it->second;
+  auto node = std::make_shared<ETFeederNode>(*this, node_id);
+  this->node_obj_cache_.emplace(node_id, node);
+  return node;
 }
 
 void ETFeeder::freeChildrenNodes(const NodeId& node_id) {

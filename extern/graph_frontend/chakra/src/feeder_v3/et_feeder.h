@@ -47,10 +47,15 @@ class ETFeeder {
       throw std::runtime_error("Failed to open file " + file_path);
     this->build_index_dependancy_cache();
     this->graph_sanity_check(); // make sure graph is sane
+    // After the sanity check only the enabled layer is ever read; drop the
+    // data/ctrl layers to save memory (matters at thousands of concurrent
+    // rank feeders).
+    this->dependancy_resolver.free_load_time_layers();
   }
 
   ~ETFeeder() {
     // no explict cache release. Will be kicked-out natually.
+    node_obj_cache_.clear();
     index_map.clear();
     chakra_file.close();
   }
@@ -98,6 +103,10 @@ class ETFeeder {
   static Cache<std::tuple<ETFeederId, NodeId>, ChakraNode> _node_cache;
 
   std::unordered_map<NodeId, std::streampos> index_map;
+  // Per-feeder node-object cache: keeps ETFeederNode memo fields alive
+  // across lookupNode calls. Single-threaded simulator, so no lock (see
+  // cache.h note).
+  std::unordered_map<NodeId, std::shared_ptr<ETFeederNode>> node_obj_cache_;
   DependancyResolver dependancy_resolver;
 
   void build_index_dependancy_cache();

@@ -92,10 +92,15 @@ class DependancyResolver {
   void finish_node(const NodeId& node);
   void resolve_dependancy_free_nodes();
   // See _DependancyLayer::capture_pristine()/reset(): snapshot the sealed
-  // graph, and rewind all three layers to it at a drained iteration
-  // boundary (avoids re-parsing the trace to rebuild the resolver).
+  // graph, and rewind to it at a drained iteration boundary (avoids
+  // re-parsing the trace to rebuild the resolver). Only the enabled layer
+  // is snapshotted/rewound: it is the only layer consumed at runtime.
   void capture_pristine();
   void reset();
+  // Drop the data/ctrl layers once load-time sanity checks are done; they
+  // are never read afterwards (all runtime queries route to the enabled
+  // layer). Saves memory at high rank counts.
+  void free_load_time_layers();
 
   const std::unordered_set<NodeId>& get_dependancy_free_nodes() const;
   const std::unordered_set<NodeId>& get_ongoing_nodes() const;

@@ -194,21 +194,20 @@ void DependancyResolver::add_node(const ChakraNode& node) {
   this->enabled_dependancy.add_node(node_id, enabled_parents);
 }
 
+// Runtime state transitions touch only the enabled layer: after the
+// load-time graph_sanity_check nothing ever reads the data/ctrl layers
+// (every runtime query -- get_dependancy_free_nodes, get_ongoing_nodes,
+// get_children -- routes to enabled), and free_load_time_layers() drops
+// them right after construction.
 void DependancyResolver::take_node(const NodeId& node) {
-  this->data_dependancy.take_node(node);
-  this->ctrl_dependancy.take_node(node);
   this->enabled_dependancy.take_node(node);
 }
 
 void DependancyResolver::push_back_node(const NodeId& node) {
-  this->data_dependancy.push_back_node(node);
-  this->ctrl_dependancy.push_back_node(node);
   this->enabled_dependancy.push_back_node(node);
 }
 
 void DependancyResolver::finish_node(const NodeId& node) {
-  this->data_dependancy.finish_node(node);
-  this->ctrl_dependancy.finish_node(node);
   this->enabled_dependancy.finish_node(node);
 }
 
@@ -219,15 +218,22 @@ void DependancyResolver::resolve_dependancy_free_nodes() {
 }
 
 void DependancyResolver::capture_pristine() {
-  this->data_dependancy.capture_pristine();
-  this->ctrl_dependancy.capture_pristine();
+  // Only the enabled layer is consumed at runtime (see take/finish above),
+  // so only it needs a pristine snapshot for reset(). The data/ctrl layers
+  // may already be freed by free_load_time_layers() at this point.
   this->enabled_dependancy.capture_pristine();
 }
 
 void DependancyResolver::reset() {
-  this->data_dependancy.reset();
-  this->ctrl_dependancy.reset();
   this->enabled_dependancy.reset();
+}
+
+void DependancyResolver::free_load_time_layers() {
+  // The data/ctrl layers exist only to build the enabled layer and to run
+  // the load-time graph_sanity_check; nothing reads them afterwards. Free
+  // their edge maps to cut per-feeder memory.
+  this->data_dependancy = _DependancyLayer();
+  this->ctrl_dependancy = _DependancyLayer();
 }
 
 const std::unordered_set<NodeId>& DependancyResolver::

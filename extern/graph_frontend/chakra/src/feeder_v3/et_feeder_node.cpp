@@ -50,8 +50,9 @@ ChakraAttr::ValueCase ETFeederNode::get_attr_type(
 }
 
 NodeId ETFeederNode::id() const {
-  auto node = this->get_chakra_node();
-  return node->id();
+  // node_id is the key the node was looked up with (== protobuf node.id());
+  // no need to fetch the whole protobuf message.
+  return this->node_id;
 }
 
 std::string ETFeederNode::name() const {
