@@ -41,6 +41,21 @@ class PlacementRanker {
     virtual bool scatter_never_beats_closed() const {
         return true;
     }
+    // Lazy-ranking hook: true iff `incumbent` strictly beats EVERY possible
+    // candidate whose (frag_delta, blocks_touched) equal the given values,
+    // regardless of the candidate's remaining keys. Selectors then skip the
+    // expensive per-candidate construction (OCS realizability, wirable
+    // subset, scorer cost) for candidates that already lost. Only rankers
+    // whose order is lexicographic with exactly this prefix can say true;
+    // the default (false) means "always build and compare fully".
+    virtual bool prefix_beats(const Placement& incumbent,
+                              int frag_delta,
+                              int blocks_touched) const {
+        (void)incumbent;
+        (void)frag_delta;
+        (void)blocks_touched;
+        return false;
+    }
 };
 
 // Comm-class ranking (spec 2026-06-11 §3). Hard class order
@@ -70,6 +85,16 @@ class FragFirst : public PlacementRanker {
     bool better(const Placement& a, const Placement& b) const override;
     bool scatter_never_beats_closed() const override {
         return false;  // tiled placements compete as equals, always searched
+    }
+    // The order is strictly lexicographic (frag_delta, blocks_touched,
+    // dor_edges, cost), so an incumbent strictly ahead on the first two keys
+    // beats any candidate with this prefix no matter its dor_edges/cost.
+    bool prefix_beats(const Placement& incumbent,
+                      int frag_delta,
+                      int blocks_touched) const override {
+        return incumbent.frag_delta < frag_delta ||
+               (incumbent.frag_delta == frag_delta &&
+                incumbent.blocks_touched < blocks_touched);
     }
 };
 

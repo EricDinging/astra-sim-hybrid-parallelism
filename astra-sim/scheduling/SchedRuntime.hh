@@ -15,7 +15,10 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/PlacementPolicy.hh"
 #include "astra-sim/scheduling/SchedContext.hh"
 
+#include <array>
+#include <cstdint>
 #include <functional>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_set>
@@ -111,6 +114,13 @@ class SchedRuntime {
     void remove_from_pending(JobInstance* job);
     bool simulation_done() const;
     ClusterView snapshot_cluster_view() const;
+    // One placement attempt for `job`: installs/clears the SchedContext
+    // around placement_->try_place. When the policy declares
+    // defer_is_shape_sticky(), a DEFER outcome is memoized per shape and
+    // returned without re-running the search until the next completion frees
+    // NPUs (the free set only grows at detach, and a same-or-smaller free
+    // set cannot flip DEFER to PLACED). All sweeps route through this.
+    PlacementResult attempt_place(JobInstance* job);
 
     NetworkAnalytical::EventQueue* event_queue_;
     std::vector<Sys*> all_sys_;
@@ -131,6 +141,11 @@ class SchedRuntime {
     JobRegistry registry_;
     std::unordered_set<int> busy_npus_;
     std::unordered_set<int> failed_npus_;
+    // DEFER memo (see attempt_place): shape -> the detach epoch at which it
+    // last deferred. Bumped in detach_job -- the only event that frees NPUs
+    // (the failed set is fixed at startup) -- which invalidates every entry.
+    std::map<std::array<int, 3>, std::uint64_t> defer_memo_;
+    std::uint64_t detach_epoch_ = 0;
     std::function<void()> drain_diagnostic_;  // deadlock post-mortem hook
     std::unique_ptr<DurationEstimator> ctx_estimator_;
     // main.cc sets this from the --preserve-placement-order CLI flag (which

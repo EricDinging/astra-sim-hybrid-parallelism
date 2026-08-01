@@ -215,6 +215,10 @@ void SchedRuntime::detach_job(JobInstance* job) {
         reconfig_hook_->release(job->reconfig_plan);
     }
 
+    // NPUs were freed (and any OCS wiring released): every memoized DEFER is
+    // now stale.
+    ++detach_epoch_;
+
     sweep();
 }
 
@@ -236,6 +240,32 @@ void SchedRuntime::commit_placement(JobInstance* job,
     place_job(job, r.npus);
 }
 
+PlacementResult SchedRuntime::attempt_place(JobInstance* job) {
+    const bool sticky = placement_->defer_is_shape_sticky();
+    if (sticky) {
+        auto it = defer_memo_.find(job->shape);
+        if (it != defer_memo_.end() && it->second == detach_epoch_) {
+            // This shape deferred with a free set that was a superset of (or
+            // equal to) the current one; re-running the search cannot place.
+            return PlacementResult{PlacementOutcome::DEFER,
+                                   {},
+                                   "memoized DEFER (no NPUs freed since last "
+                                   "attempt)"};
+        }
+    }
+    SchedContext ctx;
+    if (placement_->wants_sched_context()) {
+        ctx = make_sched_context(job);
+        placement_->set_sched_context(&ctx);
+    }
+    auto r = placement_->try_place(*job, snapshot_cluster_view());
+    placement_->set_sched_context(nullptr);
+    if (sticky && r.outcome == PlacementOutcome::DEFER) {
+        defer_memo_[job->shape] = detach_epoch_;
+    }
+    return r;
+}
+
 void SchedRuntime::sweep() {
     if (admission_->uses_backfill()) {
         easy_sweep();
@@ -252,13 +282,7 @@ void SchedRuntime::sweep() {
         if (job == nullptr) {
             break;
         }
-        SchedContext ctx;
-        if (placement_->wants_sched_context()) {
-            ctx = make_sched_context(job);
-            placement_->set_sched_context(&ctx);
-        }
-        auto r = placement_->try_place(*job, snapshot_cluster_view());
-        placement_->set_sched_context(nullptr);
+        auto r = attempt_place(job);
         if (r.outcome == PlacementOutcome::PLACED) {
             commit_placement(job, r);
         } else if (r.outcome == PlacementOutcome::DROP) {
@@ -292,13 +316,7 @@ void SchedRuntime::greedy_sweep() {
             break;
         }
         eligible.erase(std::find(eligible.begin(), eligible.end(), job));
-        SchedContext ctx;
-        if (placement_->wants_sched_context()) {
-            ctx = make_sched_context(job);
-            placement_->set_sched_context(&ctx);
-        }
-        auto r = placement_->try_place(*job, snapshot_cluster_view());
-        placement_->set_sched_context(nullptr);
+        auto r = attempt_place(job);
         if (r.outcome == PlacementOutcome::PLACED) {
             commit_placement(job, r);
         } else if (r.outcome == PlacementOutcome::DROP) {
@@ -326,13 +344,7 @@ void SchedRuntime::easy_sweep() {
     // dropping any unplaceable head along the way.
     while (!pending_.empty()) {
         JobInstance* head = fcfs_head();
-        SchedContext ctx;
-        if (placement_->wants_sched_context()) {
-            ctx = make_sched_context(head);
-            placement_->set_sched_context(&ctx);
-        }
-        auto r = placement_->try_place(*head, snapshot_cluster_view());
-        placement_->set_sched_context(nullptr);
+        auto r = attempt_place(head);
         if (r.outcome == PlacementOutcome::PLACED) {
             commit_placement(head, r);
             continue;
@@ -387,13 +399,7 @@ void SchedRuntime::easy_sweep() {
             if (!backfill_safe(res, cand_end, cand->num_ranks, extra)) {
                 continue;
             }
-            SchedContext ctx;
-            if (placement_->wants_sched_context()) {
-                ctx = make_sched_context(cand);
-                placement_->set_sched_context(&ctx);
-            }
-            auto cr = placement_->try_place(*cand, snapshot_cluster_view());
-            placement_->set_sched_context(nullptr);
+            auto cr = attempt_place(cand);
             if (cr.outcome == PlacementOutcome::PLACED) {
                 commit_placement(cand, cr);
                 // Consume reservation slack only for a job admitted via the

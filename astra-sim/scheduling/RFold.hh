@@ -14,6 +14,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/SpaceFillingCurve.hh"
 
 #include <array>
+#include <cstdlib>
 #include <map>
 #include <memory>
 #include <unordered_set>
@@ -56,6 +57,14 @@ class RFold : public PlacementPolicy {
     }
     bool wants_sched_context() const override {
         return ranker_->wants_context();
+    }
+    // DEFER depends only on (shape, free set) and is monotone in the free
+    // set -- EXCEPT when shape relaxation is on (the outcome flips once a
+    // job's wait crosses the stall floor, so it is time-dependent) or the
+    // wired-probe diagnostic is active (try_place then has an observable
+    // side effect at long-wait events that a skipped call would suppress).
+    bool defer_is_shape_sticky() const override {
+        return !relax_on_ && std::getenv("RFOLD_WIRED_PROBE") == nullptr;
     }
 
   private:

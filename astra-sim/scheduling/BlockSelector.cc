@@ -83,7 +83,8 @@ Placement build_placement(const std::vector<int>& rm,
                           const BlockModel& cm,
                           const FragmentationScorer& scorer,
                           const std::vector<std::pair<int, int>>& ring,
-                          const std::unordered_set<int>& free) {
+                          int frag_delta,
+                          int blocks_touched) {
     auto oe = FootprintRouter::ocs_edges(ring, rm, cm);
     // RDCN mode (DOR-tolerant glue): wire only the realizable, port-disjoint
     // subset; the rest ride the shared fabric and are charged as dor_edges.
@@ -106,9 +107,9 @@ Placement build_placement(const std::vector<int>& rm,
     ScoredPlacement sp{&rm, &dims, v.footprint};
     double cost = scorer.cost(sp);
     Placement p{rm, v.footprint, std::move(wired), cost};
-    p.blocks_touched = count_blocks(rm, cm);
+    p.blocks_touched = blocks_touched;
     p.dor_edges = dor;
-    p.frag_delta = frag_delta_of(rm, cm, free);
+    p.frag_delta = frag_delta;
     p.identity = v.identity;
     p.ring_closes = v.ring_closes;
     p.scattered = true;
@@ -132,6 +133,15 @@ std::optional<Placement> ContiguousFirst::select(
     scan_contiguous_fits(
         v, dims, free, K, any_fits,
         [&](const std::vector<int>& cand, const std::array<int, 3>& pf) {
+            // Cheap ranking prefix first: when the incumbent already wins on
+            // (frag_delta, blocks_touched) alone, skip the expensive OCS
+            // realizability / wirable-subset / scorer work entirely (exact
+            // for lexicographic rankers; others always take the full path).
+            const int frag = frag_delta_of(cand, cm, free);
+            const int blocks = count_blocks(cand, cm);
+            if (result && ranker.prefix_beats(*result, frag, blocks)) {
+                return;
+            }
             auto oe = FootprintRouter::ocs_edges(ring_edges, cand, cm);
             // Wire OCS only where it is realizable (opposite block faces at
             // the same position). Ring edges the OCS cannot serve at this
@@ -159,9 +169,9 @@ std::optional<Placement> ContiguousFirst::select(
             ScoredPlacement sp{&cand, &dims, pf};
             double c = scorer.cost(sp);
             Placement p{cand, pf, std::move(realizable), c};
-            p.blocks_touched = count_blocks(cand, cm);
+            p.blocks_touched = blocks;
             p.dor_edges = dor;
-            p.frag_delta = frag_delta_of(cand, cm, free);
+            p.frag_delta = frag;
             p.identity = v.identity;
             p.ring_closes = v.ring_closes;
             if (!result || ranker.better(p, *result)) {
@@ -219,7 +229,15 @@ std::optional<Placement> MinReconfig::select(
         if (!rm) {
             continue;
         }
-        auto p = build_placement(*rm, pv, dims, cm, scorer, ring_edges, free);
+        // Same cheap-prefix shortcut as the contiguous scan: skip the OCS /
+        // wirable-subset / scorer work for a rotation that already lost.
+        const int frag = frag_delta_of(*rm, cm, free);
+        const int blocks = count_blocks(*rm, cm);
+        if (s && ranker.prefix_beats(*s, frag, blocks)) {
+            continue;
+        }
+        auto p = build_placement(*rm, pv, dims, cm, scorer, ring_edges, frag,
+                                 blocks);
         if (!s || ranker.better(p, *s)) {
             s = std::move(p);
         }

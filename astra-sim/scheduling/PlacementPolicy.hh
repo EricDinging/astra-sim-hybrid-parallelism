@@ -38,6 +38,16 @@ class PlacementPolicy {
     virtual bool wants_sched_context() const {
         return false;
     }
+    // True iff a DEFER outcome is a pure, side-effect-free function of
+    // (job shape, free set) AND monotone in the free set (a smaller free set
+    // can never flip DEFER to PLACED). SchedRuntime then memoizes DEFER per
+    // shape and skips re-running the search until a job completion frees
+    // NPUs. Opt-in per policy: randomized policies (RNG consumed per call)
+    // and policies with time-dependent outcomes or in-call side effects must
+    // return false.
+    virtual bool defer_is_shape_sticky() const {
+        return false;
+    }
 };
 
 // Common entry guards for 3-D torus placement policies: DROP for non-3-D
