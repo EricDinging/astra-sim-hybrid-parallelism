@@ -81,8 +81,13 @@ def build_jobs_dir(w: str, exp: str, combo_dir: str, load: str) -> str:
     seed-pinned arrivals); an flock serializes the concurrent first-builders."""
     jobs = os.path.join(w, "runs", exp, f"jobs-load{load}")
     lock_path = os.path.join(w, "runs", exp, f".jobs-load{load}.lock")
+    done_marker = os.path.join(jobs, ".complete")
     with open(lock_path, "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        if os.path.exists(done_marker):
+            # Already fully built: re-running make_jobs would unlink+relink
+            # every entry, racing sims already reading this shared dir.
+            return jobs
         subprocess.run(
             [
                 sys.executable,
@@ -97,6 +102,8 @@ def build_jobs_dir(w: str, exp: str, combo_dir: str, load: str) -> str:
             check=True,
             stdout=subprocess.DEVNULL,
         )
+        with open(done_marker, "w"):
+            pass
     return jobs
 
 

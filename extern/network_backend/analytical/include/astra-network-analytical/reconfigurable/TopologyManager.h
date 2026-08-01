@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 #include "common/EventQueue.h"
 #include "reconfigurable/Chunk.h"
 #include "reconfigurable/Device.h"
+#include "reconfigurable/FlowEngine.h"
 #include "reconfigurable/Link.h"
 #include "reconfigurable/Router.h"
 #include "reconfigurable/Topology.h"
@@ -40,6 +41,12 @@ class TopologyManager {
                     bool is_torus = false,
                     bool bidi = false,
                     bool fullmesh = false) noexcept;
+
+    // set_fluid_mode(true) installs closures into Device's process-wide
+    // static hooks that capture `this`; without a destructor, a destroyed
+    // TopologyManager leaves those closures dangling and the next
+    // link_become_free invokes them (use-after-free).
+    ~TopologyManager() noexcept;
 
     std::shared_ptr<Device> get_device(const DeviceId deviceId) noexcept;
 
@@ -147,6 +154,11 @@ class TopologyManager {
 
     bool is_reconfiguring() const noexcept;
 
+    /// Select the congestion model. Must be called after construction and
+    /// before the first send. true = fluid (FlowEngine); false = serial
+    /// store-and-forward (default, byte-identical to the historical path).
+    void set_fluid_mode(bool enable) noexcept;
+
   protected:
     /// number of total devices in the topology
     /// device includes non-NPU devices such as switches
@@ -224,6 +236,10 @@ class TopologyManager {
 
     /// NPUs marked failed: never a route endpoint or transit hop.
     std::unordered_set<int> failed_npus;
+
+    /// Fluid congestion model engine (used only when fluid_ is true).
+    std::unique_ptr<FlowEngine> flow_engine_;
+    bool fluid_ = false;
 };
 
 }  // namespace NetworkAnalyticalReconfigurable
