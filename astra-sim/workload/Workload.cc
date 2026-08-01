@@ -15,6 +15,7 @@ LICENSE file in the root directory of this source tree.
 #include <json/json.hpp>
 
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 #include <queue>
 #include <stdlib.h>
@@ -65,6 +66,7 @@ Workload::Workload(Sys* sys, string et_filename, string comm_group_filename) {
     this->comm_group_list = temp_et_feeder->traverse_comm_group();
     delete temp_et_feeder;
     this->et_feeder = new ETFeeder(workload_filename);
+    rebuild_dep_free_mirror();
     this->workload_filename_ = workload_filename;
     // Legacy one-shot path: always a single iteration (total_iterations_ stays
     // at its default of 1).
@@ -225,6 +227,9 @@ Workload::Workload(Sys* sys,
     // fresh-parse resolver state (the same in-memory rewind used per training
     // iteration by advance_to_next_iteration) without a second protobuf parse.
     this->et_feeder->reset_dependancy();
+    // The Kahn scan above ran before the mirror existed; seed it from the
+    // rewound (pristine) free set.
+    rebuild_dep_free_mirror();
     this->workload_filename_ = workload_filename;
     // Replay the single-iteration trace once per training iteration. Clamp to
     // >= 1 so a malformed/zero count degrades to single-iteration rather than
@@ -463,7 +468,24 @@ void Workload::issue_pytorch_pg_metadata(
 }
 
 void Workload::issue_dep_free_nodes() {
-    auto& dependancy_resolver = this->et_feeder->getDependancyResolver();
+    // Belt-and-braces: the ordered mirror must equal the resolver's truth on
+    // every entry; a divergence means a resolver mutation slipped past the
+    // mirror maintenance in this file. NOTE this project's release build does
+    // NOT define NDEBUG (build/astra_analytical/CMakeLists.txt overrides
+    // CMAKE_CXX_FLAGS_RELEASE to "-O3 -g"), so asserts are live in production
+    // binaries. Keep the always-on tripwire O(1) -- any single missed mirror
+    // insert/erase changes the size -- and run the O(F) element-wise check
+    // only in the sanitizer (Debug) build, where an O(F) scan per event would
+    // not defeat the point of the mirror.
+    assert(this->et_feeder->getDependancyResolver()
+               .get_dependancy_free_nodes()
+               .size() == dep_free_mirror_.size());
+#if !defined(NDEBUG) && defined(__SANITIZE_ADDRESS__)
+    for (const uint64_t node_id :
+         this->et_feeder->getDependancyResolver().get_dependancy_free_nodes()) {
+        assert(dep_free_mirror_.count(node_id) != 0U);
+    }
+#endif
 
     // Some nodes complete synchronously inside issue() (skip_invalid:
     // METADATA and INVALID nodes, zero-tensor-size COMP): finish_node frees
@@ -480,21 +502,18 @@ void Workload::issue_dep_free_nodes() {
         rescan = false;
 
         // Ascending, deduplicated order is required for deterministic,
-        // rank-invariant issue. A sorted vector gives the same order as the
-        // previous std::set with one allocation instead of a red-black-tree
-        // node per free node, on this every-event path; membership below uses
-        // binary_search.
-        const auto& free_now = dependancy_resolver.get_dependancy_free_nodes();
-        std::vector<uint64_t> dependancy_free_nodes;
-        dependancy_free_nodes.reserve(free_now.size());
-        for (const auto node_id : free_now) {
-            dependancy_free_nodes.push_back(node_id);
-        }
-        std::sort(dependancy_free_nodes.begin(), dependancy_free_nodes.end());
+        // rank-invariant issue. dep_free_mirror_ (kept in lockstep with the
+        // resolver's unordered truth at every mutation site) already iterates
+        // in that order, so no per-event copy + O(F log F) sort of the hash
+        // set. Copy it into the reusable snapshot buffer (capacity persists
+        // across calls) because synchronous completions inside issue() mutate
+        // the mirror mid-pass; membership below uses binary_search.
+        dep_free_snapshot_.assign(dep_free_mirror_.begin(),
+                                  dep_free_mirror_.end());
 
         bool success = true;
         bool issued_any = false;
-        for (const auto node_id : dependancy_free_nodes) {
+        for (const auto node_id : dep_free_snapshot_) {
             std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
             // Grouped collectives must additionally be admitted in the
             // rank-invariant per-group order; see comm_admission_in_order. A
@@ -520,20 +539,44 @@ void Workload::issue_dep_free_nodes() {
 
         // A new dependency-free node can only appear via a synchronous
         // finish_node inside issue(); if nothing was issued this pass the
-        // resolver's free set is unchanged from the snapshot, so this scan
-        // would always find nothing. Skip it in that (common, fully-blocked)
-        // case -- byte-identical, since rescan would stay false anyway.
+        // free set is unchanged from the snapshot, so this scan would always
+        // find nothing. Skip it in that (common, fully-blocked) case --
+        // byte-identical, since rescan would stay false anyway.
         if (issued_any) {
-            for (const auto node_id :
-                 dependancy_resolver.get_dependancy_free_nodes()) {
-                if (!std::binary_search(dependancy_free_nodes.begin(),
-                                        dependancy_free_nodes.end(), node_id)) {
+            for (const auto node_id : dep_free_mirror_) {
+                if (!std::binary_search(dep_free_snapshot_.begin(),
+                                        dep_free_snapshot_.end(), node_id)) {
                     rescan = true;
                     break;
                 }
             }
         }
     }
+}
+
+void Workload::dep_finish_node(uint64_t node_id) {
+    auto& dependancy_resolver = this->et_feeder->getDependancyResolver();
+    // Snapshot the children before finish_node consumes the node's edge
+    // buckets (same pattern as the constructor's Kahn scan), then mirror
+    // exactly the children it freed: a node can only become dependency-free
+    // when its last unfinished parent finishes, so newly-free nodes are
+    // always children of `node_id`.
+    const auto children =
+        dependancy_resolver.get_enabled_dependancy().get_children(node_id);
+    dependancy_resolver.finish_node(node_id);
+    const auto& free_now = dependancy_resolver.get_dependancy_free_nodes();
+    for (const uint64_t child : children) {
+        if (free_now.count(child) != 0U) {
+            dep_free_mirror_.insert(child);
+        }
+    }
+}
+
+void Workload::rebuild_dep_free_mirror() {
+    const auto& free_now =
+        this->et_feeder->getDependancyResolver().get_dependancy_free_nodes();
+    dep_free_mirror_.clear();
+    dep_free_mirror_.insert(free_now.begin(), free_now.end());
 }
 
 bool Workload::comm_admission_in_order(
@@ -602,6 +645,7 @@ bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     }
 
     this->et_feeder->getDependancyResolver().take_node(node->id());
+    dep_free_mirror_.erase(node->id());
     this->hw_resource->occupy(node);
     // stats->record_end will be called in Workload::call
     stats->record_start(node, Sys::boostedTick());
@@ -637,6 +681,7 @@ bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
                 hw_resource->release(node);
                 this->et_feeder->getDependancyResolver().push_back_node(
                     node->id());
+                dep_free_mirror_.insert(node->id());
                 stats->record_end(node, Sys::boostedTick());
                 if (this->sys->track_local_mem) {
                     this->local_mem_usage_tracker->recordEnd(
@@ -1004,8 +1049,7 @@ bool Workload::issue_recv_comm(
 
 void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const auto node_id = node->id();
-    auto& dependancy_resolver = this->et_feeder->getDependancyResolver();
-    dependancy_resolver.finish_node(node_id);
+    dep_finish_node(node_id);
     const auto& logger = workload_logger();
     logger->debug("callback,sys->id={}, tick={}, node->id={}, "
                   "node->name={}, node->type={}",
@@ -1071,7 +1115,7 @@ void Workload::call(EventType event, CallData* data) {
             this->local_mem_usage_tracker->recordEnd(node, Sys::boostedTick());
         }
 
-        this->et_feeder->getDependancyResolver().finish_node(node_id);
+        dep_finish_node(node_id);
 
         issue_dep_free_nodes();
 
@@ -1123,7 +1167,7 @@ void Workload::call(EventType event, CallData* data) {
                                                          Sys::boostedTick());
             }
 
-            this->et_feeder->getDependancyResolver().finish_node(wlhd->node_id);
+            dep_finish_node(wlhd->node_id);
 
             issue_dep_free_nodes();
 
@@ -1192,6 +1236,7 @@ void Workload::advance_to_next_iteration() {
     // across iterations is correct and collision-free, and the maps are empty
     // here because a drained iteration has no in-flight collectives.
     this->et_feeder->reset_dependancy();
+    rebuild_dep_free_mirror();
 
     // Node ids repeat across iterations, so per-group admission order starts
     // over from the first ordinal.

@@ -6,10 +6,12 @@ LICENSE file in the root directory of this source tree.
 #ifndef __WORKLOAD_HH__
 #define __WORKLOAD_HH__
 
+#include <cstdint>
 #include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "astra-sim/system/Callable.hh"
 #include "astra-sim/system/CommunicatorGroup.hh"
@@ -161,6 +163,28 @@ class Workload : public Callable {
     // we track the exact unadmitted set instead. Rebuilt (from
     // cg_node_to_ordinal_) at construction and at every iteration boundary.
     std::unordered_map<int, std::set<int>> cg_unadmitted_ordinals_;
+
+    // --- Ordered mirror of the resolver's dependency-free set --------------
+    // issue_dep_free_nodes() must iterate free nodes in ascending id order
+    // (deterministic, rank-invariant issue). The resolver's truth is an
+    // unordered_set, and copying + sorting it on every completion event is
+    // O(F log F) with F large whenever ranks are cap-blocked. Instead keep an
+    // ordered mirror, updated at every point Workload mutates the resolver
+    // (take/push_back/finish/reset -- all resolver mutations for this feeder
+    // live in Workload.cc; CustomAlgorithm owns a separate feeder). Every
+    // issue_dep_free_nodes() entry asserts an O(1) size tripwire against the
+    // truth (asserts are live even in this project's release build); the
+    // sanitizer (Debug) build additionally checks element-wise equality.
+    std::set<uint64_t> dep_free_mirror_;
+    // Reusable snapshot buffer for issue_dep_free_nodes passes; keeps its
+    // capacity across calls to avoid per-event reallocation.
+    std::vector<uint64_t> dep_free_snapshot_;
+    // finish_node + mirror maintenance: snapshots the node's children before
+    // finish_node consumes the edges, then mirrors the children it freed.
+    void dep_finish_node(uint64_t node_id);
+    // Re-derive the mirror from the resolver's truth (constructor / iteration
+    // rewind).
+    void rebuild_dep_free_mirror();
 
     // True iff admitting `node` now respects the per-group admission order
     // (always true for non-collectives, ungrouped collectives, and while the
