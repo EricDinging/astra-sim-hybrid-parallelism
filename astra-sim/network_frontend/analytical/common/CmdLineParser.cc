@@ -126,9 +126,9 @@ void CmdLineParser::define_options() noexcept {
         "to this bound; OCS overrides are always kept. Default 100.",
         cxxopts::value<double>()->default_value("100"))(
         "congestion-model",
-        "serial (exclusive links + FIFO, the historical model) | fluid "
-        "(flow-level bandwidth sharing; reconfigurable backend only)",
-        cxxopts::value<std::string>()->default_value("fluid"));
+        "serial (exclusive links + FIFO, the historical model; default) | "
+        "fluid (flow-level bandwidth sharing; reconfigurable backend only)",
+        cxxopts::value<std::string>()->default_value("serial"));
 }
 
 void CmdLineParser::parse(int argc, char* argv[]) noexcept {
