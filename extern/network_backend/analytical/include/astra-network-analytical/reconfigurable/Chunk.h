@@ -65,18 +65,21 @@ class Chunk {
     }
 
     /**
-     * Get the current sitting device of the chunk
+     * Get the current sitting device of the chunk.
+     * Raw pointer: devices are owned by Topology::devices for the whole run,
+     * so per-hop shared_ptr refcount churn buys nothing.
      *
      * @return current device of the chunk
      */
-    [[nodiscard]] std::shared_ptr<Device> current_device() const noexcept;
+    [[nodiscard]] Device* current_device() const noexcept;
 
     /**
-     * Get the next destined device of the chunk
+     * Get the next destined device of the chunk (raw pointer, see
+     * current_device()).
      *
      * @return next device of the chunk
      */
-    [[nodiscard]] std::shared_ptr<Device> next_device() const noexcept;
+    [[nodiscard]] Device* next_device() const noexcept;
 
     /**
      * Mark the chunk arrived at its next device

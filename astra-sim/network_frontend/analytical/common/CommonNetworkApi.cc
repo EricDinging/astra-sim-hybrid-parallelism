@@ -80,6 +80,14 @@ timespec_t CommonNetworkApi::sim_get_time() {
     return {NS, astra_sim_time};
 }
 
+Tick CommonNetworkApi::sim_get_time_ns() {
+    // CLOCK_PERIOD is 1, so the historical path (uint64 -> long double,
+    // divide by 1, truncate back) yields this same integer; return it
+    // directly and skip the x87 round-trip.
+    static_assert(AstraSim::CLOCK_PERIOD == 1, "shortcut below assumes 1ns ticks");
+    return event_queue->get_current_time();
+}
+
 void CommonNetworkApi::sim_schedule(const timespec_t delta,
                                     void (*fun_ptr)(void*),
                                     void* const fun_arg) {

@@ -13,6 +13,8 @@ LICENSE file in the root directory of this source tree.
 #include <memory>
 #include <queue>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 using namespace NetworkAnalytical;
 
@@ -34,6 +36,19 @@ using LatencyRow = std::unordered_map<DeviceId, Latency>;
  */
 class Device : public std::enable_shared_from_this<Device> {
   public:
+    /// One outgoing port: the link plus its pending-chunk queue. The two were
+    /// twin maps with identical key sets maintained in lockstep; merging them
+    /// makes every per-hop lookup a single search instead of two.
+    struct Port {
+        std::shared_ptr<Link> link;
+        std::list<std::unique_ptr<Chunk>> pending;
+    };
+
+    /// Sorted-by-DeviceId port table (~7-8 entries per device). Ascending
+    /// iteration order matches the std::map it replaced -- same-tick event
+    /// insertion order in drain/reconfigure depends on it.
+    using PortVec = std::vector<std::pair<DeviceId, Port>>;
+
     /**
      * Constructor.
      *
@@ -46,10 +61,6 @@ class Device : public std::enable_shared_from_this<Device> {
     /// Fluid mode: notifies the FlowEngine that a link finished its
     /// reconfig-downtime window (link_become_free). Default no-op.
     static std::function<void(Link*)> link_freed_hook;
-
-    /// Fluid mode: active-flow count on a link (the fluid analogue of
-    /// Link::is_busy for the scoped-reconfigure guard). Default 0.
-    static std::function<int(const Link*)> flow_count_probe;
 
     /**
      * Get id of the device.
@@ -120,10 +131,11 @@ class Device : public std::enable_shared_from_this<Device> {
 
     std::shared_ptr<Link> get_link(DeviceId id) const noexcept;
 
-    /// Read-only view of this device's links (sparse: ~6 torus neighbors + OCS
-    /// edges + self-loop). Used by the drain pass.
-    const std::map<DeviceId, std::shared_ptr<Link>>& get_links() const noexcept {
-        return links;
+    /// Read-only view of this device's ports (sparse: ~6 torus neighbors + OCS
+    /// edges + self-loop), sorted ascending by DeviceId. Used by the drain and
+    /// reconfigure-teardown passes.
+    const PortVec& ports() const noexcept {
+        return ports_;
     }
 
     /**
@@ -140,12 +152,18 @@ class Device : public std::enable_shared_from_this<Device> {
 
     int topology_iteration;
 
-    /// links to other nodes
-    /// map[dest node node_id] -> link
+    /// ports to other nodes, sorted by dest DeviceId (link + pending queue
+    /// merged; see Port). Lookup = std::lower_bound; connect/disconnect are
+    /// O(n) vector insert/erase but wiring-time only.
+    PortVec ports_;
 
-    std::map<DeviceId, std::shared_ptr<Link>> links;
-    std::map<DeviceId, std::list<std::unique_ptr<Chunk>>> pending_chunks;
-    std::map<DeviceId, Route> routes;  // BFS mode only; empty under DOR
+    /// sorted-insert position / lookup helpers for ports_
+    [[nodiscard]] PortVec::iterator port_pos(DeviceId id) noexcept;
+    [[nodiscard]] PortVec::const_iterator port_pos(DeviceId id) const noexcept;
+    [[nodiscard]] Port* find_port(DeviceId id) noexcept;
+    [[nodiscard]] const Port* find_port(DeviceId id) const noexcept;
+
+    std::map<DeviceId, RoutePtr> routes;  // BFS mode only; empty under DOR
 
     // DOR-mode on-demand router (non-owning). nullptr => BFS mode (use `routes`).
     Router* router_ = nullptr;

@@ -79,12 +79,18 @@ EventTime Link::book_transmission(std::unique_ptr<Chunk> chunk) noexcept {
     const auto start = next_free_time_ > now ? next_free_time_ : now;
 
     const auto chunk_size = chunk->get_size();
-    const auto arrival = start + communication_delay(chunk_size);
+    assert(chunk_size > 0);
+    // One division serves both delays. Truncation points replicate the
+    // communication_delay/serialization_delay pair exactly: (latency + d)
+    // truncated for the arrival, d truncated (then + 2x latency) for the
+    // occupancy window.
+    const auto d = static_cast<Bandwidth>(chunk_size) / bandwidth_Bpns;
+    const auto arrival = start + static_cast<EventTime>(latency + d);
     auto* const chunk_ptr = static_cast<void*>(chunk.release());
     Link::event_queue->schedule_event(arrival, Chunk::chunk_arrived_next_device, chunk_ptr);
 
     // Same occupancy window the event scheme used: serialization + 2x latency.
-    next_free_time_ = start + serialization_delay(chunk_size) + 2 * static_cast<EventTime>(latency);
+    next_free_time_ = start + static_cast<EventTime>(d) + 2 * static_cast<EventTime>(latency);
     return next_free_time_;
 }
 
@@ -149,7 +155,9 @@ unsigned long Link::schedule_chunk_transmission(std::unique_ptr<Chunk> chunk) no
 
 unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency reconfig_time) noexcept {
     if (bandwidth == this->bandwidth && latency == this->latency) {
-        debug_print("No reconfiguration needed");
+        if (kVerboseLogging) {
+            debug_print("No reconfiguration needed");
+        }
         return Link::event_queue->get_current_time() + 1;
     }
 
@@ -157,9 +165,11 @@ unsigned long Link::reconfigure(Bandwidth bandwidth, Latency latency, Latency re
     const auto current_time = Link::event_queue->get_current_time();
     set_busy();
 
-    debug_print("Reconfiguring link from bandwidth " + std::to_string(this->bandwidth) + " GB/s to " +
-                std::to_string(bandwidth) + " GB/s and latency " + std::to_string(this->latency) + " ns to " +
-                std::to_string(latency) + " ns at time " + std::to_string(current_time) + " ns");
+    if (kVerboseLogging) {
+        debug_print("Reconfiguring link from bandwidth " + std::to_string(this->bandwidth) + " GB/s to " +
+                    std::to_string(bandwidth) + " GB/s and latency " + std::to_string(this->latency) + " ns to " +
+                    std::to_string(latency) + " ns at time " + std::to_string(current_time) + " ns");
+    }
 
     this->bandwidth = bandwidth;
     this->latency = latency;

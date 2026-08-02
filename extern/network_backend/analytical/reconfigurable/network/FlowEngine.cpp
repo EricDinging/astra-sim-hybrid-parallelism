@@ -19,6 +19,12 @@ FlowEngine::FlowEngine(EventQueue* const event_queue) noexcept : event_queue(eve
     assert(event_queue != nullptr);
 }
 
+FlowEngine::~FlowEngine() noexcept {
+    for (auto* const arg : finish_arg_pool) {
+        delete arg;
+    }
+}
+
 void FlowEngine::start_flow(std::unique_ptr<Chunk> chunk) noexcept {
     assert(chunk != nullptr);
     if (paused) {
@@ -59,16 +65,19 @@ void FlowEngine::begin_flow(std::unique_ptr<Chunk> chunk) noexcept {
     flow.total_latency = static_cast<EventTime>(latency_sum);
     flow.chunk = std::move(chunk);
 
-    std::vector<Link*> touched;
-    touched.reserve(flow.links.size());
     for (const auto& link : flow.links) {
         link_flows[link.get()].push_back(id);
         link->fluid_flow_inc();
-        touched.push_back(link.get());
     }
-    flows.emplace(id, std::move(flow));
+    auto& inserted = flows.emplace(id, std::move(flow)).first->second;
 
-    recompute_flows_on(touched);
+    // The touched set is exactly the flow's own links, so collect straight
+    // from them instead of building a throwaway raw-pointer copy.
+    scratch_affected.clear();
+    for (const auto& link : inserted.links) {
+        collect_flows_on(link.get());
+    }
+    recompute_collected();
 }
 
 int FlowEngine::active_flows(const Link* const link) const noexcept {
@@ -79,7 +88,9 @@ int FlowEngine::active_flows(const Link* const link) const noexcept {
 }
 
 void FlowEngine::on_link_updated(Link* const link) noexcept {
-    recompute_flows_on({link});
+    scratch_affected.clear();
+    collect_flows_on(link);
+    recompute_collected();
 }
 
 void FlowEngine::pause() noexcept {
@@ -142,23 +153,31 @@ void FlowEngine::reschedule(Flow& flow, const EventTime now) noexcept {
     }
     flow.epoch++;
     flow.next_fire = target;
-    auto* const arg = new FinishEventArg{this, flow.id, flow.epoch};
+    FinishEventArg* arg;
+    if (finish_arg_pool.empty()) {
+        arg = new FinishEventArg{this, flow.id, flow.epoch};
+    } else {
+        arg = finish_arg_pool.back();
+        finish_arg_pool.pop_back();
+        *arg = {this, flow.id, flow.epoch};
+    }
     event_queue->schedule_event(target, transmission_finished, static_cast<void*>(arg));
 }
 
-void FlowEngine::recompute_flows_on(const std::vector<Link*>& links) noexcept {
+void FlowEngine::collect_flows_on(const Link* const link) noexcept {
+    const auto it = link_flows.find(link);
+    if (it == link_flows.end()) {
+        return;
+    }
+    scratch_affected.insert(scratch_affected.end(), it->second.begin(), it->second.end());
+}
+
+void FlowEngine::recompute_collected() noexcept {
     const auto now = event_queue->get_current_time();
 
-    // Collect the (unique) flows crossing any touched link. Counts change
+    // Process the (unique) flows crossing any touched link. Counts change
     // only on flow add/remove, so one level suffices — no propagation.
-    std::vector<uint64_t> affected;
-    for (const auto* link : links) {
-        const auto it = link_flows.find(link);
-        if (it == link_flows.end()) {
-            continue;
-        }
-        affected.insert(affected.end(), it->second.begin(), it->second.end());
-    }
+    auto& affected = scratch_affected;
     std::sort(affected.begin(), affected.end());
     affected.erase(std::unique(affected.begin(), affected.end()), affected.end());
 
@@ -175,11 +194,16 @@ void FlowEngine::recompute_flows_on(const std::vector<Link*>& links) noexcept {
 
 void FlowEngine::transmission_finished(void* const arg) noexcept {
     assert(arg != nullptr);
-    const auto guard = std::unique_ptr<FinishEventArg>(static_cast<FinishEventArg*>(arg));
-    auto* const self = guard->engine;
+    auto* const fe_arg = static_cast<FinishEventArg*>(arg);
+    auto* const self = fe_arg->engine;
+    const auto flow_id = fe_arg->flow_id;
+    const auto arg_epoch = fe_arg->epoch;
+    // Fields copied out; return the arg to the freelist up front (a
+    // reschedule later in this very call may pop and reuse it).
+    self->finish_arg_pool.push_back(fe_arg);
 
-    const auto it = self->flows.find(guard->flow_id);
-    if (it == self->flows.end() || it->second.epoch != guard->epoch) {
+    const auto it = self->flows.find(flow_id);
+    if (it == self->flows.end() || it->second.epoch != arg_epoch) {
         return;  // stale event: the flow was rescheduled or already done
     }
 
@@ -198,8 +222,6 @@ void FlowEngine::transmission_finished(void* const arg) noexcept {
     // Deregister from every link; freed capacity may speed up neighbors. A
     // link whose registry empties notifies the drain machinery (the hook is
     // a no-op outside a reconfigure drain).
-    std::vector<Link*> touched;
-    touched.reserve(flow.links.size());
     for (const auto& link : flow.links) {
         auto& ids = self->link_flows.at(link.get());
         // Swap-and-pop: O(1) removal instead of an O(F) shift. The per-link
@@ -214,16 +236,25 @@ void FlowEngine::transmission_finished(void* const arg) noexcept {
             self->link_flows.erase(link.get());
             Link::increment_callback();
         }
-        touched.push_back(link.get());
     }
 
     auto chunk = std::move(flow.chunk);
     const auto latency = flow.total_latency;
+    // The touched set is the flow's own links; keep them alive past the
+    // erase below instead of building a raw-pointer copy.
+    const auto links = std::move(flow.links);
     // Erase by key, not by `it`: increment_callback() above can reentrantly
     // complete a drain -> retune -> resume() -> begin_flow() -> flows.emplace(),
     // and a rehash invalidates `it` (only references survive rehash).
-    self->flows.erase(guard->flow_id);
-    self->recompute_flows_on(touched);
+    self->flows.erase(flow_id);
+    // Collect only now, after the deregister loop: increment_callback()
+    // above can reentrantly run begin_flow, which shares scratch_affected.
+    // From here on nothing reenters until recompute_collected returns.
+    self->scratch_affected.clear();
+    for (const auto& link : links) {
+        self->collect_flows_on(link.get());
+    }
+    self->recompute_collected();
 
     if (latency > 0) {
         self->event_queue->schedule_event(now + latency, deliver, static_cast<void*>(chunk.release()));

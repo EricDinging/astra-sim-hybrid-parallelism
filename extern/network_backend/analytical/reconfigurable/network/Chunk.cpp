@@ -27,8 +27,9 @@ void Chunk::chunk_arrived_next_device(void* const chunk_ptr) noexcept {
         // printf("ABCDEFGHIJ\n");
         chunk->invoke_callback();
     } else {
-        // send this chunk to next dest
-        const auto current_node = chunk->current_device();
+        // send this chunk to next dest (raw pointer: the device outlives the
+        // chunk, owned by Topology::devices for the whole run)
+        auto* const current_node = chunk->current_device();
         current_node->send(std::move(chunk));  // send chunk to next des
     }
 }
@@ -49,20 +50,20 @@ Chunk::Chunk(const ChunkSize chunk_size,
     assert(this->route != nullptr);
 }
 
-std::shared_ptr<Device> Chunk::current_device() const noexcept {
+Device* Chunk::current_device() const noexcept {
     // assert the cursor still points into the route
     assert(cursor < route->size());
 
     // return the current npu in route
-    return (*route)[cursor];
+    return (*route)[cursor].get();
 }
 
-std::shared_ptr<Device> Chunk::next_device() const noexcept {
+Device* Chunk::next_device() const noexcept {
     // assert the chunk has next dest
     assert(!arrived_dest());
 
     // return next dest
-    return (*route)[cursor + 1];
+    return (*route)[cursor + 1].get();
 }
 
 void Chunk::mark_arrived_next_device() noexcept {

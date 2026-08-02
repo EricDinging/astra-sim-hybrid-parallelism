@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 #include "reconfigurable/Chunk.h"
 #include "reconfigurable/Link.h"
 #include "reconfigurable/Router.h"
+#include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <vector>
@@ -16,7 +17,6 @@ using namespace NetworkAnalyticalReconfigurable;
 
 std::function<void()> Device::increment_callback = []() {};
 std::function<void(Link*)> Device::link_freed_hook = [](Link*) noexcept {};
-std::function<int(const Link*)> Device::flow_count_probe = [](const Link*) noexcept { return 0; };
 
 Device::Device(const DeviceId id) noexcept : device_id(id), topology_iteration(0) {
     assert(id >= 0);
@@ -27,29 +27,48 @@ DeviceId Device::get_id() const noexcept {
     return device_id;
 }
 
+Device::PortVec::iterator Device::port_pos(const DeviceId id) noexcept {
+    return std::lower_bound(
+        ports_.begin(), ports_.end(), id,
+        [](const std::pair<DeviceId, Port>& p, const DeviceId key) noexcept { return p.first < key; });
+}
+
+Device::PortVec::const_iterator Device::port_pos(const DeviceId id) const noexcept {
+    return std::lower_bound(
+        ports_.begin(), ports_.end(), id,
+        [](const std::pair<DeviceId, Port>& p, const DeviceId key) noexcept { return p.first < key; });
+}
+
+Device::Port* Device::find_port(const DeviceId id) noexcept {
+    const auto it = port_pos(id);
+    return (it != ports_.end() && it->first == id) ? &it->second : nullptr;
+}
+
+const Device::Port* Device::find_port(const DeviceId id) const noexcept {
+    const auto it = port_pos(id);
+    return (it != ports_.end() && it->first == id) ? &it->second : nullptr;
+}
+
 std::shared_ptr<Link> Device::get_link(const DeviceId id) const noexcept {
     assert(id >= 0);
-    // No assert(connected(id)): it duplicates the bounds check links.at()
-    // already performs (throws on a missing key), and this runs per hop with
-    // asserts live in this project's release builds -- the redundant check
-    // is a full extra map lookup.
-    return links.at(id);
+    const auto* const port = find_port(id);
+    assert(port != nullptr);
+    return port->link;
 }
 
 int Device::pending_chunks_count(const DeviceId id) const noexcept {
     assert(id >= 0);
-    assert(connected(id));
-    return static_cast<int>(pending_chunks.at(id).size());
+    const auto* const port = find_port(id);
+    assert(port != nullptr);
+    return static_cast<int>(port->pending.size());
 }
 
 void Device::link_become_free(DeviceId link_id) noexcept {
-    // one lookup per map; hold the references for the rest of the call
-    const auto link_it = links.find(link_id);
-    assert(link_it != links.end());
-    const auto& link = link_it->second;
-    const auto pending_it = pending_chunks.find(link_id);
-    assert(pending_it != pending_chunks.end());
-    auto& pending = pending_it->second;
+    // one lookup; hold the references for the rest of the call
+    auto* const port = find_port(link_id);
+    assert(port != nullptr);
+    const auto& link = port->link;
+    auto& pending = port->pending;
 
     // Lazy firing: hot-path bookings may extend the link's occupancy past
     // this event's time (drain-report events are armed at the occupancy seen
@@ -72,8 +91,9 @@ void Device::link_become_free(DeviceId link_id) noexcept {
         // Each link must report drained exactly once. If fluid flows are still
         // registered on this link (link_freed_hook above may have un-parked some
         // of them), the FlowEngine's own link-empty notification is the single
-        // report for this link, so skip ours to avoid double-counting.
-        if (flow_count_probe(link.get()) == 0) {
+        // report for this link, so skip ours to avoid double-counting. The
+        // count lives on the Link itself and is 0 whenever fluid mode is off.
+        if (link->fluid_flow_count() == 0) {
             increment_callback();
         }
         return;
@@ -138,24 +158,26 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
         // hop* here truncated the route to one hop and delivered the chunk
         // there as if it had arrived (P0-1).
         const DeviceId dest_id = chunk->get_route().back()->get_id();
-        // DOR mode: fetch the route on demand; BFS mode: use the per-row copy.
+        // DOR mode: fetch the route on demand; BFS mode: share the stored
+        // row (refcount bump, no deep copy; at() instead of operator[] so a
+        // missing row fails loudly instead of fabricating an empty route).
         if (router_ != nullptr) {
             chunk->update_route(router_->lookup(device_id, dest_id), topology_iteration);
         } else {
-            chunk->update_route(std::make_shared<const Route>(routes[dest_id]), topology_iteration);
+            chunk->update_route(routes.at(dest_id), topology_iteration);
         }
     }
 
     // get next dest
-    const auto next_dest = chunk->next_device();
+    const auto* const next_dest = chunk->next_device();
     const auto next_dest_id = next_dest->get_id();
 
-    // one lookup; hold the reference (the assert below already proves the
-    // next dest is connected -- a separate assert(connected(...)) would be a
-    // second map walk per hop, and asserts are live in release here)
-    const auto link_it = links.find(next_dest_id);
-    assert(link_it != links.end());
-    const auto& link = link_it->second;
+    // one lookup for link AND pending queue (the assert below already proves
+    // the next dest is connected -- a separate assert(connected(...)) would
+    // be a second search per hop, and asserts are live in release here)
+    auto* const port = find_port(next_dest_id);
+    assert(port != nullptr);
+    const auto& link = port->link;
 
     // Cold path: reconfiguration downtime or a cold transmission in flight
     // (flag), a dead link, a chunk stamped for a future topology, or a
@@ -166,11 +188,9 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     // divert to the cold path -- hot sends append to the arithmetic booking
     // themselves, in FIFO order, with the same start times the event chain
     // produced.
-    const auto pending_it = pending_chunks.find(next_dest_id);
-    assert(pending_it != pending_chunks.end());
     if (link->is_flag_busy() || link->get_bandwidth() == Bandwidth(0) ||
-        chunk->get_topology_iteration() > topology_iteration || !pending_it->second.empty()) {
-        auto& pending = pending_it->second;
+        chunk->get_topology_iteration() > topology_iteration || !port->pending.empty()) {
+        auto& pending = port->pending;
         pending.push_back(std::move(chunk));
         if (kVerboseLogging) {
             debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(next_dest_id) +
@@ -192,11 +212,12 @@ void Device::connect(const DeviceId id, const Bandwidth bandwidth, const Latency
     // assert there's no existing connection
     assert(!connected(id));
 
-    // create link, binding its preallocated link-free callback arg to us
+    // create link, binding its preallocated link-free callback arg to us.
+    // The arg points at the Device and the id -- not into ports_ -- so vector
+    // reallocation on later inserts is safe.
     auto link = std::make_shared<Link>(bandwidth, latency);
     link->set_free_callback_arg(this, id);
-    links[id] = std::move(link);
-    pending_chunks[id] = std::list<std::unique_ptr<Chunk>>();
+    ports_.insert(port_pos(id), {id, Port{std::move(link), {}}});
 }
 
 void Device::reconfigure(const BandwidthRow& bandwidth,
@@ -215,14 +236,16 @@ void Device::reconfigure(const BandwidthRow& bandwidth,
         topology_iteration++;
     }
 
-    for (const auto& [id, link] : links) {
+    // ports_ is sorted ascending by DeviceId: identical iteration (and thus
+    // same-tick event insertion) order as the std::map it replaced.
+    for (auto& [id, port] : ports_) {
         assert(id >= 0);
 
         if (id == device_id) {
             continue;
         }
 
-        assert(connected(id));
+        const auto& link = port.link;
 
         const auto bw_it = bandwidth.find(id);
         const Bandwidth bw = (bw_it == bandwidth.end()) ? Bandwidth(0) : bw_it->second;
@@ -237,7 +260,7 @@ void Device::reconfigure(const BandwidthRow& bandwidth,
                 // free event here force-freed busy links (P0-2).
                 continue;
             }
-            if (link->is_busy() || flow_count_probe(link.get()) > 0) {
+            if (link->is_busy() || link->fluid_flow_count() > 0) {
                 // Retuning a link mid-transmission would invalidate its
                 // in-flight completion events (P4-11: Link::reconfigure
                 // asserts !busy, aborting the run). Keep the old values and
@@ -252,12 +275,12 @@ void Device::reconfigure(const BandwidthRow& bandwidth,
         // update the route (BFS mode only; DOR mode passes an empty routes
         // vector and fetches on demand via router_).
         if (!routes.empty()) {
-            this->routes[id] = routes[id];
+            this->routes[id] = std::make_shared<const Route>(routes[id]);
         }
         // reconfigure the link
         if (kVerboseLogging) {
             debug_print("Device " + std::to_string(device_id) + ": Reconfiguring link to " + std::to_string(id) +
-                        ", pending chunk size: " + std::to_string(pending_chunks[id].size()) +
+                        ", pending chunk size: " + std::to_string(port.pending.size()) +
                         ", new bandwidth: " + std::to_string(bw));
         }
         auto free_time = link->reconfigure(bw, lt, reconfig_time);
@@ -297,17 +320,17 @@ void Device::disconnect(const DeviceId id) noexcept {
     assert(id >= 0);
 
     // assert there's an existing connection
-    assert(connected(id));
-    assert(pending_chunks[id].empty());
+    const auto it = port_pos(id);
+    assert(it != ports_.end() && it->first == id);
+    assert(it->second.pending.empty());
 
-    // remove the link and its pending queue
-    links.erase(id);
-    pending_chunks.erase(id);
+    // remove the port (link + pending queue)
+    ports_.erase(it);
 }
 
 bool Device::connected(const DeviceId dest) const noexcept {
     assert(dest >= 0);
 
     // check whether the connection exists
-    return links.find(dest) != links.end();
+    return find_port(dest) != nullptr;
 }

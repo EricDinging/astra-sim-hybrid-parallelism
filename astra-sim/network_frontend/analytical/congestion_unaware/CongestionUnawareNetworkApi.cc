@@ -63,8 +63,8 @@ int CongestionUnawareNetworkApi::sim_send(void* const buffer,
     }
 
     // create chunk
-    auto chunk_arrival_arg = std::tuple(tag, src, dst, count, chunk_id);
-    auto arg = std::make_unique<decltype(chunk_arrival_arg)>(chunk_arrival_arg);
+    auto arg = std::make_unique<std::tuple<int, int, int, uint64_t, int>>(
+        tag, src, dst, count, chunk_id);
     const auto arg_ptr = static_cast<void*>(arg.release());
 
     // compute send communication delay (in AstraSim format)

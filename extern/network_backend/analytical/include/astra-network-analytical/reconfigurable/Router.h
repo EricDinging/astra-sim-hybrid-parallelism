@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 
 #include <cstddef>
 #include <cstdint>
-#include <list>
 #include <memory>
 #include <unordered_map>
 #include <unordered_set>
@@ -27,7 +26,7 @@ namespace NetworkAnalyticalReconfigurable {
  * non-geometric and stored explicitly (sparsely).
  *
  * lookup(src, dst) returns, in priority order: an installed override, a cached
- * route, or a freshly computed DOR route (inserted into a bounded LRU cache).
+ * route, or a freshly computed DOR route (inserted into a bounded cache).
  * The result is bit-identical to the value the eager precomputeRoutes_DOR()
  * table held -- compute_dor() is the original per-pair walk lifted verbatim,
  * and the override/cache lifecycle mirrors the eager table's state machine
@@ -114,7 +113,6 @@ class Router {
     }
 
     void invalidate(DeviceId s, DeviceId t) const noexcept;
-    void evict_to_budget() const noexcept;
 
     std::shared_ptr<Topology> topology_;
     std::vector<int> npus_per_dim_;
@@ -128,11 +126,11 @@ class Router {
     // Sparse OCS overrides. Persistent, consulted first, never evicted.
     std::unordered_map<std::uint64_t, RoutePtr> overrides_;
 
-    // Bounded LRU cache: front == most-recently-used. The cache is logically
-    // const (a pure accelerator), hence mutable.
-    using LruList = std::list<std::pair<std::uint64_t, RoutePtr>>;
-    mutable LruList lru_;
-    mutable std::unordered_map<std::uint64_t, LruList::iterator> cache_;
+    // Bounded route cache. No recency tracking: routes are pure functions of
+    // geometry + overrides, so when the byte budget is exceeded the whole
+    // cache is dropped and rebuilt on demand (eviction policy is
+    // unobservable). Logically const (a pure accelerator), hence mutable.
+    mutable std::unordered_map<std::uint64_t, RoutePtr> cache_;
     mutable std::size_t cur_bytes_;
     std::size_t budget_bytes_;
 

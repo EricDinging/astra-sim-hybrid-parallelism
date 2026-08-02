@@ -4,7 +4,6 @@
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
-#include <set>
 
 using namespace NetworkAnalytical;
 using namespace NetworkAnalyticalReconfigurable;
@@ -63,11 +62,10 @@ TopologyManager::TopologyManager(int npus_count,
 }
 
 TopologyManager::~TopologyManager() noexcept {
-    // Unconditional reset: the hooks captured `this` iff set_fluid_mode(true)
+    // Unconditional reset: the hook captured `this` iff set_fluid_mode(true)
     // was ever called, but resetting unconditionally is cheap and correct
-    // either way, and a dying instance's hooks must never outlive it.
+    // either way, and a dying instance's hook must never outlive it.
     Device::link_freed_hook = [](Link*) noexcept {};
-    Device::flow_count_probe = [](const Link*) noexcept { return 0; };
 }
 
 std::shared_ptr<Device> TopologyManager::get_device(const DeviceId deviceId) noexcept {
@@ -84,7 +82,7 @@ void TopologyManager::drain_network() noexcept {
     Link::num_drained_links = 0;
     drain_target_ = 0;
     for (int i = 0; i < devices_count; ++i) {
-        for (const auto& [id, link] : topology->get_device(i)->get_links()) {
+        for (const auto& [id, port] : topology->get_device(i)->ports()) {
             if (id != i) {
                 ++drain_target_;
             }
@@ -93,10 +91,11 @@ void TopologyManager::drain_network() noexcept {
 
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
-        for (const auto& [id, link] : device->get_links()) {
+        for (const auto& [id, port] : device->ports()) {
             if (id == i) {
                 continue;
             }
+            const auto& link = port.link;
             if (!link->is_busy() && (!fluid_ || flow_engine_->active_flows(link.get()) == 0)) {
                 increment_callback();
             } else if (!link->is_flag_busy() && Link::current_time() < link->next_free_time()) {
@@ -127,10 +126,8 @@ void TopologyManager::set_fluid_mode(const bool enable) noexcept {
     if (enable) {
         // Fluid mode reads link occupancy from the engine, not Link::busy.
         Device::link_freed_hook = [this](Link* link) noexcept { flow_engine_->on_link_updated(link); };
-        Device::flow_count_probe = [this](const Link* link) noexcept { return flow_engine_->active_flows(link); };
     } else {
         Device::link_freed_hook = [](Link*) noexcept {};
-        Device::flow_count_probe = [](const Link*) noexcept { return 0; };
     }
 }
 
@@ -566,16 +563,17 @@ void TopologyManager::apply_job_wiring(const std::vector<std::pair<int, int>>& o
         precomputed_routes = std::vector<std::vector<Route>>(devices_count, std::vector<Route>(devices_count));
     }
 
-    std::set<int> touched;
     for (const auto& e : ocs_edges) {
         int u = e.first;
         int v = e.second;
         assert(u >= 0 && u < devices_count && v >= 0 && v < devices_count);
         // Under sparse connectivity the OCS pair may have no link yet; create
         // it so the override route can traverse it (no-op if already linked).
+        // connect_ocs_edge installs the link's bw/lt itself; no per-device
+        // retune pass is needed afterwards (a scoped Device::reconfigure fed
+        // rows read back from the links' own current state skipped every link
+        // via its unchanged-guard -- a provable no-op, now deleted).
         topology->connect_ocs_edge(u, v, link_bw, link_lt);
-        touched.insert(u);
-        touched.insert(v);
     }
 
     for (const auto& path : routes) {
@@ -593,35 +591,13 @@ void TopologyManager::apply_job_wiring(const std::vector<std::pair<int, int>>& o
         } else {
             precomputed_routes[s][t] = std::move(route);
         }
-        touched.insert(s);
     }
 
-    // Reconfigure only the touched devices -- no global drain. DOR mode fetches
-    // routes on demand, so push an empty route row (links only). scoped=true:
-    // only the links this wiring actually changed are retuned, and the
-    // per-device topology_iteration is left alone (see Device::reconfigure).
-    for (int d : touched) {
-        // connect_ocs_edge already created/updated the OCS link at link_bw, so
-        // reading the device's current links back reproduces the row the old
-        // live `bandwidths[d]`/`latencies[d]` mirror used to hold.
-        BandwidthRow bw_row;
-        LatencyRow lt_row;
-        const auto dev = topology->get_device(d);
-        for (const auto& [id, link] : dev->get_links()) {
-            if (id == d) {
-                continue;
-            }
-            bw_row[id] = link->get_bandwidth();
-            lt_row[id] = link->get_latency();
-        }
-        static const std::vector<Route> kNoRoutes;
-        dev->reconfigure(bw_row, use_dor ? kNoRoutes : precomputed_routes[d], lt_row, Latency(0), /*scoped=*/true);
-    }
-
-    if (std::getenv("RFOLD_WIRING_LOG") != nullptr) {
+    static const bool wiring_log = std::getenv("RFOLD_WIRING_LOG") != nullptr;
+    if (wiring_log) {
         std::cerr << "[wiring] ocs_edges=" << ocs_edges.size() << " routes=" << routes.size()
                   << " overrides=" << (router_ != nullptr ? router_->override_count() : precomputed_routes.size())
-                  << " touched=" << touched.size() << std::endl;
+                  << std::endl;
     }
 }
 
@@ -696,10 +672,10 @@ void TopologyManager::remove_job_wiring(const std::vector<std::pair<int, int>>& 
             std::cerr << "[unwiring] warning: OCS edge (" << u << ", " << v << ") not connected; skipping" << std::endl;
             continue;
         }
-        if (du->get_links().at(v)->is_busy() || dv->get_links().at(u)->is_busy() || du->pending_chunks_count(v) > 0 ||
+        if (du->get_link(v)->is_busy() || dv->get_link(u)->is_busy() || du->pending_chunks_count(v) > 0 ||
             dv->pending_chunks_count(u) > 0 ||
-            (fluid_ && (flow_engine_->active_flows(du->get_links().at(v).get()) > 0 ||
-                        flow_engine_->active_flows(dv->get_links().at(u).get()) > 0))) {
+            (fluid_ && (flow_engine_->active_flows(du->get_link(v).get()) > 0 ||
+                        flow_engine_->active_flows(dv->get_link(u).get()) > 0))) {
             // Structural invariant broken: the owning job is drained, so its
             // OCS link cannot be carrying or queueing traffic. Leak the link
             // rather than erase it under an outstanding link-free event
@@ -712,7 +688,8 @@ void TopologyManager::remove_job_wiring(const std::vector<std::pair<int, int>>& 
         dv->disconnect(u);
     }
 
-    if (std::getenv("RFOLD_WIRING_LOG") != nullptr) {
+    static const bool wiring_log = std::getenv("RFOLD_WIRING_LOG") != nullptr;
+    if (wiring_log) {
         std::cerr << "[unwiring] ocs_edges=" << ocs_edges.size() << " routes=" << routes.size()
                   << " overrides=" << (router_ != nullptr ? router_->override_count() : precomputed_routes.size())
                   << std::endl;

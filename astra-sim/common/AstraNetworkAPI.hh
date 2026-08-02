@@ -14,8 +14,8 @@ class AstraNetworkAPI {
   public:
     enum class BackendType { NotSpecified = 0, Garnet, NS3, Analytical };
 
-    AstraNetworkAPI(int rank) : rank(rank) {};
-    virtual ~AstraNetworkAPI() {};
+    AstraNetworkAPI(int rank) : rank(rank){};
+    virtual ~AstraNetworkAPI(){};
 
     virtual int sim_send(void* buffer,
                          uint64_t count,
@@ -61,6 +61,16 @@ class AstraNetworkAPI {
 
     virtual timespec_t sim_get_time() = 0;
 
+    // Integer sim-time in ticks. The default reproduces Sys::boostedTick's
+    // historical conversion exactly (timespec_t long double / CLOCK_PERIOD,
+    // truncated), so non-analytical backends stay bit-exact; the analytical
+    // frontend overrides it to skip the long-double round-trip.
+    virtual Tick sim_get_time_ns() {
+        timespec_t tmp = sim_get_time();
+        Tick tick = tmp.time_val / CLOCK_PERIOD;
+        return tick;
+    }
+
     virtual double get_BW_at_dimension(int dim) {
         return -1;
     };
@@ -83,11 +93,11 @@ class AstraNetworkAPI {
         return 0;
     }
 
-    // Notifies that the workload for this rank has finished. 
-    // Note that we have one network handler per rank. 
-    // Therefore, when implementing this function, the network handler must 
+    // Notifies that the workload for this rank has finished.
+    // Note that we have one network handler per rank.
+    // Therefore, when implementing this function, the network handler must
     // find a way to concur that all ranks have finished their workloads.
-    virtual void sim_notify_finished(){
+    virtual void sim_notify_finished() {
         return;
     }
 

@@ -39,25 +39,30 @@ Router::Router(std::shared_ptr<Topology> topology,
 const RoutePtr& Router::lookup(DeviceId src, DeviceId dst) const noexcept {
     const std::uint64_t k = key(src, dst);
 
-    const auto oit = overrides_.find(k);
-    if (oit != overrides_.end()) {
-        return oit->second;
+    // Overrides exist only after apply_job_wiring; skip the probe entirely on
+    // the common no-override runs.
+    if (!overrides_.empty()) {
+        const auto oit = overrides_.find(k);
+        if (oit != overrides_.end()) {
+            return oit->second;
+        }
     }
 
     const auto cit = cache_.find(k);
     if (cit != cache_.end()) {
-        // Move to most-recently-used.
-        lru_.splice(lru_.begin(), lru_, cit->second);
-        return cit->second->second;
+        return cit->second;
     }
 
-    // Miss: compute, insert at MRU, account, evict to budget.
+    // Miss: compute, account, insert. Over budget the whole cache is dropped
+    // (before inserting, so the fresh entry survives): routes are pure and
+    // deterministically recomputable, so the eviction policy is unobservable.
     auto r = std::make_shared<const Route>(fullmesh_ ? direct_route(src, dst) : compute_dor(src, dst));
-    cur_bytes_ += route_bytes(*r);
-    lru_.emplace_front(k, std::move(r));
-    cache_[k] = lru_.begin();
-    evict_to_budget();  // never evicts the just-inserted front (size guard)
-    return lru_.begin()->second;
+    const auto bytes = route_bytes(*r);
+    if (cur_bytes_ + bytes > budget_bytes_) {
+        clear_cache();
+    }
+    cur_bytes_ += bytes;
+    return cache_.emplace(k, std::move(r)).first->second;
 }
 
 void Router::set_override(DeviceId s, DeviceId t, Route route) noexcept {
@@ -72,20 +77,8 @@ void Router::erase_override(DeviceId s, DeviceId t) noexcept {
 void Router::invalidate(DeviceId s, DeviceId t) const noexcept {
     const auto cit = cache_.find(key(s, t));
     if (cit != cache_.end()) {
-        cur_bytes_ -= route_bytes(*cit->second->second);
-        lru_.erase(cit->second);
+        cur_bytes_ -= route_bytes(*cit->second);
         cache_.erase(cit);
-    }
-}
-
-void Router::evict_to_budget() const noexcept {
-    // Keep at least the just-inserted MRU entry even if a single route somehow
-    // exceeds the whole budget (not possible for realistic budgets/routes).
-    while (cur_bytes_ > budget_bytes_ && lru_.size() > 1) {
-        const auto& back = lru_.back();
-        cur_bytes_ -= route_bytes(*back.second);
-        cache_.erase(back.first);
-        lru_.pop_back();
     }
 }
 
@@ -95,14 +88,15 @@ void Router::clear() noexcept {
 }
 
 void Router::clear_cache() const noexcept {
-    lru_.clear();
     cache_.clear();
     cur_bytes_ = 0;
 }
 
 void Router::set_budget_bytes(std::size_t bytes) noexcept {
     budget_bytes_ = bytes;
-    evict_to_budget();
+    if (cur_bytes_ > budget_bytes_) {
+        clear_cache();
+    }
 }
 
 Route Router::direct_route(DeviceId src, DeviceId dst) const noexcept {

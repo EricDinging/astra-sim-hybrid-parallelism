@@ -60,6 +60,12 @@ class CommonNetworkApi : public AstraNetworkAPI {
     [[nodiscard]] timespec_t sim_get_time() override;
 
     /**
+     * Integer sim-time: the event queue's time directly, skipping the
+     * timespec_t long-double round-trip.
+     */
+    [[nodiscard]] Tick sim_get_time_ns() override;
+
+    /**
      * Implement sim_schedule of AstraNetworkAPI.
      */
     void sim_schedule(timespec_t delta,

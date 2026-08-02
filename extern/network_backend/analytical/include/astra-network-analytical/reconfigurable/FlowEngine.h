@@ -32,6 +32,7 @@ namespace NetworkAnalyticalReconfigurable {
 class FlowEngine {
   public:
     explicit FlowEngine(EventQueue* event_queue) noexcept;
+    ~FlowEngine() noexcept;
 
     /// Start a flow for a routed chunk (route = [src, ..., dst]); while
     /// paused, the chunk is deferred until resume().
@@ -66,7 +67,10 @@ class FlowEngine {
         EventTime next_fire = 0;
     };
 
-    /// Heap-allocated argument of the epoch-guarded transmission-finish event.
+    /// Argument of the epoch-guarded transmission-finish event. Pooled on
+    /// `finish_arg_pool` (freelist) instead of new/delete per reschedule:
+    /// flow_id and epoch are uint64 and neither is provably < 2^32 over a
+    /// full run, so packing both into the void* arg is out.
     struct FinishEventArg {
         FlowEngine* engine;
         uint64_t flow_id;
@@ -80,7 +84,18 @@ class FlowEngine {
     static void deliver(void* chunk_ptr) noexcept;
 
     void begin_flow(std::unique_ptr<Chunk> chunk) noexcept;
-    void recompute_flows_on(const std::vector<Link*>& links) noexcept;
+
+    /// Append the ids of the flows crossing `link` to scratch_affected.
+    /// Callers clear scratch_affected, collect the touched links, then run
+    /// recompute_collected() -- with NO reentrant code (callbacks) in
+    /// between, which is what makes the shared scratch buffer safe.
+    void collect_flows_on(const Link* link) noexcept;
+
+    /// Sort/unique scratch_affected and re-rate every collected flow.
+    /// Fires no callbacks (schedule_event only inserts), so it cannot be
+    /// live twice on the stack.
+    void recompute_collected() noexcept;
+
     void advance(Flow& flow, EventTime now) noexcept;
     [[nodiscard]] double compute_rate(const Flow& flow) const noexcept;
     void reschedule(Flow& flow, EventTime now) noexcept;
@@ -91,6 +106,14 @@ class FlowEngine {
     std::vector<std::unique_ptr<Chunk>> deferred;
     uint64_t next_flow_id = 0;
     bool paused = false;
+
+    // Reused scratch buffer for the affected-flow set (see collect_flows_on
+    // for the reentrancy argument). Cleared by each collect/recompute site.
+    std::vector<uint64_t> scratch_affected;
+    // Freelist of FinishEventArg objects; owns its entries (freed in the
+    // destructor). Args still in the event queue at teardown are not owned
+    // here -- same as the old per-event new/delete.
+    std::vector<FinishEventArg*> finish_arg_pool;
 };
 
 }  // namespace NetworkAnalyticalReconfigurable

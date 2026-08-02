@@ -66,8 +66,8 @@ int ReconfigurableNetworkApi::sim_send(void* const buffer,
 
     // initiate transmission from src -> dst on the cached route (no
     // throwaway 2-node stub route)
-    auto chunk_arrival_arg = std::tuple(tag, src, dst, count, chunk_id);
-    auto arg = std::make_unique<decltype(chunk_arrival_arg)>(chunk_arrival_arg);
+    auto arg = std::make_unique<std::tuple<int, int, int, uint64_t, int>>(
+        tag, src, dst, count, chunk_id);
     const auto arg_ptr = static_cast<void*>(arg.release());
     tm->send(count, src, dst, ReconfigurableNetworkApi::process_chunk_arrival,
              arg_ptr);
