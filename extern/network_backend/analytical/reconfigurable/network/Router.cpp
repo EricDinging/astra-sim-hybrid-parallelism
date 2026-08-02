@@ -36,7 +36,7 @@ Router::Router(std::shared_ptr<Topology> topology,
     assert(dims_count_ > 0 || fullmesh_);
 }
 
-const Route& Router::lookup(DeviceId src, DeviceId dst) const noexcept {
+const RoutePtr& Router::lookup(DeviceId src, DeviceId dst) const noexcept {
     const std::uint64_t k = key(src, dst);
 
     const auto oit = overrides_.find(k);
@@ -52,8 +52,8 @@ const Route& Router::lookup(DeviceId src, DeviceId dst) const noexcept {
     }
 
     // Miss: compute, insert at MRU, account, evict to budget.
-    Route r = fullmesh_ ? direct_route(src, dst) : compute_dor(src, dst);
-    cur_bytes_ += route_bytes(r);
+    auto r = std::make_shared<const Route>(fullmesh_ ? direct_route(src, dst) : compute_dor(src, dst));
+    cur_bytes_ += route_bytes(*r);
     lru_.emplace_front(k, std::move(r));
     cache_[k] = lru_.begin();
     evict_to_budget();  // never evicts the just-inserted front (size guard)
@@ -62,7 +62,7 @@ const Route& Router::lookup(DeviceId src, DeviceId dst) const noexcept {
 
 void Router::set_override(DeviceId s, DeviceId t, Route route) noexcept {
     invalidate(s, t);
-    overrides_[key(s, t)] = std::move(route);
+    overrides_[key(s, t)] = std::make_shared<const Route>(std::move(route));
 }
 
 void Router::erase_override(DeviceId s, DeviceId t) noexcept {
@@ -72,7 +72,7 @@ void Router::erase_override(DeviceId s, DeviceId t) noexcept {
 void Router::invalidate(DeviceId s, DeviceId t) const noexcept {
     const auto cit = cache_.find(key(s, t));
     if (cit != cache_.end()) {
-        cur_bytes_ -= route_bytes(cit->second->second);
+        cur_bytes_ -= route_bytes(*cit->second->second);
         lru_.erase(cit->second);
         cache_.erase(cit);
     }
@@ -83,7 +83,7 @@ void Router::evict_to_budget() const noexcept {
     // exceeds the whole budget (not possible for realistic budgets/routes).
     while (cur_bytes_ > budget_bytes_ && lru_.size() > 1) {
         const auto& back = lru_.back();
-        cur_bytes_ -= route_bytes(back.second);
+        cur_bytes_ -= route_bytes(*back.second);
         cache_.erase(back.first);
         lru_.pop_back();
     }

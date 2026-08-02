@@ -15,6 +15,16 @@ using namespace NetworkAnalytical;
 
 namespace NetworkAnalyticalReconfigurable {
 
+/// Argument of Device::link_become_free events. One instance is preallocated
+/// per link (owned by the Link, set at Device::connect) instead of being
+/// heap-allocated per scheduled event: the owning Device outlives every event
+/// (devices live in Topology::devices for the whole run), and the arg is
+/// read-only in the callback, so all events of a link can share it.
+struct LinkFreeCallbackArg {
+    Device* device;
+    DeviceId link_id;
+};
+
 /**
  * Link models physical links between two devices.
  */
@@ -90,7 +100,21 @@ class Link {
 
     static void schedule_event(EventTime event_time, Callback callback, void* const arg) noexcept;
 
+    /// Bind the preallocated link-free callback arg to the owning device
+    /// (called once, from Device::connect).
+    void set_free_callback_arg(Device* device, DeviceId link_id) noexcept {
+        free_callback_arg_ = {device, link_id};
+    }
+
+    /// The preallocated argument to pass to Device::link_become_free events.
+    [[nodiscard]] void* free_callback_arg() noexcept {
+        return &free_callback_arg_;
+    }
+
   private:
+    /// preallocated argument shared by all link-free events of this link
+    LinkFreeCallbackArg free_callback_arg_{nullptr, -1};
+
     /// event queue Link uses to schedule events
     static std::shared_ptr<EventQueue> event_queue;
 

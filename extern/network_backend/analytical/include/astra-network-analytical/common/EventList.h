@@ -7,7 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "common/Event.h"
 #include "common/Type.h"
-#include <list>
+#include <vector>
 
 namespace NetworkAnalytical {
 
@@ -51,8 +51,9 @@ class EventList {
     /// event time of the event list
     EventTime event_time;
 
-    /// list of registered events
-    std::list<Event> events;
+    /// registered events, in insertion order. Vector instead of list: one
+    /// amortized append per scheduled event rather than a node allocation.
+    std::vector<Event> events;
 };
 
 }  // namespace NetworkAnalytical

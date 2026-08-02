@@ -60,6 +60,25 @@ CallbackTrackerEntry* CallbackTracker::create_new_entry(
     return &(entry->second);
 }
 
+std::pair<CallbackTrackerEntry*, bool> CallbackTracker::find_or_create_entry(
+    const int tag,
+    const int src,
+    const int dest,
+    const ChunkSize chunk_size,
+    const int chunk_id) noexcept {
+    assert(tag >= 0);
+    assert(src >= 0);
+    assert(dest >= 0);
+    assert(chunk_size > 0);
+    assert(chunk_id >= 0);
+
+    // single probe: default-construct the entry in place if absent
+    const auto key = std::make_tuple(tag, src, dest, chunk_size, chunk_id);
+    const auto [entry, inserted] = tracker.try_emplace(key);
+
+    return {&(entry->second), !inserted};
+}
+
 void CallbackTracker::pop_entry(const int tag,
                                 const int src,
                                 const int dest,

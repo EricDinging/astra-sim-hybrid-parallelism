@@ -34,25 +34,27 @@ void Chunk::chunk_arrived_next_device(void* const chunk_ptr) noexcept {
 }
 
 Chunk::Chunk(const ChunkSize chunk_size,
-             Route route,
+             RoutePtr route,
              const Callback callback,
              const CallbackArg callback_arg,
              int topology_iteration) noexcept
-    : chunk_size(chunk_size),
-      route(std::move(route)),
+    : route(std::move(route)),
+      cursor(0),
+      chunk_size(chunk_size),
       callback(callback),
       callback_arg(callback_arg),
       topology_iteration(topology_iteration) {
     assert(chunk_size > 0);
     assert(callback != nullptr);
+    assert(this->route != nullptr);
 }
 
 std::shared_ptr<Device> Chunk::current_device() const noexcept {
-    // assert the route is not empty
-    assert(!route.empty());
+    // assert the cursor still points into the route
+    assert(cursor < route->size());
 
-    // return the first npu in route
-    return route.front();
+    // return the current npu in route
+    return (*route)[cursor];
 }
 
 std::shared_ptr<Device> Chunk::next_device() const noexcept {
@@ -60,8 +62,7 @@ std::shared_ptr<Device> Chunk::next_device() const noexcept {
     assert(!arrived_dest());
 
     // return next dest
-    const auto next_dest = std::next(route.begin(), 1);
-    return *next_dest;
+    return (*route)[cursor + 1];
 }
 
 void Chunk::mark_arrived_next_device() noexcept {
@@ -69,15 +70,13 @@ void Chunk::mark_arrived_next_device() noexcept {
     // it means the chunk hasn't arrived its final dest yet
     assert(!arrived_dest());
 
-    // pop previous node from the route
-    // marking the current node has been changed
-    route.pop_front();
+    // advance the cursor, marking the current node has been changed
+    cursor++;
 }
 
 bool Chunk::arrived_dest() const noexcept {
-    // if a chunk arrived dest, route length should be 1
-    // i.e., only containing the dest node
-    return route.size() == 1;
+    // if a chunk arrived dest, only the dest node remains ahead of the cursor
+    return cursor + 1 == route->size();
 }
 
 ChunkSize Chunk::get_size() const noexcept {

@@ -318,7 +318,7 @@ void TopologyManager::precomputeRoutes(int topo_id) noexcept {
                     path.push_back(topology->get_device(cur));
                 }
                 reverse(path.begin(), path.end());
-                precomputed_routes[s][t] = move(path);
+                precomputed_routes[s][t] = std::move(path);
             }
         }
     }
@@ -482,8 +482,11 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
             ensure_mesh_link(src, dest);
         }
         // DOR/fullmesh mode: fetch on demand; BFS mode: index the eager table.
-        const Route& r = (router_ != nullptr) ? router_->lookup(src, dest) : precomputed_routes[src][dest];
-        chunk->update_route(r, topology_iteration);
+        if (router_ != nullptr) {
+            chunk->update_route(router_->lookup(src, dest), topology_iteration);
+        } else {
+            chunk->update_route(std::make_shared<const Route>(precomputed_routes[src][dest]), topology_iteration);
+        }
     }
 
     // printf("TM: Sending chunk from %d to %d, in topo iter %d, route: ", chunk->current_device()->get_id(),
@@ -491,6 +494,33 @@ void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
     //     printf("%d ", device->get_id());
     // }
     // printf("\n");
+
+    if (fluid_) {
+        flow_engine_->start_flow(std::move(chunk));
+        return;
+    }
+
+    // Send the chunk through the topology
+    topology->send(std::move(chunk));
+}
+
+void TopologyManager::send(const ChunkSize chunk_size,
+                           const DeviceId src,
+                           const DeviceId dest,
+                           const Callback callback,
+                           const CallbackArg callback_arg) noexcept {
+    assert(src >= 0 && src < devices_count);
+    assert(dest >= 0 && dest < devices_count);
+
+    // Same sequence as send(chunk) on a stub-routed chunk (iteration -1),
+    // minus the throwaway 2-node stub route allocation.
+    if (fullmesh_) {
+        ensure_mesh_link(src, dest);
+    }
+    // DOR/fullmesh mode: fetch on demand; BFS mode: index the eager table.
+    auto route = (router_ != nullptr) ? router_->lookup(src, dest)
+                                      : std::make_shared<const Route>(precomputed_routes[src][dest]);
+    auto chunk = std::make_unique<Chunk>(chunk_size, std::move(route), callback, callback_arg, topology_iteration);
 
     if (fluid_) {
         flow_engine_->start_flow(std::move(chunk));
@@ -679,7 +709,7 @@ void TopologyManager::remove_job_wiring(const std::vector<std::pair<int, int>>& 
 
 const Route& TopologyManager::get_precomputed_route(DeviceId src, DeviceId dst) const noexcept {
     if (router_ != nullptr) {
-        return router_->lookup(src, dst);
+        return *router_->lookup(src, dst);
     }
     return precomputed_routes[src][dst];
 }

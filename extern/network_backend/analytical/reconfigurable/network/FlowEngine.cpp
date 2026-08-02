@@ -31,8 +31,11 @@ void FlowEngine::start_flow(std::unique_ptr<Chunk> chunk) noexcept {
 void FlowEngine::begin_flow(std::unique_ptr<Chunk> chunk) noexcept {
     const auto now = event_queue->get_current_time();
 
+    const auto& route = chunk->get_route();
+    const auto cursor = chunk->get_cursor();
+
     // Degenerate route (src == dst): nothing to transmit, deliver right away.
-    if (chunk->route.size() < 2) {
+    if (route.size() - cursor < 2) {
         event_queue->schedule_event(now + 1, deliver, static_cast<void*>(chunk.release()));
         return;
     }
@@ -48,9 +51,8 @@ void FlowEngine::begin_flow(std::unique_ptr<Chunk> chunk) noexcept {
     // Map the device route to the directed links it traverses and sum the
     // path latency (snapshotted at start, per the spec).
     double latency_sum = 0.0;
-    auto it = chunk->route.begin();
-    for (auto next = std::next(it); next != chunk->route.end(); ++it, ++next) {
-        auto link = (*it)->get_link((*next)->get_id());
+    for (auto i = cursor; i + 1 < route.size(); ++i) {
+        auto link = route[i]->get_link(route[i + 1]->get_id());
         latency_sum += link->get_latency();
         flow.links.push_back(std::move(link));
     }

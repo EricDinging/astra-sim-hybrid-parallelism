@@ -11,9 +11,6 @@ using namespace NetworkAnalytical;
 
 EventList::EventList(const EventTime event_time) noexcept : event_time(event_time) {
     assert(event_time >= 0);
-
-    // create an empty event list
-    events = std::list<Event>();
 }
 
 EventTime EventList::get_event_time() const noexcept {
@@ -28,10 +25,12 @@ void EventList::add_event(const Callback callback, const CallbackArg callback_ar
 }
 
 void EventList::invoke_events() noexcept {
-    // invoke all events in the event list
-    while (!events.empty()) {
-        events.front().invoke_event();
-        // printf("\nEventQueue: issue event\n\n");
-        events.pop_front();
+    // Invoke all events in insertion order. This list is already detached
+    // from the queue map when invoked (EventQueue::proceed moves it out), so
+    // same-time events scheduled DURING invocation go to a fresh map entry
+    // processed by a later proceed() — the vector cannot grow while iterating.
+    for (auto& event : events) {
+        event.invoke_event();
     }
+    events.clear();
 }

@@ -25,13 +25,8 @@ int ChunkIdGenerator::create_send_chunk_id(
     // create key
     const auto key = std::make_tuple(tag, src, dest, chunk_size);
 
-    // search whether the key exists
-    auto entry = chunk_id_map.find(key);
-
-    // if key doesn't exist, create new entry
-    if (entry == chunk_id_map.end()) {
-        entry = chunk_id_map.emplace(key, ChunkIdGeneratorEntry()).first;
-    }
+    // single probe: default-construct the entry in place if absent
+    const auto entry = chunk_id_map.try_emplace(key).first;
 
     // increment id and return
     entry->second.increment_send_id();
@@ -51,15 +46,10 @@ int ChunkIdGenerator::create_recv_chunk_id(
     // create key
     const auto key = std::make_tuple(tag, src, dest, chunk_size);
 
-    // search whether the key exists
-    auto entry = chunk_id_map.find(key);
+    // single probe: default-construct the entry in place if absent
+    const auto entry = chunk_id_map.try_emplace(key).first;
 
-    // key doesn't exist, create new entry
-    if (entry == chunk_id_map.end()) {
-        entry = chunk_id_map.emplace(key, ChunkIdGeneratorEntry()).first;
-    }
-
-    // if key exists, increment send id and return
+    // increment id and return
     entry->second.increment_recv_id();
     return entry->second.get_recv_id();
 }

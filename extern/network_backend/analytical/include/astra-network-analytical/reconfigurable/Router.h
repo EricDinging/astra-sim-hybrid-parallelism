@@ -57,13 +57,14 @@ class Router {
     /**
      * Route from src to dst (override > cache > computed DOR).
      *
-     * The returned reference is valid until the next lookup() that misses and
-     * evicts; every caller copies it into the Chunk immediately (Chunk owns its
-     * route, copied by value) before any other lookup, and the simulator is
-     * single-threaded, so no eviction can dangle the reference. Overrides are
-     * never evicted.
+     * Returns a shared handle to the cached route: callers copy the handle
+     * (one refcount bump) into the Chunk instead of deep-copying the hop list.
+     * The referenced shared_ptr slot is valid until the next lookup() that
+     * misses and evicts; every caller copies the handle immediately and the
+     * simulator is single-threaded, so no eviction can dangle it — and even
+     * an evicted route stays alive for the chunks that still hold it.
      */
-    const Route& lookup(DeviceId src, DeviceId dst) const noexcept;
+    const RoutePtr& lookup(DeviceId src, DeviceId dst) const noexcept;
 
     /// Install an OCS override for (s, t) and drop any stale cached entry.
     void set_override(DeviceId s, DeviceId t, Route route) noexcept;
@@ -103,10 +104,11 @@ class Router {
                static_cast<std::uint64_t>(t);
     }
 
-    /// Approximate resident bytes of a cached route (list node + shared_ptr +
-    /// allocator overhead per hop, plus the LRU/map bookkeeping per entry).
+    /// Approximate resident bytes of a cached route (conservative: the old
+    /// per-hop list-node estimate is kept even though the shared vector is
+    /// denser, so the budget semantics are unchanged).
     static std::size_t route_bytes(const Route& r) noexcept {
-        constexpr std::size_t kPerHop = 56;    // list node + shared_ptr + malloc hdr
+        constexpr std::size_t kPerHop = 56;    // shared_ptr slot + former list-node headroom
         constexpr std::size_t kPerEntry = 96;  // list pair + 2 unordered_map nodes
         return kPerEntry + kPerHop * r.size();
     }
@@ -124,11 +126,11 @@ class Router {
     const std::unordered_set<int>* failed_npus_;
 
     // Sparse OCS overrides. Persistent, consulted first, never evicted.
-    std::unordered_map<std::uint64_t, Route> overrides_;
+    std::unordered_map<std::uint64_t, RoutePtr> overrides_;
 
     // Bounded LRU cache: front == most-recently-used. The cache is logically
     // const (a pure accelerator), hence mutable.
-    using LruList = std::list<std::pair<std::uint64_t, Route>>;
+    using LruList = std::list<std::pair<std::uint64_t, RoutePtr>>;
     mutable LruList lru_;
     mutable std::unordered_map<std::uint64_t, LruList::iterator> cache_;
     mutable std::size_t cur_bytes_;

@@ -33,11 +33,6 @@ std::shared_ptr<Link> Device::get_link(const DeviceId id) const noexcept {
     return links.at(id);
 }
 
-struct LinkFreeCallbackArg {
-    std::shared_ptr<Device> device_ptr;
-    DeviceId link_id;
-};
-
 int Device::pending_chunks_count(const DeviceId id) const noexcept {
     assert(id >= 0);
     assert(connected(id));
@@ -45,30 +40,36 @@ int Device::pending_chunks_count(const DeviceId id) const noexcept {
 }
 
 void Device::link_become_free(DeviceId link_id) noexcept {
+    // one lookup per map; hold the references for the rest of the call
+    const auto link_it = links.find(link_id);
+    assert(link_it != links.end());
+    const auto& link = link_it->second;
+    const auto pending_it = pending_chunks.find(link_id);
+    assert(pending_it != pending_chunks.end());
+    auto& pending = pending_it->second;
 
     // set link free
-    links[link_id]->set_free();
-    link_freed_hook(links[link_id].get());
+    link->set_free();
+    link_freed_hook(link.get());
     // std::cout << "Device " << device_id << ": link to " << link_id << " is free at time " << Link::get_current_time()
     // << std::endl;
 
     // process pending chunks if one exist
-    if (pending_chunks[link_id].empty() ||
-        pending_chunks[link_id].front()->get_topology_iteration() > topology_iteration) {
+    if (pending.empty() || pending.front()->get_topology_iteration() > topology_iteration) {
         // Each link must report drained exactly once. If fluid flows are still
         // registered on this link (link_freed_hook above may have un-parked some
         // of them), the FlowEngine's own link-empty notification is the single
         // report for this link, so skip ours to avoid double-counting.
-        if (flow_count_probe(links[link_id].get()) == 0) {
+        if (flow_count_probe(link.get()) == 0) {
             increment_callback();
         }
         return;
     }
 
     // printf("Pending chunk topology iteration: %d, current topology iteration: %d\n",
-    //        pending_chunks[link_id].front()->get_topology_iteration(), topology_iteration);
+    //        pending.front()->get_topology_iteration(), topology_iteration);
 
-    if (links[link_id]->get_bandwidth() == Bandwidth(0)) {
+    if (link->get_bandwidth() == Bandwidth(0)) {
         // A pending chunk must stay queued while the link has no bandwidth:
         // sending would compute an infinite serialization delay and cast it
         // to an integer event time (UB). Reachable when a reconfigure
@@ -77,35 +78,27 @@ void Device::link_become_free(DeviceId link_id) noexcept {
         return;
     }
 
-    std::unique_ptr<Chunk> chunk = std::move(pending_chunks[link_id].front());
-    pending_chunks[link_id].pop_front();
+    std::unique_ptr<Chunk> chunk = std::move(pending.front());
+    pending.pop_front();
 
-    auto next_link_free_time = links[link_id]->send(std::move(chunk));
-    // schedule the next link free event
-    // create a new callback argument for the next link free event
-    LinkFreeCallbackArg* next_callback_arg = new LinkFreeCallbackArg{shared_from_this(), link_id};
-    // get the next link free time
+    auto next_link_free_time = link->send(std::move(chunk));
 
     // std::cout << "Device " << device_id << ": link to " << link_id << " becomes free at time and scheduled another
-    // chunk " << next_link_free_time << ", link pending chunk: " << pending_chunks[link_id].size() << std::endl;
+    // chunk " << next_link_free_time << ", link pending chunk: " << pending.size() << std::endl;
 
-    Link::schedule_event(next_link_free_time, link_become_free, next_callback_arg);
+    // schedule the next link free event (arg preallocated in the link)
+    Link::schedule_event(next_link_free_time, link_become_free, link->free_callback_arg());
 }
 
 void Device::link_become_free(void* const arg) noexcept {
     assert(arg != nullptr);
     const auto* const callback_arg = static_cast<const LinkFreeCallbackArg*>(arg);
-    assert(callback_arg->device_ptr != nullptr);
+    assert(callback_arg->device != nullptr);
     assert(callback_arg->link_id >= 0);
 
-    auto device = callback_arg->device_ptr;
-
-    // invoke the link become free method on the device
-    device->link_become_free(callback_arg->link_id);
-
-    // clean up the callback argument
-
-    delete callback_arg;
+    // invoke the link become free method on the device; the argument is owned
+    // by the link (preallocated), so nothing to free here
+    callback_arg->device->link_become_free(callback_arg->link_id);
 }
 
 void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
@@ -131,10 +124,13 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
         // its true destination (route.back()). Refreshing toward the *next
         // hop* here truncated the route to one hop and delivered the chunk
         // there as if it had arrived (P0-1).
-        const DeviceId dest_id = chunk->route.back()->get_id();
+        const DeviceId dest_id = chunk->get_route().back()->get_id();
         // DOR mode: fetch the route on demand; BFS mode: use the per-row copy.
-        const Route& r = (router_ != nullptr) ? router_->lookup(device_id, dest_id) : routes[dest_id];
-        chunk->update_route(r, topology_iteration);
+        if (router_ != nullptr) {
+            chunk->update_route(router_->lookup(device_id, dest_id), topology_iteration);
+        } else {
+            chunk->update_route(std::make_shared<const Route>(routes[dest_id]), topology_iteration);
+        }
     }
 
     // get next dest
@@ -144,25 +140,28 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     // assert the next dest is connected to this node
     assert(connected(next_dest_id));
 
-    auto link = links[next_dest_id];
+    // one lookup; hold the reference
+    const auto link_it = links.find(next_dest_id);
+    assert(link_it != links.end());
+    const auto& link = link_it->second;
 
     if (link->is_busy() || link->get_bandwidth() == Bandwidth(0) ||
         chunk->get_topology_iteration() > topology_iteration) {
         // link is busy, add the chunk to pending chunks
-        pending_chunks[next_dest_id].push_back(std::move(chunk));
+        auto& pending = pending_chunks.find(next_dest_id)->second;
+        pending.push_back(std::move(chunk));
         if (kVerboseLogging) {
             debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(next_dest_id) +
                         " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " +
-                        std::to_string(pending_chunks[next_dest_id].size()));
+                        std::to_string(pending.size()));
         }
         return;
     }
 
     // send the chunk to the next dest
-    // delegate this task to the link
-    auto link_free_time = links[next_dest_id]->send(std::move(chunk));
-    LinkFreeCallbackArg* args = new LinkFreeCallbackArg{shared_from_this(), next_dest_id};
-    Link::schedule_event(link_free_time, link_become_free, args);
+    // delegate this task to the link (link-free event arg preallocated in it)
+    auto link_free_time = link->send(std::move(chunk));
+    Link::schedule_event(link_free_time, link_become_free, link->free_callback_arg());
 }
 
 void Device::connect(const DeviceId id, const Bandwidth bandwidth, const Latency latency) noexcept {
@@ -173,8 +172,10 @@ void Device::connect(const DeviceId id, const Bandwidth bandwidth, const Latency
     // assert there's no existing connection
     assert(!connected(id));
 
-    // create link
-    links[id] = std::make_shared<Link>(bandwidth, latency);
+    // create link, binding its preallocated link-free callback arg to us
+    auto link = std::make_shared<Link>(bandwidth, latency);
+    link->set_free_callback_arg(this, id);
+    links[id] = std::move(link);
     pending_chunks[id] = std::list<std::unique_ptr<Chunk>>();
 }
 
@@ -240,11 +241,8 @@ void Device::reconfigure(const BandwidthRow& bandwidth,
                         ", new bandwidth: " + std::to_string(bw));
         }
         auto free_time = link->reconfigure(bw, lt, reconfig_time);
-        // create a callback argument for the link free event
-
-        LinkFreeCallbackArg* args = new LinkFreeCallbackArg{shared_from_this(), id};
-        // schedule the link free event
-        Link::schedule_event(free_time, link_become_free, args);
+        // schedule the link free event (arg preallocated in the link)
+        Link::schedule_event(free_time, link_become_free, link->free_callback_arg());
     }
 
     // std::vector<std::unique_ptr<Chunk>> pending_chunks_copy;

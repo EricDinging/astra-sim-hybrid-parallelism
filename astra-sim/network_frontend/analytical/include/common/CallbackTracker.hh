@@ -9,6 +9,7 @@ LICENSE file in the root directory of this source tree.
 #include "common/ChunkIdGenerator.hh"
 #include <functional>
 #include <unordered_map>
+#include <utility>
 
 namespace AstraSimAnalytical {
 
@@ -73,6 +74,20 @@ class CallbackTracker {
                                            int dest,
                                            ChunkSize chunk_size,
                                            int chunk_id) noexcept;
+
+    /**
+     * Get the entry identified by (tag, src, dest, chunk_size, chunk_id),
+     * creating it if absent — a single hash probe instead of the
+     * search_entry()-then-create_new_entry() double probe on the miss path.
+     *
+     * @return pair of (pointer to the entry, whether it already existed)
+     */
+    std::pair<CallbackTrackerEntry*, bool> find_or_create_entry(
+        int tag,
+        int src,
+        int dest,
+        ChunkSize chunk_size,
+        int chunk_id) noexcept;
 
     /**
      * Remove the entry identified by (tag, src, dest, chunk_size, chunk_id)

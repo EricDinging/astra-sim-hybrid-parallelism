@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 #include "common/Type.h"
 #include "reconfigurable/Type.h"
 #include <functional>
+#include <list>
 #include <map>
 #include <memory>
 #include <queue>

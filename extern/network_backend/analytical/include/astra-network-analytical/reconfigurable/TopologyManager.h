@@ -152,6 +152,19 @@ class TopologyManager {
      */
     void send(std::unique_ptr<Chunk> chunk) noexcept;
 
+    /**
+     * Construct and transmit a chunk from src to dest in one step, using the
+     * cached route directly (no throwaway stub route). Equivalent to building
+     * a Chunk on the stub route(src, dest) and calling send() on it.
+     *
+     * @param chunk_size size of the chunk
+     * @param src src NPU id
+     * @param dest dest NPU id
+     * @param callback callback invoked when the chunk arrives at dest
+     * @param callback_arg argument of the callback
+     */
+    void send(ChunkSize chunk_size, DeviceId src, DeviceId dest, Callback callback, CallbackArg callback_arg) noexcept;
+
     bool is_reconfiguring() const noexcept;
 
     /// Select the congestion model. Must be called after construction and

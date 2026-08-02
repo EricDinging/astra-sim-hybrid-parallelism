@@ -44,45 +44,33 @@ int ReconfigurableNetworkApi::get_inflight_coll() {
 }
 
 int ReconfigurableNetworkApi::sim_send(void* const buffer,
-                                        const uint64_t count,
-                                        const int type,
-                                        const int dst,
-                                        const int tag,
-                                        sim_request* const request,
-                                        void (*msg_handler)(void*),
-                                        void* const fun_arg) {
+                                       const uint64_t count,
+                                       const int type,
+                                       const int dst,
+                                       const int tag,
+                                       sim_request* const request,
+                                       void (*msg_handler)(void*),
+                                       void* const fun_arg) {
     // query chunk id
     const auto src = sim_comm_get_rank();
     const auto chunk_id =
         ReconfigurableNetworkApi::chunk_id_generator.create_send_chunk_id(
             tag, src, dst, count);
 
-    // search tracker
-    const auto entry =
-        callback_tracker.search_entry(tag, src, dst, count, chunk_id);
-    if (entry.has_value()) {
-        // recv operation already issued.
-        // register send callback
-        entry.value()->register_send_callback(msg_handler, fun_arg);
-    } else {
-        // recv operation not issued yet
-        // create new entry and insert callback
-        auto* const new_entry =
-            callback_tracker.create_new_entry(tag, src, dst, count, chunk_id);
-        new_entry->register_send_callback(msg_handler, fun_arg);
-    }
+    // register the send callback (single probe: the entry is created here if
+    // the recv operation hasn't been issued yet)
+    auto* const entry =
+        callback_tracker.find_or_create_entry(tag, src, dst, count, chunk_id)
+            .first;
+    entry->register_send_callback(msg_handler, fun_arg);
 
-    // create chunk
+    // initiate transmission from src -> dst on the cached route (no
+    // throwaway 2-node stub route)
     auto chunk_arrival_arg = std::tuple(tag, src, dst, count, chunk_id);
     auto arg = std::make_unique<decltype(chunk_arrival_arg)>(chunk_arrival_arg);
     const auto arg_ptr = static_cast<void*>(arg.release());
-    const auto route = tm->route(src, dst);
-    auto chunk = std::make_unique<Chunk>(
-        count, route, ReconfigurableNetworkApi::process_chunk_arrival,
-        arg_ptr);
-
-    // initiate transmission from src -> dst.
-    tm->send(std::move(chunk));
+    tm->send(count, src, dst, ReconfigurableNetworkApi::process_chunk_arrival,
+             arg_ptr);
 
     // return
     return 0;

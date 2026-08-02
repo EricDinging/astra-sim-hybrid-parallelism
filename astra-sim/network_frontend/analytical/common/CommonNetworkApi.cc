@@ -110,32 +110,24 @@ int CommonNetworkApi::sim_recv(void* const buffer,
         CommonNetworkApi::chunk_id_generator.create_recv_chunk_id(tag, src, dst,
                                                                   count);
 
-    // search tracker
-    auto entry = callback_tracker.search_entry(tag, src, dst, count, chunk_id);
-    if (entry.has_value()) {
-        // send() already invoked
-        // behavior is decided whether the transmission is already finished or
-        // not
-        if (entry.value()->is_transmission_finished()) {
-            // transmission already finished, run callback immediately
+    // single probe: get the entry, creating it if send() wasn't called yet
+    const auto [entry, existed] =
+        callback_tracker.find_or_create_entry(tag, src, dst, count, chunk_id);
+    if (existed && entry->is_transmission_finished()) {
+        // send() already invoked and transmission already finished:
+        // run callback immediately
 
-            // pop entry (and retire the chunk-id key when fully drained)
-            callback_tracker.pop_entry(tag, src, dst, count, chunk_id);
-            chunk_id_generator.retire_chunk(tag, src, dst, count);
+        // pop entry (and retire the chunk-id key when fully drained)
+        callback_tracker.pop_entry(tag, src, dst, count, chunk_id);
+        chunk_id_generator.retire_chunk(tag, src, dst, count);
 
-            // run recv callback immediately
-            const auto delta = timespec_t{NS, 0};
-            sim_schedule(delta, msg_handler, fun_arg);
-        } else {
-            // transmission not finished yet, just register callback
-            entry.value()->register_recv_callback(msg_handler, fun_arg);
-        }
+        // run recv callback immediately
+        const auto delta = timespec_t{NS, 0};
+        sim_schedule(delta, msg_handler, fun_arg);
     } else {
-        // send() not yet called
-        // create new entry and insert callback
-        auto* const new_entry =
-            callback_tracker.create_new_entry(tag, src, dst, count, chunk_id);
-        new_entry->register_recv_callback(msg_handler, fun_arg);
+        // transmission not finished (or send() not yet called on the
+        // just-created entry): just register the callback
+        entry->register_recv_callback(msg_handler, fun_arg);
     }
 
     // return

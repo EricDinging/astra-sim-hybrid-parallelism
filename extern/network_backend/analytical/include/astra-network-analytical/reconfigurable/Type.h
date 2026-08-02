@@ -5,9 +5,9 @@ LICENSE file in the root directory of this source tree.
 
 #pragma once
 
-#include <list>
 #include <memory>
 #include <optional>
+#include <vector>
 
 namespace NetworkAnalyticalReconfigurable {
 
@@ -16,7 +16,12 @@ class Chunk;
 class Link;
 class Device;
 
-/// Route is a list of devices
-using Route = std::list<std::shared_ptr<Device>>;
+/// Route is a sequence of devices
+using Route = std::vector<std::shared_ptr<Device>>;
+
+/// Shared, immutable route handle. The Router cache and every in-flight Chunk
+/// share one Route instance (one refcount bump per chunk instead of a per-chunk
+/// deep copy of the whole hop list); chunks track progress with a cursor.
+using RoutePtr = std::shared_ptr<const Route>;
 
 }  // namespace NetworkAnalyticalReconfigurable

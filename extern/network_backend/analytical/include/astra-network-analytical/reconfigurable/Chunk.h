@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "common/Type.h"
 #include "reconfigurable/Type.h"
+#include <cstddef>
 #include <memory>
 
 using namespace NetworkAnalytical;
@@ -37,16 +38,25 @@ class Chunk {
      * @param callback_arg: argument of the callback
      */
     Chunk(ChunkSize chunk_size,
-          Route route,
+          RoutePtr route,
           Callback callback,
           CallbackArg callback_arg,
           int topology_iteration) noexcept;
 
+    /// Convenience: wrap a by-value route into a shared handle (tests, example,
+    /// TopologyManager::route callers). The hot path passes a RoutePtr instead.
+    Chunk(
+        ChunkSize chunk_size, Route route, Callback callback, CallbackArg callback_arg, int topology_iteration) noexcept
+        : Chunk(
+              chunk_size, std::make_shared<const Route>(std::move(route)), callback, callback_arg, topology_iteration) {
+    }
+
     Chunk(ChunkSize chunk_size, Route route, Callback callback, CallbackArg callback_arg) noexcept
         : Chunk(chunk_size, std::move(route), callback, callback_arg, -1) {}
 
-    void update_route(Route new_route, int topology_iteration) noexcept {
+    void update_route(RoutePtr new_route, int topology_iteration) noexcept {
         route = std::move(new_route);
+        cursor = 0;
         this->topology_iteration = topology_iteration;
     }
 
@@ -95,14 +105,30 @@ class Chunk {
      */
     void invoke_callback() noexcept;
 
-    /// route of the chunk to its destination, structured
-    /// [current device, next device, ..., dest device]; e.g., a chunk from
-    /// device 5 to destination 3 could hold [5, 1, 6, 2, 3]. The last element
-    /// is invariantly the true destination (routes are only ever installed
-    /// whole), which is what the stale-route refresh in Device::send relies on.
-    Route route;
+    /// Full route [src, ..., dest], shared (immutable) with the Router cache.
+    /// The last element is invariantly the true destination (routes are only
+    /// ever installed whole), which the stale-route refresh in Device::send
+    /// relies on.
+    [[nodiscard]] const Route& get_route() const noexcept {
+        return *route;
+    }
+
+    /// Index of the current device within the route (replaces the old
+    /// per-chunk route copy + pop_front).
+    [[nodiscard]] std::size_t get_cursor() const noexcept {
+        return cursor;
+    }
 
   private:
+    /// route of the chunk from its source to destination, structured
+    /// [src, next device, ..., dest device]; e.g., a chunk from device 5 to
+    /// destination 3 could hold [5, 1, 6, 2, 3]. Shared with the Router cache
+    /// and never mutated; `cursor` marks the current device.
+    RoutePtr route;
+
+    /// index of the chunk's current device within `route`
+    std::size_t cursor;
+
     /// size of the chunk
     ChunkSize chunk_size;
 
