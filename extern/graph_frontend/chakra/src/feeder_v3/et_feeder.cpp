@@ -1,4 +1,5 @@
 #include "et_feeder.h"
+#include <cstdlib>
 #include "common.h"
 #include "protobuf_util.h"
 
@@ -107,8 +108,20 @@ void ETFeeder::freeChildrenNodes(const NodeId& node_id) {
 }
 
 uint64_t ETFeeder::_operator_id_cnt = 0;
+
+// See common.h: default sized for a saturated 16^3 run; CHAKRA_NODE_CACHE_SIZE
+// overrides (nodes, not bytes). Read once at static init.
+static size_t node_cache_capacity() {
+  const char* env = std::getenv("CHAKRA_NODE_CACHE_SIZE");
+  if (env != nullptr) {
+    const auto v = std::strtoull(env, nullptr, 10);
+    if (v > 0)
+      return static_cast<size_t>(v);
+  }
+  return DEFAULT_ETFEEDER_CACHE_SIZE;
+}
 Cache<std::tuple<ETFeederId, NodeId>, ChakraNode> ETFeeder::_node_cache(
-    DEFAULT_ETFEEDER_CACHE_SIZE);
+    node_cache_capacity());
 
 void ETFeeder::build_index_dependancy_cache() {
   this->chakra_file.clear();
