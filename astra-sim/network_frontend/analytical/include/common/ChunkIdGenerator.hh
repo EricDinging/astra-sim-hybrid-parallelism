@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "common/ChunkIdGeneratorEntry.hh"
 #include <astra-network-analytical/common/Type.h>
+#include <cstdint>
 #include <tuple>
 #include <unordered_map>
 
@@ -23,19 +24,28 @@ class ChunkIdGenerator {
     /// Key = (tag, src, dest, chunk_size)
     using Key = std::tuple<int, int, int, ChunkSize>;
 
-    /// Hash functor for the tuple key. std::unordered_map has no built-in hash
-    /// for std::tuple, so combine the four field hashes (boost-style mix).
+    /// Hash functor for the tuple key. std::unordered_map has no built-in
+    /// hash for std::tuple. Per-chunk hot path: pack the four fields into
+    /// two 64-bit words and splitmix64 each -- two multiplies instead of
+    /// four std::hash calls + four mix rounds. Hash choice only affects
+    /// bucket placement, never map contents: results are identical.
     struct KeyHash {
+        static std::size_t mix64(std::uint64_t x) noexcept {
+            x += 0x9e3779b97f4a7c15ULL;
+            x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+            x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+            return static_cast<std::size_t>(x ^ (x >> 31));
+        }
         std::size_t operator()(const Key& key) const noexcept {
-            std::size_t h = 0;
-            const auto mix = [&h](const std::size_t v) {
-                h ^= v + 0x9e3779b97f4a7c15ULL + (h << 6) + (h >> 2);
-            };
-            mix(std::hash<int>{}(std::get<0>(key)));
-            mix(std::hash<int>{}(std::get<1>(key)));
-            mix(std::hash<int>{}(std::get<2>(key)));
-            mix(std::hash<ChunkSize>{}(std::get<3>(key)));
-            return h;
+            const auto a = (static_cast<std::uint64_t>(
+                                static_cast<std::uint32_t>(std::get<0>(key)))
+                            << 32) |
+                           static_cast<std::uint32_t>(std::get<1>(key));
+            const auto b = (static_cast<std::uint64_t>(
+                                static_cast<std::uint32_t>(std::get<2>(key)))
+                            << 32) ^
+                           static_cast<std::uint64_t>(std::get<3>(key));
+            return mix64(a) ^ mix64(b);
         }
     };
 

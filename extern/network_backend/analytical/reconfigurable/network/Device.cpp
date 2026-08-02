@@ -29,7 +29,10 @@ DeviceId Device::get_id() const noexcept {
 
 std::shared_ptr<Link> Device::get_link(const DeviceId id) const noexcept {
     assert(id >= 0);
-    assert(connected(id));
+    // No assert(connected(id)): it duplicates the bounds check links.at()
+    // already performs (throws on a missing key), and this runs per hop with
+    // asserts live in this project's release builds -- the redundant check
+    // is a full extra map lookup.
     return links.at(id);
 }
 
@@ -137,10 +140,9 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     const auto next_dest = chunk->next_device();
     const auto next_dest_id = next_dest->get_id();
 
-    // assert the next dest is connected to this node
-    assert(connected(next_dest_id));
-
-    // one lookup; hold the reference
+    // one lookup; hold the reference (the assert below already proves the
+    // next dest is connected -- a separate assert(connected(...)) would be a
+    // second map walk per hop, and asserts are live in release here)
     const auto link_it = links.find(next_dest_id);
     assert(link_it != links.end());
     const auto& link = link_it->second;
