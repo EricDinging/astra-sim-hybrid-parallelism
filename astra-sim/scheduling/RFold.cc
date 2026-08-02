@@ -609,12 +609,16 @@ PlacementResult RFold::try_place(const JobInstance& job,
     } else {
         std::unordered_set<int> free(view.free_npus().begin(),
                                      view.free_npus().end());
+        // Search-wide scratch: free bitmap + block census + tile-plan memo,
+        // built once and shared by every variant's selector call.
+        SearchScratch scratch(free, cm, dims);
+        scratch.tile_plan_memo = &tile_plan_memo_;
         for (const auto& v : FoldEnumerator::enumerate(job.shape, multifold_)) {
             if (fits_cluster(v.footprint, dims)) {
                 any_fits = true;
             }
-            auto p =
-                selector_->select(v, free, dims, cm, *scorer_, *ranker_, ring);
+            auto p = selector_->select(v, free, dims, cm, *scorer_, *ranker_,
+                                       ring, scratch);
             if (p) {
                 candidates.push_back(std::move(*p));
             }

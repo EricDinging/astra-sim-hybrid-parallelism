@@ -240,7 +240,8 @@ void SchedRuntime::commit_placement(JobInstance* job,
     place_job(job, r.npus);
 }
 
-PlacementResult SchedRuntime::attempt_place(JobInstance* job) {
+PlacementResult SchedRuntime::attempt_place(JobInstance* job,
+                                            const ClusterView& view) {
     const bool sticky = placement_->defer_is_shape_sticky();
     if (sticky) {
         auto it = defer_memo_.find(job->shape);
@@ -258,7 +259,7 @@ PlacementResult SchedRuntime::attempt_place(JobInstance* job) {
         ctx = make_sched_context(job);
         placement_->set_sched_context(&ctx);
     }
-    auto r = placement_->try_place(*job, snapshot_cluster_view());
+    auto r = placement_->try_place(*job, view);
     placement_->set_sched_context(nullptr);
     if (sticky && r.outcome == PlacementOutcome::DEFER) {
         defer_memo_[job->shape] = detach_epoch_;
@@ -276,15 +277,18 @@ void SchedRuntime::sweep() {
         return;
     }
     auto logger = LoggerFactory::get_logger("scheduling");
+    // One snapshot per sweep, refreshed only after a placement mutates the
+    // cluster (DROP/DEFER leave it untouched).
+    ClusterView view = snapshot_cluster_view();
     while (true) {
-        JobInstance* job =
-            admission_->select_next(pending_, snapshot_cluster_view());
+        JobInstance* job = admission_->select_next(pending_, view);
         if (job == nullptr) {
             break;
         }
-        auto r = attempt_place(job);
+        auto r = attempt_place(job, view);
         if (r.outcome == PlacementOutcome::PLACED) {
             commit_placement(job, r);
+            view = snapshot_cluster_view();
         } else if (r.outcome == PlacementOutcome::DROP) {
             remove_from_pending(job);
             job->status = JobStatus::DROPPED;
@@ -309,16 +313,22 @@ void SchedRuntime::sweep() {
 void SchedRuntime::greedy_sweep() {
     auto logger = LoggerFactory::get_logger("scheduling");
     std::vector<JobInstance*> eligible(pending_.begin(), pending_.end());
+    ClusterView view = snapshot_cluster_view();
     while (true) {
-        JobInstance* job =
-            admission_->select_next(eligible, snapshot_cluster_view());
+        JobInstance* job = admission_->select_next(eligible, view);
         if (job == nullptr) {
             break;
         }
-        eligible.erase(std::find(eligible.begin(), eligible.end(), job));
-        auto r = attempt_place(job);
+        // Swap-and-pop: selection scans the whole vector with a strict total
+        // key order, so eligible's element order is irrelevant -- no need for
+        // the order-preserving O(q) erase.
+        auto it = std::find(eligible.begin(), eligible.end(), job);
+        *it = eligible.back();
+        eligible.pop_back();
+        auto r = attempt_place(job, view);
         if (r.outcome == PlacementOutcome::PLACED) {
             commit_placement(job, r);
+            view = snapshot_cluster_view();
         } else if (r.outcome == PlacementOutcome::DROP) {
             remove_from_pending(job);
             job->status = JobStatus::DROPPED;
@@ -342,11 +352,13 @@ void SchedRuntime::easy_sweep() {
 
     // Place the FCFS head repeatedly until one cannot place (the pivot),
     // dropping any unplaceable head along the way.
+    ClusterView view = snapshot_cluster_view();
     while (!pending_.empty()) {
         JobInstance* head = fcfs_head();
-        auto r = attempt_place(head);
+        auto r = attempt_place(head, view);
         if (r.outcome == PlacementOutcome::PLACED) {
             commit_placement(head, r);
+            view = snapshot_cluster_view();
             continue;
         }
         if (r.outcome == PlacementOutcome::DROP) {
@@ -399,9 +411,10 @@ void SchedRuntime::easy_sweep() {
             if (!backfill_safe(res, cand_end, cand->num_ranks, extra)) {
                 continue;
             }
-            auto cr = attempt_place(cand);
+            auto cr = attempt_place(cand, view);
             if (cr.outcome == PlacementOutcome::PLACED) {
                 commit_placement(cand, cr);
+                view = snapshot_cluster_view();
                 // Consume reservation slack only for a job admitted via the
                 // extra-nodes path (condition b: finishes after shadow_time).
                 if (cand_end > res.shadow_time) {

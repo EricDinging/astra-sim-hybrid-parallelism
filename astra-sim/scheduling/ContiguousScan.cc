@@ -12,7 +12,7 @@ namespace Scheduling {
 void scan_contiguous_fits(
     const FoldVariant& v,
     const std::vector<int>& dims,
-    const std::unordered_set<int>& free,
+    const std::uint8_t* free_mask,
     int K,
     bool& any_fits_cluster,
     const std::function<void(const std::vector<int>&,
@@ -46,7 +46,7 @@ void scan_contiguous_fits(
                         }
                         int n =
                             cc[2] * dims[1] * dims[0] + cc[1] * dims[0] + cc[0];
-                        if (free.find(n) == free.end()) {
+                        if (free_mask[n] == 0) {
                             ok = false;
                         } else {
                             cand[i] = n;

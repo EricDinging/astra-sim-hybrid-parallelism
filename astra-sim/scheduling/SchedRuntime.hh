@@ -120,7 +120,10 @@ class SchedRuntime {
     // returned without re-running the search until the next completion frees
     // NPUs (the free set only grows at detach, and a same-or-smaller free
     // set cannot flip DEFER to PLACED). All sweeps route through this.
-    PlacementResult attempt_place(JobInstance* job);
+    // `view` is the sweep-maintained cluster snapshot: sweeps build it once
+    // and refresh it only after commit_placement (the only in-sweep cluster
+    // mutation), instead of rebuilding the O(N) snapshot per attempt.
+    PlacementResult attempt_place(JobInstance* job, const ClusterView& view);
 
     NetworkAnalytical::EventQueue* event_queue_;
     std::vector<Sys*> all_sys_;

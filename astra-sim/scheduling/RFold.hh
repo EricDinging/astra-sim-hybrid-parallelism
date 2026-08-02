@@ -11,6 +11,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/PlacementPolicy.hh"
 #include "astra-sim/scheduling/PlacementRanker.hh"
 #include "astra-sim/scheduling/SchedContext.hh"
+#include "astra-sim/scheduling/SearchScratch.hh"
 #include "astra-sim/scheduling/SpaceFillingCurve.hh"
 
 #include <array>
@@ -89,6 +90,10 @@ class RFold : public PlacementPolicy {
     std::unique_ptr<FragmentationScorer> scorer_;
     std::unique_ptr<PlacementRanker> ranker_;
     std::map<std::array<int, 3>, bool> idle_ok_;
+    // Cross-search memo of tilings + per-tile offset masks, keyed by
+    // footprint (block dims are fixed per policy instance; pure geometry, so
+    // safe to reuse across jobs and cluster states).
+    std::map<std::array<int, 3>, TilePlan> tile_plan_memo_;
     const SchedContext* runtime_ctx_ = nullptr;
     bool multifold_;
     // Shape-constraint relaxation (--rfold-relax): when no fold variant

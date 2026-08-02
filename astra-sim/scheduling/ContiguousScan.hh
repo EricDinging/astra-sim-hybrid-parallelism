@@ -8,8 +8,8 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/FoldEnumerator.hh"
 
 #include <array>
+#include <cstdint>
 #include <functional>
-#include <unordered_set>
 #include <vector>
 
 namespace AstraSim {
@@ -20,10 +20,13 @@ namespace Scheduling {
 // anchor, invoke on_fit(rank_map, physical_footprint). Sets any_fits_cluster if
 // some rotation's footprint fits the cluster dims (regardless of occupancy) --
 // the caller uses it to distinguish DEFER from DROP. Callers score/keep-best.
+// `free_mask` is a flat by-NPU-id membership bitmap (SearchScratch::free_mask):
+// the probe loop runs up to 6 x N anchors x K chips per variant, so membership
+// must be an array index, not a hash probe.
 void scan_contiguous_fits(
     const FoldVariant& v,
     const std::vector<int>& dims,
-    const std::unordered_set<int>& free,
+    const std::uint8_t* free_mask,
     int K,
     bool& any_fits_cluster,
     const std::function<void(const std::vector<int>&,

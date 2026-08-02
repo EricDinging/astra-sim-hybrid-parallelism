@@ -6,6 +6,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "astra-sim/scheduling/BlockTiler.hh"
 #include "astra-sim/scheduling/FootprintRouter.hh"
+#include "astra-sim/scheduling/SearchScratch.hh"
 
 #include <algorithm>
 #include <cstdint>
@@ -207,7 +208,8 @@ std::optional<std::vector<int>> scatter_assign_nested(
     const std::vector<int>& dims,
     const BlockModel& cm,
     const std::vector<std::pair<int, int>>& ring,
-    int budget) {
+    int budget,
+    SearchScratch* scratch) {
     const std::array<int, 3> blk = cm.block_dims();
     const std::array<int, 3>& fp = v.footprint;
 
@@ -215,32 +217,89 @@ std::optional<std::vector<int>> scatter_assign_nested(
         return cyc;
     }
 
-    Tiling t = tile(fp, blk);
     const int vol = blk[0] * blk[1] * blk[2];
+    const int words = (vol + 63) / 64;
 
     // Per-block free-chip census: `count` (0 < count < vol marks a fragmented
     // block — preferred host for partial tiles) plus a bitmask of the free
     // chips (x-fastest in-block bit order), so the tile-fit checks in the DFS
-    // are word ops instead of per-chip hash probes.
-    const int words = (vol + 63) / 64;
-    struct BlockFree {
-        int count = 0;
-        std::vector<uint64_t> mask;
-    };
-    std::map<std::array<int, 3>, BlockFree> free_in_block;
-    for (int n : free) {
-        auto& fb = free_in_block[cm.block_of(n)];
-        if (fb.mask.empty()) {
-            fb.mask.assign(words, 0);
+    // are word ops instead of per-chip hash probes. The census depends only
+    // on (free, blk) — constant across every call of one placement search —
+    // so it is built once in the scratch and shared; the local fallback keeps
+    // scratch-less callers working.
+    auto build_census = [&](ScatterCensus& out) {
+        for (int n : free) {
+            auto& fb = out[cm.block_of(n)];
+            if (fb.mask.empty()) {
+                fb.mask.assign(words, 0);
+            }
+            const int x = n % dims[0];
+            const int y = (n / dims[0]) % dims[1];
+            const int z = n / (dims[0] * dims[1]);
+            const int idx =
+                (x % blk[0]) + blk[0] * ((y % blk[1]) + blk[1] * (z % blk[2]));
+            fb.mask[idx >> 6] |= uint64_t{1} << (idx & 63);
+            ++fb.count;
         }
-        const int x = n % dims[0];
-        const int y = (n / dims[0]) % dims[1];
-        const int z = n / (dims[0] * dims[1]);
-        const int idx =
-            (x % blk[0]) + blk[0] * ((y % blk[1]) + blk[1] * (z % blk[2]));
-        fb.mask[idx >> 6] |= uint64_t{1} << (idx & 63);
-        ++fb.count;
+    };
+    ScatterCensus local_census;
+    if (scratch != nullptr) {
+        if (!scratch->census_built) {
+            build_census(scratch->census);
+            scratch->census_built = true;
+        }
+    } else {
+        build_census(local_census);
     }
+    const ScatterCensus& free_in_block =
+        scratch != nullptr ? scratch->census : local_census;
+
+    // Tiling + per-tile candidate offsets with their in-block need-masks: a
+    // pure function of (footprint, blk), so it is memoized across placement
+    // searches when the caller provides a memo (footprints recur across
+    // jobs); the DFS re-enters every level on each backtrack and the offset
+    // grid never changes.
+    auto build_plan = [&](TilePlan& plan) {
+        plan.t = tile(fp, blk);
+        plan.offs.resize(plan.t.blocks.size());
+        for (size_t bi = 0; bi < plan.t.blocks.size(); ++bi) {
+            const Block& tb = plan.t.blocks[bi];
+            for (int oz = 0; oz + tb.shape[2] <= blk[2]; ++oz) {
+                for (int oy = 0; oy + tb.shape[1] <= blk[1]; ++oy) {
+                    for (int ox = 0; ox + tb.shape[0] <= blk[0]; ++ox) {
+                        OffCand oc{{ox, oy, oz},
+                                   std::vector<uint64_t>(words, 0)};
+                        for (int z = 0; z < tb.shape[2]; ++z) {
+                            for (int y = 0; y < tb.shape[1]; ++y) {
+                                for (int x = 0; x < tb.shape[0]; ++x) {
+                                    const int idx =
+                                        (ox + x) +
+                                        blk[0] * ((oy + y) + blk[1] * (oz + z));
+                                    oc.need[idx >> 6] |= uint64_t{1}
+                                                         << (idx & 63);
+                                }
+                            }
+                        }
+                        plan.offs[bi].push_back(std::move(oc));
+                    }
+                }
+            }
+        }
+    };
+    TilePlan local_plan;
+    const TilePlan* plan_ptr = nullptr;
+    if (scratch != nullptr && scratch->tile_plan_memo != nullptr) {
+        auto [it, inserted] = scratch->tile_plan_memo->try_emplace(fp);
+        if (inserted) {
+            build_plan(it->second);
+        }
+        plan_ptr = &it->second;
+    } else {
+        build_plan(local_plan);
+        plan_ptr = &local_plan;
+    }
+    const Tiling& t = plan_ptr->t;
+    const std::vector<std::vector<OffCand>>& tile_offs = plan_ptr->offs;
 
     // Exact counting prune: a full tile occupies its entire block (count ==
     // vol required, and `taken` then bars any other tile from that block), so
@@ -265,36 +324,6 @@ std::optional<std::vector<int>> scatter_assign_nested(
         }
         if (whole_free < full_tiles) {
             return std::nullopt;
-        }
-    }
-
-    // Per-tile candidate offsets with their in-block need-masks, precomputed
-    // once — the DFS re-enters every level on each backtrack, and the offset
-    // grid never changes.
-    struct OffCand {
-        std::array<int, 3> o;
-        std::vector<uint64_t> need;
-    };
-    std::vector<std::vector<OffCand>> tile_offs(t.blocks.size());
-    for (size_t bi = 0; bi < t.blocks.size(); ++bi) {
-        const Block& tb = t.blocks[bi];
-        for (int oz = 0; oz + tb.shape[2] <= blk[2]; ++oz) {
-            for (int oy = 0; oy + tb.shape[1] <= blk[1]; ++oy) {
-                for (int ox = 0; ox + tb.shape[0] <= blk[0]; ++ox) {
-                    OffCand oc{{ox, oy, oz}, std::vector<uint64_t>(words, 0)};
-                    for (int z = 0; z < tb.shape[2]; ++z) {
-                        for (int y = 0; y < tb.shape[1]; ++y) {
-                            for (int x = 0; x < tb.shape[0]; ++x) {
-                                const int idx =
-                                    (ox + x) +
-                                    blk[0] * ((oy + y) + blk[1] * (oz + z));
-                                oc.need[idx >> 6] |= uint64_t{1} << (idx & 63);
-                            }
-                        }
-                    }
-                    tile_offs[bi].push_back(std::move(oc));
-                }
-            }
         }
     }
 

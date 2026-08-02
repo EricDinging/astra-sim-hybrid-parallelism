@@ -49,6 +49,8 @@ struct Placement {
 
 class PlacementRanker;
 
+class SearchScratch;
+
 // Pluggable strategy that maps a fold variant onto real blocks/NPUs.
 class BlockSelector {
   public:
@@ -57,7 +59,9 @@ class BlockSelector {
     // across variants in RFold); `ring_edges` are the job's logical comm-ring
     // edges as rank pairs (from FootprintRouter::ring_edges(shape));
     // variant-independent, so the caller computes them once and passes them
-    // in for OCS-edge scoring.
+    // in for OCS-edge scoring. `scratch` is the search-wide scratch built
+    // once per placement search (free bitmap, block census, tile-plan memo)
+    // and shared across every variant of that search.
     virtual std::optional<Placement> select(
         const FoldVariant& v,
         const std::unordered_set<int>& free,
@@ -65,14 +69,10 @@ class BlockSelector {
         const BlockModel& cm,
         const FragmentationScorer& scorer,
         const PlacementRanker& ranker,
-        const std::vector<std::pair<int, int>>& ring_edges) const = 0;
-};
-
-// Contiguous placement (folding's anchor-scan); OCS realizes the ring edges
-// whose endpoints aren't torus-adjacent (closures / cross-block). Reused by
-// min-reconfig's contiguous phase.
-class ContiguousFirst : public BlockSelector {
-  public:
+        const std::vector<std::pair<int, int>>& ring_edges,
+        SearchScratch& scratch) const = 0;
+    // Convenience for single-shot callers (tests, the idle oracle): builds a
+    // throwaway scratch and forwards to the virtual overload.
     std::optional<Placement> select(
         const FoldVariant& v,
         const std::unordered_set<int>& free,
@@ -80,7 +80,24 @@ class ContiguousFirst : public BlockSelector {
         const BlockModel& cm,
         const FragmentationScorer& scorer,
         const PlacementRanker& ranker,
-        const std::vector<std::pair<int, int>>& ring_edges) const override;
+        const std::vector<std::pair<int, int>>& ring_edges) const;
+};
+
+// Contiguous placement (folding's anchor-scan); OCS realizes the ring edges
+// whose endpoints aren't torus-adjacent (closures / cross-block). Reused by
+// min-reconfig's contiguous phase.
+class ContiguousFirst : public BlockSelector {
+  public:
+    using BlockSelector::select;
+    std::optional<Placement> select(
+        const FoldVariant& v,
+        const std::unordered_set<int>& free,
+        const std::vector<int>& dims,
+        const BlockModel& cm,
+        const FragmentationScorer& scorer,
+        const PlacementRanker& ranker,
+        const std::vector<std::pair<int, int>>& ring_edges,
+        SearchScratch& scratch) const override;
 };
 
 // Scatter selector: place contiguously when possible (reusing ContiguousFirst,
@@ -91,6 +108,7 @@ class ContiguousFirst : public BlockSelector {
 class MinReconfig : public BlockSelector {
   public:
     explicit MinReconfig(int search_budget) : budget_(search_budget) {}
+    using BlockSelector::select;
     std::optional<Placement> select(
         const FoldVariant& v,
         const std::unordered_set<int>& free,
@@ -98,7 +116,8 @@ class MinReconfig : public BlockSelector {
         const BlockModel& cm,
         const FragmentationScorer& scorer,
         const PlacementRanker& ranker,
-        const std::vector<std::pair<int, int>>& ring_edges) const override;
+        const std::vector<std::pair<int, int>>& ring_edges,
+        SearchScratch& scratch) const override;
 
   private:
     int budget_;
