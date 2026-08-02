@@ -141,15 +141,7 @@ void CmdLineParser::define_options() noexcept {
         "congestion-model",
         "serial (exclusive links + FIFO, the historical model; default) | "
         "fluid (flow-level bandwidth sharing; reconfigurable backend only)",
-        cxxopts::value<std::string>()->default_value("serial"))(
-        "fluid-lazy-finish",
-        "fluid model only: keep at most one outstanding finish event per "
-        "flow (an early-firing event re-arms itself) instead of orphaning a "
-        "stale event on every rate change. Large event-queue saving under "
-        "congestion, but same-nanosecond event ordering can differ from the "
-        "default eager scheme, so results are NOT bit-comparable with "
-        "default-mode runs (deterministic within the mode). Default false.",
-        cxxopts::value<bool>()->default_value("false"));
+        cxxopts::value<std::string>()->default_value("serial"));
 }
 
 void CmdLineParser::parse(int argc, char* argv[]) noexcept {

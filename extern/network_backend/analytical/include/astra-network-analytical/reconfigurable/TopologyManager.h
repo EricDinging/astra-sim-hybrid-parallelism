@@ -172,10 +172,6 @@ class TopologyManager {
     /// store-and-forward (default, byte-identical to the historical path).
     void set_fluid_mode(bool enable) noexcept;
 
-    /// Fluid model only: enable lazy finish-event rescheduling (see
-    /// FlowEngine::set_lazy_finish). Call after set_fluid_mode.
-    void set_fluid_lazy_finish(bool enable) noexcept;
-
   protected:
     /// number of total devices in the topology
     /// device includes non-NPU devices such as switches

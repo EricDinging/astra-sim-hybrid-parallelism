@@ -22,8 +22,11 @@ namespace NetworkAnalyticalReconfigurable {
  * every routed chunk becomes a flow that occupies all links of its route
  * simultaneously at rate min over links of (bw / active_flow_count). The
  * chunk callback fires at path latency + the time its bytes take to drain
- * through rate changes. Finish events are epoch-guarded because the shared
- * EventQueue has no cancellation. Design:
+ * through rate changes. Finish events are lazy: each flow keeps at most one
+ * outstanding event, armed to fire at or before the true finish time; an
+ * early fire (the rate dropped after arming) re-arms itself. Rate rises
+ * schedule a new, earlier event and orphan the old one via the epoch guard
+ * (the shared EventQueue has no cancellation). Design:
  * docs/superpowers/specs/2026-07-25-fluid-congestion-model-design.md.
  */
 class FlowEngine {
@@ -48,18 +51,6 @@ class FlowEngine {
     /// ...and release them once the post-drain retune is done.
     void resume() noexcept;
 
-    /// Lazy finish-event rescheduling (--fluid-lazy-finish): keep at most
-    /// one outstanding finish event per flow. An event that fires before the
-    /// flow's bytes have drained (its rate dropped after arming) re-arms
-    /// itself at the then-current estimate, instead of the default eager
-    /// scheme that orphans a stale event on EVERY rate change. Cuts event
-    /// churn dramatically under congestion, but same-nanosecond event
-    /// insertion order differs from eager, so results are deterministic
-    /// within the mode yet not bit-comparable across modes.
-    void set_lazy_finish(bool enable) noexcept {
-        lazy_finish_ = enable;
-    }
-
   private:
     struct Flow {
         std::unique_ptr<Chunk> chunk;
@@ -70,8 +61,8 @@ class FlowEngine {
         EventTime last_update;                     // when `remaining` was banked
         uint64_t epoch;                            // invalidates stale events
         uint64_t id;
-        // Lazy mode only: absolute fire time of the outstanding finish
-        // event; 0 = none outstanding (parked or completed).
+        // Absolute fire time of the outstanding finish event; 0 = none
+        // outstanding (parked flow).
         EventTime next_fire = 0;
     };
 
@@ -100,7 +91,6 @@ class FlowEngine {
     std::vector<std::unique_ptr<Chunk>> deferred;
     uint64_t next_flow_id = 0;
     bool paused = false;
-    bool lazy_finish_ = false;  // see set_lazy_finish
 };
 
 }  // namespace NetworkAnalyticalReconfigurable

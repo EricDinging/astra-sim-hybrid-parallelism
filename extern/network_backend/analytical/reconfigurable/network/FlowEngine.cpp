@@ -125,25 +125,12 @@ double FlowEngine::compute_rate(const Flow& flow) const noexcept {
 }
 
 void FlowEngine::reschedule(Flow& flow, const EventTime now) noexcept {
-    if (!lazy_finish_) {
-        // Eager (default): any previously scheduled finish event is stale.
-        flow.epoch++;
-        if (flow.rate <= 0.0) {
-            return;  // parked; a later recompute will reschedule
-        }
-        const double eta = flow.remaining / flow.rate;
-        const auto delta = std::max<EventTime>(1, static_cast<EventTime>(std::ceil(eta)));
-        auto* const arg = new FinishEventArg{this, flow.id, flow.epoch};
-        event_queue->schedule_event(now + delta, transmission_finished, static_cast<void*>(arg));
-        return;
-    }
-
-    // Lazy (--fluid-lazy-finish): the invariant is that the outstanding
-    // event (if any) fires AT or BEFORE the flow's true finish time -- an
-    // early fire re-arms itself in transmission_finished. So a rate DROP
-    // (finish moved later, the common case when a new flow joins a shared
-    // link) keeps the outstanding event; only a rate RISE (finish moved
-    // earlier) schedules a new event and orphans the old one via the epoch.
+    // Lazy finish: the invariant is that the outstanding event (if any)
+    // fires AT or BEFORE the flow's true finish time -- an early fire
+    // re-arms itself in transmission_finished. So a rate DROP (finish moved
+    // later, the common case when a new flow joins a shared link) keeps the
+    // outstanding event; only a rate RISE (finish moved earlier) schedules
+    // a new event and orphans the old one via the epoch.
     if (flow.rate <= 0.0) {
         return;  // parked; the outstanding event (if any) fires, makes no
                  // progress, clears next_fire, and a later recompute re-arms
@@ -199,7 +186,7 @@ void FlowEngine::transmission_finished(void* const arg) noexcept {
     auto& flow = it->second;
     const auto now = self->event_queue->get_current_time();
     self->advance(flow, now);
-    if (self->lazy_finish_ && flow.remaining > 0.0) {
+    if (flow.remaining > 0.0) {
         // Early fire: the rate dropped (or the flow parked) after this event
         // was armed, so bytes are still draining. Re-arm at the current
         // estimate and keep the flow alive.
@@ -207,8 +194,6 @@ void FlowEngine::transmission_finished(void* const arg) noexcept {
         self->reschedule(flow, now);
         return;
     }
-    // Eager: ceil() overshoots by <1 ns of drain, so remaining is ~0 here.
-    assert(self->lazy_finish_ || flow.remaining < flow.rate + 1.0);
 
     // Deregister from every link; freed capacity may speed up neighbors. A
     // link whose registry empties notifies the drain machinery (the hook is

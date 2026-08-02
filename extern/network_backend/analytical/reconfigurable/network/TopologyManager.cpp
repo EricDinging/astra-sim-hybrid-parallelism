@@ -122,10 +122,6 @@ void TopologyManager::set_fluid_mode(const bool enable) noexcept {
     }
 }
 
-void TopologyManager::set_fluid_lazy_finish(const bool enable) noexcept {
-    flow_engine_->set_lazy_finish(enable);
-}
-
 void TopologyManager::increment_callback() noexcept {
     if (!reconfiguring) {
         Link::num_drained_links = 0;
