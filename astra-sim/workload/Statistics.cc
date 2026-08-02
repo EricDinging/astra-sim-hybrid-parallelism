@@ -27,7 +27,7 @@ const std::unordered_map<NodeId, Statistics::OperatorStatistics>& Statistics::
     return operator_statistics;
 }
 
-void Statistics::record_start(std::shared_ptr<Chakra::ETFeederNode> node,
+void Statistics::record_start(const std::shared_ptr<Chakra::ETFeederNode>& node,
                               Tick start_time) {
     const NodeId& node_id = node->id();
     const auto type = OperatorStatistics::get_operator_type(node);
@@ -37,14 +37,14 @@ void Statistics::record_start(std::shared_ptr<Chakra::ETFeederNode> node,
         node_id, OperatorStatistics(node_id, start_time, type));
 }
 
-void Statistics::record_end(std::shared_ptr<Chakra::ETFeederNode> node,
+void Statistics::record_end(const std::shared_ptr<Chakra::ETFeederNode>& node,
                             Tick end_time) {
     const NodeId& node_id = node->id();
     this->get_operator_statistics(node_id).end_time = end_time;
 }
 
 Statistics::OperatorStatistics::OperatorType Statistics::OperatorStatistics::
-    get_operator_type(const std::shared_ptr<Chakra::ETFeederNode> node) {
+    get_operator_type(const std::shared_ptr<Chakra::ETFeederNode>& node) {
     const auto& node_type = node->type();
     Statistics::OperatorStatistics::OperatorType stat_node_type;
     switch (node_type) {

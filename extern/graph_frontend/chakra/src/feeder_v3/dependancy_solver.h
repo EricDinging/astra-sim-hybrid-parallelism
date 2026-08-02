@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include "common.h"
 #include "et_def.pb.h"
 
@@ -36,7 +37,10 @@ class _DependancyLayer {
       const NodeId& node,
       const std::unordered_set<NodeId>& children);
   void take_node(const NodeId& node);
-  void finish_node(const NodeId& node);
+  // If `freed` is non-null, the children that became dependancy-free by this
+  // finish are appended to it (exactly the nodes inserted into
+  // dependancy_free_nodes by this call).
+  void finish_node(const NodeId& node, std::vector<NodeId>* freed = nullptr);
   void push_back_node(const NodeId& node);
   void resolve_dependancy_free_nodes();
 
@@ -89,7 +93,9 @@ class DependancyResolver {
   void add_node(const ChakraNode& node);
   void take_node(const NodeId& node);
   void push_back_node(const NodeId& node);
-  void finish_node(const NodeId& node);
+  // See _DependancyLayer::finish_node: `freed` optionally collects the
+  // children this finish made dependancy-free.
+  void finish_node(const NodeId& node, std::vector<NodeId>* freed = nullptr);
   void resolve_dependancy_free_nodes();
   // See _DependancyLayer::capture_pristine()/reset(): snapshot the sealed
   // graph, and rewind to it at a drained iteration boundary (avoids

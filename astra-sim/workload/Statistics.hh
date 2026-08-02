@@ -24,7 +24,7 @@ class Statistics {
         static const Tick INVALID_TICK = UINT64_MAX;
         enum class OperatorType { CPU, GPU, COMM, REMOTE_MEM, REPLAY, INVALID };
         static OperatorType get_operator_type(
-            const std::shared_ptr<Chakra::ETFeederNode> node);
+            const std::shared_ptr<Chakra::ETFeederNode>& node);
         OperatorStatistics(NodeId node_id,
                            Tick start_time,
                            Tick end_time,
@@ -75,10 +75,11 @@ class Statistics {
     const std::unordered_map<NodeId, OperatorStatistics>&
     get_operator_statistics() const;
 
-    void record_start(std::shared_ptr<Chakra::ETFeederNode> node,
+    void record_start(const std::shared_ptr<Chakra::ETFeederNode>& node,
                       Tick start_time);
 
-    void record_end(std::shared_ptr<Chakra::ETFeederNode> node, Tick end_time);
+    void record_end(const std::shared_ptr<Chakra::ETFeederNode>& node,
+                    Tick end_time);
 
     ~Statistics() {
         operator_statistics.clear();

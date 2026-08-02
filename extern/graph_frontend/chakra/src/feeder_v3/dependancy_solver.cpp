@@ -47,7 +47,9 @@ void _DependancyLayer::take_node(const NodeId& node) {
   }
 }
 
-void _DependancyLayer::finish_node(const NodeId& node) {
+void _DependancyLayer::finish_node(
+    const NodeId& node,
+    std::vector<NodeId>* freed) {
   if (this->dirty) {
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
@@ -70,6 +72,9 @@ void _DependancyLayer::finish_node(const NodeId& node) {
       }
       if (cmp_it->second.empty()) {
         this->dependancy_free_nodes.insert(child);
+        if (freed != nullptr) {
+          freed->push_back(child);
+        }
       }
     }
     this->parent_map_child.erase(pmc_it);
@@ -151,7 +156,6 @@ const std::unordered_set<NodeId>& _DependancyLayer::get_dependancy_free_nodes()
 
 const std::unordered_set<NodeId>& _DependancyLayer::get_children(
     NodeId node) const {
-  const auto& results = this->parent_map_child.at(node);
   return this->parent_map_child.at(node);
 }
 
@@ -165,12 +169,10 @@ const std::unordered_set<NodeId>& _DependancyLayer::get_ongoing_nodes() const {
 }
 
 void _DependancyLayer::_helper_allocate_bucket(NodeId node_id) {
-  if (this->child_map_parent.find(node_id) == this->child_map_parent.end()) {
-    this->child_map_parent[node_id] = std::unordered_set<NodeId>();
-  }
-  if (this->parent_map_child.find(node_id) == this->parent_map_child.end()) {
-    this->parent_map_child[node_id] = std::unordered_set<NodeId>();
-  }
+  // Single probe per map: try_emplace default-constructs the bucket iff
+  // absent (identical semantics to the old find + operator[]).
+  this->child_map_parent.try_emplace(node_id);
+  this->parent_map_child.try_emplace(node_id);
 }
 
 void DependancyResolver::add_node(const ChakraNode& node) {
@@ -210,8 +212,10 @@ void DependancyResolver::push_back_node(const NodeId& node) {
   this->enabled_dependancy.push_back_node(node);
 }
 
-void DependancyResolver::finish_node(const NodeId& node) {
-  this->enabled_dependancy.finish_node(node);
+void DependancyResolver::finish_node(
+    const NodeId& node,
+    std::vector<NodeId>* freed) {
+  this->enabled_dependancy.finish_node(node, freed);
 }
 
 void DependancyResolver::resolve_dependancy_free_nodes() {

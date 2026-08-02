@@ -1,6 +1,7 @@
 #ifndef CHAKRA_FEEDER_V3_ET_FEEDER_H
 #define CHAKRA_FEEDER_V3_ET_FEEDER_H
 
+#include <cstdint>
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -18,11 +19,22 @@ namespace std {
 template <>
 struct hash<
     std::tuple<Chakra::FeederV3::ETFeederId, Chakra::FeederV3::NodeId>> {
+  // splitmix64-style finalizer per field (same pattern as
+  // CallbackTracker::KeyHash). The previous hash(a) ^ (hash(b) << 1) with
+  // identity std::hash collapsed to a few thousand distinct values under a
+  // multi-million-entry cache, producing long collision chains. Hash choice
+  // only affects bucket placement, never map contents.
+  static size_t mix64(uint64_t x) noexcept {
+    x += 0x9e3779b97f4a7c15ULL;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+    return static_cast<size_t>(x ^ (x >> 31));
+  }
   size_t operator()(
       const std::tuple<Chakra::FeederV3::ETFeederId, Chakra::FeederV3::NodeId>&
-          k) const {
-    return std::hash<Chakra::FeederV3::ETFeederId>()(std::get<0>(k)) ^
-        (std::hash<Chakra::FeederV3::NodeId>()(std::get<1>(k)) << 1);
+          k) const noexcept {
+    return mix64(std::get<0>(k)) ^
+        mix64(std::get<1>(k) ^ 0x9e3779b97f4a7c15ULL);
   }
 };
 } // namespace std

@@ -13,6 +13,11 @@ namespace FeederV3 {
 // previous std::shared_mutex on every access was pure overhead (~1-2% of
 // self-time) and has been removed. Reintroduce locking here if a
 // multi-threaded frontend ever shares a Cache instance across threads.
+//
+// NOTE: eviction is FIFO by design, not LRU. No get* accessor ever promotes
+// an entry in `lru` (only put moves keys), so the list holds insertion
+// order and eviction takes the oldest insert. Do not "fix" this to true
+// LRU: eviction order determines when outstanding weak_ptrs expire.
 template <typename K, typename V>
 class Cache {
  public:
@@ -47,6 +52,32 @@ class Cache {
   std::shared_ptr<const V> put_locked(const K& key, const V& value) {
     this->put(key, value);
     return this->cache.find(key)->second.first;
+  }
+
+  // Rvalue overload for the raw-node miss path: moves the parsed message
+  // into the cache (no protobuf deep copy) and returns the stored pointer
+  // without a second probe. Same eviction order as put().
+  std::shared_ptr<const V> put_locked(const K& key, V&& value) {
+    auto it = this->cache.find(key);
+    if (it != this->cache.end()) {
+      // hit and update
+      this->lru.erase(it->second.second);
+      this->lru.push_back(key);
+      it->second.second = --this->lru.end();
+      it->second.first = std::make_shared<V>(std::move(value));
+      return it->second.first;
+    }
+    // miss
+    while (this->cache.size() >= this->capacity) {
+      // evict
+      auto victim = this->lru.front();
+      this->cache.erase(victim);
+      this->lru.pop_front();
+    }
+    this->lru.push_back(key);
+    auto ptr = std::make_shared<V>(std::move(value));
+    this->cache.emplace(key, std::make_pair(ptr, --this->lru.end()));
+    return ptr;
   }
   bool has(const K& key) {
     return this->cache.find(key) != this->cache.end();

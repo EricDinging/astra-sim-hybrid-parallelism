@@ -128,7 +128,6 @@ Workload::Workload(Sys* sys,
     this->et_feeder->capture_pristine_dependancy();
     {
         auto& resolver = this->et_feeder->getDependancyResolver();
-        const auto& dep_layer = resolver.get_enabled_dependancy();
         std::priority_queue<uint64_t, std::vector<uint64_t>,
                             std::greater<uint64_t>>
             ready;
@@ -177,15 +176,14 @@ Workload::Workload(Sys* sys,
                     }
                 }
             }
-            // Snapshot children before finish_node mutates the layer, then
-            // enqueue those that became dependency-free.
-            const auto children = dep_layer.get_children(node_id);
+            // finish_node reports the children it made dependency-free via
+            // its out-param; enqueue exactly those (a freed child was never
+            // free before, so the queued guard is belt-and-braces).
             resolver.take_node(node_id);
-            resolver.finish_node(node_id);
-            const auto& now_free = resolver.get_dependancy_free_nodes();
-            for (const uint64_t child : children) {
-                if (now_free.count(child) != 0U &&
-                    queued.insert(child).second) {
+            dep_freed_buf_.clear();
+            resolver.finish_node(node_id, &dep_freed_buf_);
+            for (const uint64_t child : dep_freed_buf_) {
+                if (queued.insert(child).second) {
                     ready.push(child);
                 }
             }
@@ -395,7 +393,7 @@ void Workload::initialize_comm_groups(string comm_group_filename) {
 }
 
 void Workload::issue_pytorch_pg_metadata(
-    std::shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     // For read comm groups from torch, might overwrite previous.
     std::string pg_info = node->get_inputs_values();
     if (pg_info.empty()) {
@@ -483,7 +481,8 @@ void Workload::issue_dep_free_nodes() {
 #if !defined(NDEBUG) && defined(__SANITIZE_ADDRESS__)
     for (const uint64_t node_id :
          this->et_feeder->getDependancyResolver().get_dependancy_free_nodes()) {
-        assert(dep_free_mirror_.count(node_id) != 0U);
+        assert(std::binary_search(dep_free_mirror_.begin(),
+                                  dep_free_mirror_.end(), node_id));
     }
 #endif
 
@@ -507,12 +506,12 @@ void Workload::issue_dep_free_nodes() {
         // in that order, so no per-event copy + O(F log F) sort of the hash
         // set. Copy it into the reusable snapshot buffer (capacity persists
         // across calls) because synchronous completions inside issue() mutate
-        // the mirror mid-pass; membership below uses binary_search.
+        // the mirror mid-pass.
         dep_free_snapshot_.assign(dep_free_mirror_.begin(),
                                   dep_free_mirror_.end());
+        const uint64_t freed_before = children_freed_;
 
         bool success = true;
-        bool issued_any = false;
         for (const auto node_id : dep_free_snapshot_) {
             std::shared_ptr<ETFeederNode> node = et_feeder->lookupNode(node_id);
             // Grouped collectives must additionally be admitted in the
@@ -522,7 +521,6 @@ void Workload::issue_dep_free_nodes() {
             // event), so the gate delays admission but never strands a node.
             if (hw_resource->is_available(node) &&
                 comm_admission_in_order(node)) {
-                issued_any = true;
                 success = issue(node);
                 if (success) {
                     mark_comm_admitted(node);
@@ -537,50 +535,39 @@ void Workload::issue_dep_free_nodes() {
             }
         }
 
-        // A new dependency-free node can only appear via a synchronous
-        // finish_node inside issue(); if nothing was issued this pass the
-        // free set is unchanged from the snapshot, so this scan would always
-        // find nothing. Skip it in that (common, fully-blocked) case --
-        // byte-identical, since rescan would stay false anyway.
-        if (issued_any) {
-            for (const auto node_id : dep_free_mirror_) {
-                if (!std::binary_search(dep_free_snapshot_.begin(),
-                                        dep_free_snapshot_.end(), node_id)) {
-                    rescan = true;
-                    break;
-                }
-            }
-        }
+        // A node not in this pass's snapshot can only enter the mirror via a
+        // synchronous finish_node inside issue() (a freed child was never
+        // free before, so it cannot be a snapshot member); the push_back
+        // re-insert of a failed issue only re-adds a node that WAS in the
+        // snapshot. children_freed_ counts exactly the former, so "counter
+        // moved" is equivalent to the old walk finding a non-snapshot node.
+        rescan = children_freed_ != freed_before;
     }
 }
 
 void Workload::dep_finish_node(uint64_t node_id) {
     auto& dependancy_resolver = this->et_feeder->getDependancyResolver();
-    // Snapshot the children before finish_node consumes the node's edge
-    // buckets (same pattern as the constructor's Kahn scan), then mirror
-    // exactly the children it freed: a node can only become dependency-free
-    // when its last unfinished parent finishes, so newly-free nodes are
-    // always children of `node_id`.
-    const auto children =
-        dependancy_resolver.get_enabled_dependancy().get_children(node_id);
-    dependancy_resolver.finish_node(node_id);
-    const auto& free_now = dependancy_resolver.get_dependancy_free_nodes();
-    for (const uint64_t child : children) {
-        if (free_now.count(child) != 0U) {
-            dep_free_mirror_.insert(child);
-        }
+    // finish_node reports the exact children it freed via its out-param (a
+    // node can only become dependency-free when its last unfinished parent
+    // finishes, so newly-free nodes are always children of `node_id`);
+    // mirror exactly those.
+    dep_freed_buf_.clear();
+    dependancy_resolver.finish_node(node_id, &dep_freed_buf_);
+    for (const uint64_t child : dep_freed_buf_) {
+        mirror_insert(child);
+        ++children_freed_;
     }
 }
 
 void Workload::rebuild_dep_free_mirror() {
     const auto& free_now =
         this->et_feeder->getDependancyResolver().get_dependancy_free_nodes();
-    dep_free_mirror_.clear();
-    dep_free_mirror_.insert(free_now.begin(), free_now.end());
+    dep_free_mirror_.assign(free_now.begin(), free_now.end());
+    std::sort(dep_free_mirror_.begin(), dep_free_mirror_.end());
 }
 
 bool Workload::comm_admission_in_order(
-    shared_ptr<Chakra::FeederV3::ETFeederNode> node) const {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) const {
     if (node->type() != ChakraNodeType::COMM_COLL_NODE ||
         hw_resource->comm_cap_bypass) {
         return true;
@@ -607,7 +594,7 @@ bool Workload::comm_admission_in_order(
 }
 
 void Workload::mark_comm_admitted(
-    shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     const int cg_id = hw_resource->comm_group_of(node);
     if (cg_id < 0) {
         return;
@@ -633,37 +620,42 @@ void Workload::reset_comm_admission_order() {
     }
 }
 
-bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+bool Workload::issue(const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     bool success = true;
     const auto& logger = workload_logger();
+    const auto node_type = node->type();
+    // Synchronous dispatch below (issue_* only registers events; no
+    // event-queue proceed happens inside), so one tick read serves every
+    // pre-dispatch site.
+    const Tick now = Sys::boostedTick();
 
     if (sys->trace_enabled) {
         logger->debug("issue,sys->id={}, tick={}, node->id={}, "
                       "node->name={}, node->type={}",
-                      sys->id, Sys::boostedTick(), node->id(), node->name(),
-                      static_cast<uint64_t>(node->type()));
+                      sys->id, now, node->id(), node->name(),
+                      static_cast<uint64_t>(node_type));
     }
 
     this->et_feeder->getDependancyResolver().take_node(node->id());
-    dep_free_mirror_.erase(node->id());
+    mirror_erase(node->id());
     this->hw_resource->occupy(node);
     // stats->record_end will be called in Workload::call
-    stats->record_start(node, Sys::boostedTick());
+    stats->record_start(node, now);
     if (this->sys->track_local_mem) {
-        this->local_mem_usage_tracker->recordStart(node, Sys::boostedTick());
+        this->local_mem_usage_tracker->recordStart(node, now);
     }
     if (sys->replay_only) {
         issue_replay(node);
     } else {
-        if ((node->type() == ChakraNodeType::MEM_LOAD_NODE) ||
-            (node->type() == ChakraNodeType::MEM_STORE_NODE)) {
+        if ((node_type == ChakraNodeType::MEM_LOAD_NODE) ||
+            (node_type == ChakraNodeType::MEM_STORE_NODE)) {
             issue_remote_mem(node);
-        } else if (node->type() == ChakraNodeType::COMP_NODE) {
+        } else if (node_type == ChakraNodeType::COMP_NODE) {
             if (!this->sys->roofline_enabled) {
                 issue_replay(node);
 
             } else {
-                if (node->is_cpu_op<bool>(false)) {
+                if (node->is_cpu_op()) {
                     // comp node on cpu
                     // should only appears in real system trace and should run
                     // with replay.
@@ -673,15 +665,17 @@ bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
                     issue_comp(node);
                 }
             }
-        } else if (node->type() == ChakraNodeType::COMM_COLL_NODE ||
-                   node->type() == ChakraNodeType::COMM_SEND_NODE ||
-                   node->type() == ChakraNodeType::COMM_RECV_NODE) {
+        } else if (node_type == ChakraNodeType::COMM_COLL_NODE ||
+                   node_type == ChakraNodeType::COMM_SEND_NODE ||
+                   node_type == ChakraNodeType::COMM_RECV_NODE) {
             success = issue_comm(node);
             if (!success) {
                 hw_resource->release(node);
                 this->et_feeder->getDependancyResolver().push_back_node(
                     node->id());
-                dep_free_mirror_.insert(node->id());
+                mirror_insert(node->id());
+                // Deliberately NOT the hoisted `now`: issue_comm dispatched
+                // into the network frontend before this failure path.
                 stats->record_end(node, Sys::boostedTick());
                 if (this->sys->track_local_mem) {
                     this->local_mem_usage_tracker->recordEnd(
@@ -689,9 +683,9 @@ bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
                 }
                 return success;
             }
-        } else if (node->type() == ChakraNodeType::INVALID_NODE) {
+        } else if (node_type == ChakraNodeType::INVALID_NODE) {
             skip_invalid(node);
-        } else if (node->type() == ChakraNodeType::METADATA_NODE) {
+        } else if (node_type == ChakraNodeType::METADATA_NODE) {
             issue_metadata(node);
         } else {
             logger->critical("Unknown node type");
@@ -701,7 +695,8 @@ bool Workload::issue(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     return success;
 }
 
-void Workload::issue_metadata(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+void Workload::issue_metadata(
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     // TODO: someway to identify this metadata node is a pytorch pg node
     if (true) {
         issue_pytorch_pg_metadata(node);
@@ -711,14 +706,16 @@ void Workload::issue_metadata(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     this->skip_invalid(node);  // for proper dependancy resolving
 }
 
-void Workload::issue_replay(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+void Workload::issue_replay(
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     WorkloadLayerHandlerData* wlhd = new WorkloadLayerHandlerData;
     wlhd->node_id = node->id();
     uint64_t runtime = 1ul;
-    if (node->runtime() != 0ul) {
+    const uint64_t node_runtime = node->runtime();
+    if (node_runtime != 0ul) {
         // chakra runtimes are in microseconds and we should convert it into
         // nanoseconds
-        runtime = node->runtime() * 1000;
+        runtime = node_runtime * 1000;
     }
     if (node->is_cpu_op()) {
         hw_resource->tics_cpu_ops += runtime;
@@ -729,7 +726,7 @@ void Workload::issue_replay(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 }
 
 void Workload::issue_remote_mem(
-    shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     WorkloadLayerHandlerData* wlhd = new WorkloadLayerHandlerData;
     wlhd->sys_id = sys->id;
     wlhd->workload = this;
@@ -737,7 +734,8 @@ void Workload::issue_remote_mem(
     sys->remote_mem->issue(node->tensor_size(), wlhd);
 }
 
-void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+void Workload::issue_comp(
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     if (!this->sys->roofline_enabled) {
         throw std::runtime_error(
             "Roofline model is not enabled for non-replay comp");
@@ -762,7 +760,9 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 
     double operational_intensity = num_ops / tensor_size;
     double perf = sys->roofline->get_perf(operational_intensity);
-    double elapsed_time = static_cast<double>(node->num_ops()) / perf;  // sec
+    // num_ops above is the same static_cast<double> of the same attribute;
+    // reuse it instead of a second num_ops() fetch.
+    double elapsed_time = num_ops / perf;                          // sec
     uint64_t runtime = static_cast<uint64_t>(elapsed_time * 1e9);  // sec -> ns
     // if dummy node, use runtime from chakra directly
     if (node->name().find("DummyNode") != std::string::npos) {
@@ -791,8 +791,9 @@ void Workload::issue_comp(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
         tensor_size, num_ops);
 }
 
-bool Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
-    if (node->is_cpu_op<bool>(false)) {
+bool Workload::issue_comm(
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
+    if (node->is_cpu_op()) {
         throw std::runtime_error("Comm node should not be on CPU");
     }
     bool success = true;
@@ -810,7 +811,7 @@ bool Workload::issue_comm(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 }
 
 bool Workload::issue_coll_comm(
-    shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     std::vector<bool> involved_dims;
     // Single scan, no copy: the pointer overload both tests presence and
     // yields the attribute by reference, replacing has_attr() + a by-value
@@ -956,8 +957,9 @@ bool Workload::issue_coll_comm(
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
     } else if (comm_type == ChakraCollectiveCommType::BROADCAST) {
         uint64_t runtime = 1ul;
-        if (node->runtime() != 0ul) {
-            runtime = node->runtime() * 1000;
+        const uint64_t node_runtime = node->runtime();
+        if (node_runtime != 0ul) {
+            runtime = node_runtime * 1000;
         }
         fp = new DataSet(1);
         fp->set_notifier(this, EventType::CollectiveCommunicationFinished);
@@ -971,7 +973,7 @@ bool Workload::issue_coll_comm(
 }
 
 bool Workload::issue_send_comm(
-    shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     const auto src = node->comm_src<uint32_t>(this->sys->id);
     if (src != this->sys->id) {
         throw std::runtime_error("Send node should be issued by the sender");
@@ -1013,7 +1015,7 @@ bool Workload::issue_send_comm(
 }
 
 bool Workload::issue_recv_comm(
-    shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     const auto src = node->comm_src<uint32_t>();
     int src_npu = static_cast<int>(src);
     if (parent_job != nullptr) {
@@ -1051,7 +1053,8 @@ bool Workload::issue_recv_comm(
     return true;
 }
 
-void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+void Workload::skip_invalid(
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     const auto node_id = node->id();
     dep_finish_node(node_id);
     const auto& logger = workload_logger();
@@ -1072,6 +1075,11 @@ void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
 
 void Workload::call(EventType event, CallData* data) {
     const auto& logger = workload_logger();
+    // One tick read for every completion-side site below: they all run
+    // before this handler dispatches back into issue_dep_free_nodes(), and
+    // nothing in between can advance sim time (synchronous bookkeeping
+    // only).
+    const Tick now = Sys::boostedTick();
     if (is_finished) {
         logger->debug("Rank {}: workload already finished, ignore event {}",
                       this->sys->id, static_cast<int>(event));
@@ -1103,12 +1111,12 @@ void Workload::call(EventType event, CallData* data) {
             workload_logger()->debug(
                 "callback,sys->id={}, tick={}, node->id={}, "
                 "node->name={}, node->type={}",
-                sys->id, Sys::boostedTick(), node->id(), node->name(),
+                sys->id, now, node->id(), node->name(),
                 static_cast<uint64_t>(node->type()));
         }
 
         hw_resource->release(node);
-        stats->record_end(node, Sys::boostedTick());
+        stats->record_end(node, now);
 
         // Calculate network bandwidth
         auto& op_stat = stats->get_operator_statistics(node_id);
@@ -1120,7 +1128,7 @@ void Workload::call(EventType event, CallData* data) {
         }
 
         if (this->sys->track_local_mem) {
-            this->local_mem_usage_tracker->recordEnd(node, Sys::boostedTick());
+            this->local_mem_usage_tracker->recordEnd(node, now);
         }
 
         dep_finish_node(node_id);
@@ -1147,12 +1155,12 @@ void Workload::call(EventType event, CallData* data) {
                 workload_logger()->debug(
                     "callback,sys->id={}, tick={}, node->id={}, "
                     "node->name={}, node->type={}",
-                    sys->id, Sys::boostedTick(), node->id(), node->name(),
+                    sys->id, now, node->id(), node->name(),
                     static_cast<uint64_t>(node->type()));
             }
 
             hw_resource->release(node);
-            stats->record_end(node, Sys::boostedTick());
+            stats->record_end(node, now);
 
             // Calculate network bandwidth for point-to-point communications
             if (event == EventType::PacketSent ||
@@ -1171,8 +1179,7 @@ void Workload::call(EventType event, CallData* data) {
             }
 
             if (this->sys->track_local_mem) {
-                this->local_mem_usage_tracker->recordEnd(node,
-                                                         Sys::boostedTick());
+                this->local_mem_usage_tracker->recordEnd(node, now);
             }
 
             dep_finish_node(wlhd->node_id);
@@ -1296,20 +1303,35 @@ void Workload::report() {
 }
 
 CommunicatorGroup* Workload::extract_comm_group(
-    std::shared_ptr<Chakra::ETFeederNode> node) {
-    std::string comm_group_name = node->pg_name<std::string>("");
-    if (comm_group_name == "") {
-        // No communicator group is specified for this communication ET node.
-        return nullptr;
-    }
+    const std::shared_ptr<Chakra::ETFeederNode>& node) {
     int comm_group_id = 0;
-    try {
-        comm_group_id = std::stoi(comm_group_name);
-    } catch (const std::exception&) {
-        workload_logger()->critical(
-            "rank {} ET node {}: non-numeric pg_name '{}'", sys->id, node->id(),
-            comm_group_name);
-        exit(EXIT_FAILURE);
+    bool have_id = false;
+    // Fast path: node_cg_map_ was built by the constructor's Kahn scan from
+    // the same pg_name parse (stoi of the attribute), so a hit yields the
+    // identical group id without re-fetching and re-parsing the attribute
+    // per issue. A miss falls through to the legacy parse, which preserves
+    // the exact no-pg / non-numeric-pg behavior.
+    if (hw_resource->node_cg_map_ != nullptr) {
+        const auto it = node_cg_map_.find(node->id());
+        if (it != node_cg_map_.end()) {
+            comm_group_id = it->second;
+            have_id = true;
+        }
+    }
+    if (!have_id) {
+        std::string comm_group_name = node->pg_name<std::string>("");
+        if (comm_group_name == "") {
+            // No communicator group is specified for this ET node.
+            return nullptr;
+        }
+        try {
+            comm_group_id = std::stoi(comm_group_name);
+        } catch (const std::exception&) {
+            workload_logger()->critical(
+                "rank {} ET node {}: non-numeric pg_name '{}'", sys->id,
+                node->id(), comm_group_name);
+            exit(EXIT_FAILURE);
+        }
     }
     if (comm_groups.find(comm_group_id) == comm_groups.end()) {
         workload_logger()->critical(

@@ -35,7 +35,7 @@ HardwareResource::HardwareResource(uint32_t num_npus, int sys_id)
 }
 
 void HardwareResource::occupy(
-    const shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     if (node->is_cpu_op()) {
         assert(num_in_flight_cpu_ops == 0);
         ++num_in_flight_cpu_ops;
@@ -67,7 +67,7 @@ void HardwareResource::occupy(
 }
 
 void HardwareResource::release(
-    const shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) {
     if (node->is_cpu_op()) {
         --num_in_flight_cpu_ops;
         assert(num_in_flight_cpu_ops == 0);
@@ -98,7 +98,7 @@ void HardwareResource::release(
 }
 
 bool HardwareResource::is_available(
-    const shared_ptr<Chakra::FeederV3::ETFeederNode> node) const {
+    const shared_ptr<Chakra::FeederV3::ETFeederNode>& node) const {
     if (node->is_cpu_op()) {
         if (num_in_flight_cpu_ops == 0) {
             return true;

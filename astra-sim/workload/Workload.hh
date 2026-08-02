@@ -6,6 +6,8 @@ LICENSE file in the root directory of this source tree.
 #ifndef __WORKLOAD_HH__
 #define __WORKLOAD_HH__
 
+#include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <memory>
 #include <set>
@@ -56,20 +58,29 @@ class Workload : public Callable {
     // communicator groups. Refer to the wiki for the format.
     void initialize_comm_groups(std::string comm_group_filename);
     void issue_pytorch_pg_metadata(
-        std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
 
     // event-based simulation
     void issue_dep_free_nodes();
-    bool issue(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    void issue_metadata(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    void issue_replay(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    void issue_remote_mem(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    void issue_comp(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    bool issue_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    bool issue_coll_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    bool issue_send_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    bool issue_recv_comm(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    void skip_invalid(std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
+    bool issue(const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    void issue_metadata(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    void issue_replay(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    void issue_remote_mem(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    void issue_comp(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    bool issue_comm(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    bool issue_coll_comm(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    bool issue_send_comm(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    bool issue_recv_comm(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    void skip_invalid(
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
     void call(EventType event, CallData* data);
     void fire();
 
@@ -138,7 +149,7 @@ class Workload : public Callable {
     // return the pointer. If no communicator group is specified for this ET
     // node, return nullptr.
     CommunicatorGroup* extract_comm_group(
-        std::shared_ptr<Chakra::ETFeederNode> node);
+        const std::shared_ptr<Chakra::ETFeederNode>& node);
 
     // (cg_id, node_id) -> ordinal map, pre-computed from the trace via a
     // min-node-id Kahn traversal, so ordinals are (a) invariant across ranks
@@ -175,12 +186,36 @@ class Workload : public Callable {
     // issue_dep_free_nodes() entry asserts an O(1) size tripwire against the
     // truth (asserts are live even in this project's release build); the
     // sanitizer (Debug) build additionally checks element-wise equality.
-    std::set<uint64_t> dep_free_mirror_;
+    // Kept as a sorted (ascending, unique) vector: iteration order is
+    // load-bearing, and lower_bound insert/erase beats std::set's node
+    // allocations on the per-event hot path.
+    std::vector<uint64_t> dep_free_mirror_;
     // Reusable snapshot buffer for issue_dep_free_nodes passes; keeps its
     // capacity across calls to avoid per-event reallocation.
     std::vector<uint64_t> dep_free_snapshot_;
-    // finish_node + mirror maintenance: snapshots the node's children before
-    // finish_node consumes the edges, then mirrors the children it freed.
+    // Reusable buffer for the children a finish_node call frees (out-param of
+    // DependancyResolver::finish_node).
+    std::vector<uint64_t> dep_freed_buf_;
+    // Monotonic count of children ever freed via dep_finish_node; snapshotted
+    // by issue_dep_free_nodes to detect mid-pass frees (the rescan trigger).
+    uint64_t children_freed_ = 0;
+    // Sorted-vector mirror maintenance (asserts are live in release builds;
+    // both are O(log F) probes + O(F) shift, same complexity class as the
+    // former std::set's rebalancing without its allocations).
+    void mirror_insert(uint64_t node_id) {
+        const auto it = std::lower_bound(dep_free_mirror_.begin(),
+                                         dep_free_mirror_.end(), node_id);
+        assert(it == dep_free_mirror_.end() || *it != node_id);
+        dep_free_mirror_.insert(it, node_id);
+    }
+    void mirror_erase(uint64_t node_id) {
+        const auto it = std::lower_bound(dep_free_mirror_.begin(),
+                                         dep_free_mirror_.end(), node_id);
+        assert(it != dep_free_mirror_.end() && *it == node_id);
+        dep_free_mirror_.erase(it);
+    }
+    // finish_node + mirror maintenance: collects the children finish_node
+    // freed (via its out-param) and mirrors exactly those.
     void dep_finish_node(uint64_t node_id);
     // Re-derive the mirror from the resolver's truth (constructor / iteration
     // rewind).
@@ -190,11 +225,11 @@ class Workload : public Callable {
     // (always true for non-collectives, ungrouped collectives, and while the
     // liveness-valve bypass is active).
     bool comm_admission_in_order(
-        std::shared_ptr<Chakra::FeederV3::ETFeederNode> node) const;
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node) const;
     // Record a successful admission: drop the node's ordinal from its group's
     // unadmitted set. No-op for nodes without a tracked ordinal.
     void mark_comm_admitted(
-        std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
     // Reset per-group admission state to "nothing admitted yet"; called at
     // construction and at each iteration boundary (node ids repeat across
     // iterations).

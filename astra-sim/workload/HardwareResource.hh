@@ -59,10 +59,10 @@ class HardwareResource {
     // (or an ungrouped-collective cycle on the legacy path).
     bool comm_cap_bypass = false;
 
-    void occupy(const std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
-    void release(const std::shared_ptr<Chakra::FeederV3::ETFeederNode> node);
+    void occupy(const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
+    void release(const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node);
     bool is_available(
-        const std::shared_ptr<Chakra::FeederV3::ETFeederNode> node) const;
+        const std::shared_ptr<Chakra::FeederV3::ETFeederNode>& node) const;
     void report();
 
     // Communicator-group id of a collective node (its integer pg_name), or -1

@@ -158,14 +158,14 @@ std::shared_ptr<const ChakraNode> ETFeeder::get_raw_chakra_node(
   }
 
   // miss
-  if (this->index_map.find(node_id) == this->index_map.end())
+  const auto idx_it = this->index_map.find(node_id);
+  if (idx_it == this->index_map.end())
     throw std::runtime_error(
         "Node " + std::to_string(node_id) + " not found in index");
-  auto& pos = this->index_map[node_id];
-  this->chakra_file.seekg(pos);
+  this->chakra_file.seekg(idx_it->second);
   ChakraNode node_msg;
   ProtobufUtils::readMessage<ChakraNode>(this->chakra_file, node_msg);
-  return ETFeeder::_node_cache.put_locked(key, node_msg);
+  return ETFeeder::_node_cache.put_locked(key, std::move(node_msg));
 }
 
 void ETFeeder::graph_sanity_check() {
