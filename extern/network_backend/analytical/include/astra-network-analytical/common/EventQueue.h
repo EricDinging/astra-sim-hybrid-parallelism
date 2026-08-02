@@ -5,14 +5,14 @@ LICENSE file in the root directory of this source tree.
 
 #pragma once
 
-#include "common/EventList.h"
 #include "common/Type.h"
-#include <map>
+#include <cstdint>
+#include <vector>
 
 namespace NetworkAnalytical {
 
 /**
- * EventQueue manages scheduled EventLists.
+ * EventQueue manages scheduled events.
  */
 class EventQueue {
   public:
@@ -54,14 +54,32 @@ class EventQueue {
     void schedule_event(EventTime event_time, Callback callback, CallbackArg callback_arg) noexcept;
 
   private:
+    /// One scheduled event. `seq` is a monotonic insertion counter: heap
+    /// order is (time asc, seq asc), so same-time events pop in insertion
+    /// order -- the same FIFO the previous map<time, EventList> produced.
+    struct HeapEvent {
+        EventTime time;
+        std::uint64_t seq;
+        Callback callback;
+        CallbackArg callback_arg;
+    };
+
+    /// min-heap comparator (std::*_heap build a max-heap w.r.t. the
+    /// comparator, so "greater" yields a min-heap)
+    static bool heap_after(const HeapEvent& a, const HeapEvent& b) noexcept {
+        return a.time > b.time || (a.time == b.time && a.seq > b.seq);
+    }
+
     /// current time of the event queue
     EventTime current_time;
 
-    /// pending EventLists keyed (and ordered) by event time. A map makes
-    /// schedule_event O(log K) instead of a linear scan over all pending
-    /// timestamps; iteration order (ascending time) and same-time FIFO
-    /// semantics are identical to the previous sorted list.
-    std::map<EventTime, EventList> event_queue;
+    /// next insertion sequence number
+    std::uint64_t next_seq;
+
+    /// pending events as a flat binary heap ordered by (time, seq).
+    /// Replaces map<EventTime, EventList>: steady state costs no per-event
+    /// node allocation and no tree rebalance, only amortized vector pushes.
+    std::vector<HeapEvent> heap;
 };
 
 }  // namespace NetworkAnalytical

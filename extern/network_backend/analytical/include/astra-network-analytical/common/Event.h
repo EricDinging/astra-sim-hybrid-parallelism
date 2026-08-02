@@ -6,7 +6,6 @@ LICENSE file in the root directory of this source tree.
 #pragma once
 
 #include "common/Type.h"
-#include <tuple>
 
 namespace NetworkAnalytical {
 
@@ -27,13 +26,6 @@ class Event {
      * Invoke the callback function.
      */
     void invoke_event() noexcept;
-
-    /**
-     * Get the callback function and the argument.
-     *
-     * @return callback function and its argument
-     */
-    [[nodiscard]] std::pair<Callback, CallbackArg> get_handler_arg() const noexcept;
 
   private:
     /// pointer to the callback function

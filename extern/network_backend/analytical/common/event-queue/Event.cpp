@@ -15,16 +15,6 @@ Event::Event(const Callback callback, const CallbackArg callback_arg) noexcept
 }
 
 void Event::invoke_event() noexcept {
-    // check the validity of the event
-    assert(callback != nullptr);
-
-    // invoke the callback function
+    // invoke the callback function (non-null asserted at construction)
     (*callback)(callback_arg);
-}
-
-std::pair<Callback, CallbackArg> Event::get_handler_arg() const noexcept {
-    // check the validity of the event
-    assert(callback != nullptr);
-
-    return {callback, callback_arg};
 }
