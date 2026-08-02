@@ -12,6 +12,17 @@ LICENSE file in the root directory of this source tree.
 using namespace std;
 using namespace AstraSim;
 
+namespace {
+// Registry lookup is string-keyed; cache the logger instead of paying the
+// lookup on every RingTopology construction (same pattern as
+// workload_logger() in Workload.cc).
+const std::shared_ptr<spdlog::logger>& ring_logger() {
+    static const std::shared_ptr<spdlog::logger> logger =
+        LoggerFactory::get_logger("system::topology::RingTopology");
+    return logger;
+}
+}  // namespace
+
 RingTopology::RingTopology(Dimension dimension, int id, std::vector<int> NPUs)
     : BasicLogicalTopology(BasicLogicalTopology::BasicTopology::Ring) {
     name = "local";
@@ -45,11 +56,10 @@ RingTopology::RingTopology(Dimension dimension, int id, std::vector<int> NPUs)
     }
     this->NPUs = std::move(NPUs);
 
-    LoggerFactory::get_logger("system::topology::RingTopology")
-        ->debug("custom ring, id: {}, dimension: {} total nodes in ring: {} "
-                "index in ring: {} total nodes in ring {}",
-                id, name, total_nodes_in_ring, index_in_ring,
-                total_nodes_in_ring);
+    ring_logger()->debug(
+        "custom ring, id: {}, dimension: {} total nodes in ring: {} "
+        "index in ring: {} total nodes in ring {}",
+        id, name, total_nodes_in_ring, index_in_ring, total_nodes_in_ring);
 
     assert(index_in_ring >= 0);
 }
@@ -66,11 +76,11 @@ RingTopology::RingTopology(Dimension dimension,
         name = "horizontal";
     }
     if (id == 0) {
-        LoggerFactory::get_logger("system::topology::RingTopology")
-            ->debug("ring of node 0, id: {} dimension: {} total nodes in ring: "
-                    "{} index in ring: {} offset: {} total nodes in ring: {}",
-                    id, name, total_nodes_in_ring, index_in_ring, offset,
-                    total_nodes_in_ring);
+        ring_logger()->debug(
+            "ring of node 0, id: {} dimension: {} total nodes in ring: "
+            "{} index in ring: {} offset: {} total nodes in ring: {}",
+            id, name, total_nodes_in_ring, index_in_ring, offset,
+            total_nodes_in_ring);
     }
     this->id = id;
     this->total_nodes_in_ring = total_nodes_in_ring;
@@ -107,11 +117,11 @@ int RingTopology::get_receiver_homogeneous(int node_id,
             index++;
         }
         if (receiver < 0) {
-            LoggerFactory::get_logger("system::topology::RingTopology")
-                ->critical("at dim: {} at id: {} dimension: {} index: {}, node "
-                           "id: {}, offset: {}, index_in_ring {} receiver {}",
-                           name, id, name, index, node_id, offset,
-                           index_in_ring, receiver);
+            ring_logger()->critical(
+                "at dim: {} at id: {} dimension: {} index: {}, node "
+                "id: {}, offset: {}, index_in_ring {} receiver {}",
+                name, id, name, index, node_id, offset, index_in_ring,
+                receiver);
         }
         assert(receiver >= 0);
         if (!identity_) {
@@ -128,11 +138,11 @@ int RingTopology::get_receiver_homogeneous(int node_id,
             index--;
         }
         if (receiver < 0) {
-            LoggerFactory::get_logger("system::topology::RingTopology")
-                ->critical("at dim: {} at id: {} dimension: {} index: {}, node "
-                           "id: {}, offset: {}, index_in_ring {} receiver {}",
-                           name, id, name, index, node_id, offset,
-                           index_in_ring, receiver);
+            ring_logger()->critical(
+                "at dim: {} at id: {} dimension: {} index: {}, node "
+                "id: {}, offset: {}, index_in_ring {} receiver {}",
+                name, id, name, index, node_id, offset, index_in_ring,
+                receiver);
         }
         assert(receiver >= 0);
         if (!identity_) {

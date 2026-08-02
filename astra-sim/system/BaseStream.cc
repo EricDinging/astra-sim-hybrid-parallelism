@@ -19,8 +19,11 @@ BaseStream::BaseStream(int stream_id,
     this->stream_id = stream_id;
     this->owner = owner;
     this->initialized = false;
-    this->phases_to_go = phases_to_go;
-    for (auto& vn : phases_to_go) {
+    this->phases_to_go = std::move(phases_to_go);
+    // Iterate the member (the moved-in list): init() only touches the shared
+    // Algorithm* held by each phase, so the same Algorithm objects get
+    // initialized as before the move.
+    for (auto& vn : this->phases_to_go) {
         if (vn.algorithm != nullptr) {
             vn.init(this);
         }

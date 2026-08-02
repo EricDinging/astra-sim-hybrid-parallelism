@@ -53,15 +53,17 @@ Sys::SchedulerUnit::SchedulerUnit(Sys* sys,
     this->latency_per_dimension.resize(queues.size(), 0);
     this->total_chunks_per_dimension.resize(queues.size(), 0);
 
-    int base = 0;
+    int total_queues = 0;
+    for (auto q : queues) {
+        total_queues += q;
+    }
+    this->running_streams.assign(total_queues, 0);
+    this->stream_pointer.assign(total_queues, list<BaseStream*>::iterator());
+    this->queue_id_to_dimension.reserve(total_queues);
     int dimension = 0;
     for (auto q : queues) {
         for (int i = 0; i < q; i++) {
-            this->running_streams[base] = 0;
-            list<BaseStream*>::iterator it;
-            this->stream_pointer[base] = it;
-            this->queue_id_to_dimension[base] = dimension;
-            base++;
+            this->queue_id_to_dimension.push_back(dimension);
         }
         dimension++;
     }
@@ -1150,8 +1152,8 @@ DataSet* Sys::generate_collective(
             if (communicator_group != nullptr) {
                 stream_id = communicator_group->num_streams++;
             }
-            StreamBaseline* newStream =
-                new StreamBaseline(this, dataset, stream_id, vect, pri);
+            StreamBaseline* newStream = new StreamBaseline(
+                this, dataset, stream_id, std::move(vect), pri);
             newStream->current_queue_id = -1;
             insert_into_ready_list(newStream);
         } else {
@@ -1439,7 +1441,7 @@ void Sys::insert_stream(list<BaseStream*>* queue, BaseStream* baseStream) {
             }
         }
     }
-    queue->insert(it, baseStream);
+    baseStream->queue_position = queue->insert(it, baseStream);
 }
 
 void Sys::schedule(int num) {
@@ -1484,15 +1486,12 @@ void Sys::proceed_to_next_vnet_baseline(StreamBaseline* stream) {
         stream->dataset->notify_stream_finished((StreamStat*)stream);
     }
     if (stream->current_queue_id >= 0 && stream->my_current_phase.enabled) {
-        list<BaseStream*>& target =
-            active_Streams.at(stream->my_current_phase.queue_id);
-        for (list<BaseStream*>::iterator it = target.begin();
-             it != target.end(); ++it) {
-            if (((StreamBaseline*)(*it))->stream_id == stream->stream_id) {
-                target.erase(it);
-                break;
-            }
-        }
+        // O(1) erase via the iterator stored at insertion. The stream was
+        // inserted into exactly this bucket (insert_stream runs iff the
+        // phase is enabled, with queue_id == current_queue_id), and nothing
+        // else erases from active_Streams.
+        active_Streams.at(stream->my_current_phase.queue_id)
+            .erase(stream->queue_position);
     }
     if (stream->phases_to_go.size() == 0) {
         total_running_streams--;

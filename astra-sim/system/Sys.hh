@@ -51,11 +51,13 @@ class Sys : public Callable {
         int max_running_streams;
         int ready_list_threshold;
         int queue_threshold;
-        std::map<int, int> running_streams;
-        std::map<int, std::list<BaseStream*>::iterator> stream_pointer;
+        // Indexed by dense queue (vnet) id 0..total_queues-1; sized once at
+        // construction (queue ids are contiguous by design).
+        std::vector<int> running_streams;
+        std::vector<std::list<BaseStream*>::iterator> stream_pointer;
         std::vector<Tick> latency_per_dimension;
         std::vector<double> total_chunks_per_dimension;
-        std::map<int, int> queue_id_to_dimension;
+        std::vector<int> queue_id_to_dimension;
     };
     //---------------------------------------------------------------------------
 

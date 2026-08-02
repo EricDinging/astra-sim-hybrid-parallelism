@@ -14,14 +14,13 @@ StreamBaseline::StreamBaseline(Sys* owner,
                                int stream_id,
                                std::list<CollectivePhase> phases_to_go,
                                int priority)
-    : BaseStream(stream_id, owner, phases_to_go) {
+    : BaseStream(stream_id, owner, std::move(phases_to_go)) {
     this->owner = owner;
     this->stream_id = stream_id;
-    this->phases_to_go = phases_to_go;
     this->dataset = dataset;
     this->priority = priority;
     steps_finished = 0;
-    initial_data_size = phases_to_go.front().initial_data_size;
+    initial_data_size = this->phases_to_go.front().initial_data_size;
 }
 
 void StreamBaseline::init() {

@@ -32,6 +32,12 @@ class BaseStream : public Callable, public StreamStat {
     virtual void init() = 0;
 
     int stream_id;
+    // Position of this stream inside the queue it currently sits in
+    // (ready_list or one active_Streams bucket); written by
+    // Sys::insert_stream on every insertion, consumed by
+    // Sys::proceed_to_next_vnet_baseline for O(1) erase. Only valid while
+    // the stream is actually enqueued (a stream is in at most one queue).
+    std::list<BaseStream*>::iterator queue_position;
     int total_packets_sent;
     SchedulingPolicy preferred_scheduling;
     std::list<CollectivePhase> phases_to_go;

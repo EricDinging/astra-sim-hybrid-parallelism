@@ -910,8 +910,12 @@ bool Workload::issue_coll_comm(
     }
 
     sys->increment_inflight_coll();
-    logger->debug("RANK: {} inflight collective count: {}", this->sys->id,
-                  sys->get_inflight_coll());
+    // get_inflight_coll() is a pure getter but spdlog evaluates it eagerly;
+    // gate it like the collective log above.
+    if (logger->should_log(spdlog::level::debug)) {
+        logger->debug("RANK: {} inflight collective count: {}", this->sys->id,
+                      sys->get_inflight_coll());
+    }
 
     const auto comm_type =
         static_cast<ChakraCollectiveCommType>(node->comm_type<uint64_t>());
@@ -1051,10 +1055,14 @@ void Workload::skip_invalid(shared_ptr<Chakra::FeederV3::ETFeederNode> node) {
     const auto node_id = node->id();
     dep_finish_node(node_id);
     const auto& logger = workload_logger();
-    logger->debug("callback,sys->id={}, tick={}, node->id={}, "
-                  "node->name={}, node->type={}",
-                  sys->id, Sys::boostedTick(), node->id(), node->name(),
-                  static_cast<uint64_t>(node->type()));
+    // spdlog evaluates arguments eagerly; node->name() allocates, so keep it
+    // behind a level check (same pattern as issue_comm above).
+    if (logger->should_log(spdlog::level::debug)) {
+        logger->debug("callback,sys->id={}, tick={}, node->id={}, "
+                      "node->name={}, node->type={}",
+                      sys->id, Sys::boostedTick(), node->id(), node->name(),
+                      static_cast<uint64_t>(node->type()));
+    }
     hw_resource->release(node);
     stats->record_end(node, Sys::boostedTick());
     if (this->sys->track_local_mem) {
