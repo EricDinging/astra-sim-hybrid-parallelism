@@ -142,26 +142,27 @@ class Sys : public Callable {
     // Collective Communication Primitives
     // --------------------------------------
     DataSet* generate_all_reduce(uint64_t size,
-                                 std::vector<bool> involved_dimensions,
+                                 const std::vector<bool>& involved_dimensions,
                                  CommunicatorGroup* communicator_group,
                                  int explicit_priority);
     DataSet* generate_all_to_all(uint64_t size,
-                                 std::vector<bool> involved_dimensions,
+                                 const std::vector<bool>& involved_dimensions,
                                  CommunicatorGroup* communicator_group,
                                  int explicit_priority);
     DataSet* generate_all_gather(uint64_t size,
-                                 std::vector<bool> involved_dimensions,
+                                 const std::vector<bool>& involved_dimensions,
                                  CommunicatorGroup* communicator_group,
                                  int explicit_priority);
-    DataSet* generate_reduce_scatter(uint64_t size,
-                                     std::vector<bool> involved_dimensions,
-                                     CommunicatorGroup* communicator_group,
-                                     int explicit_priority);
+    DataSet* generate_reduce_scatter(
+        uint64_t size,
+        const std::vector<bool>& involved_dimensions,
+        CommunicatorGroup* communicator_group,
+        int explicit_priority);
     DataSet* generate_collective(
         uint64_t size,
         LogicalTopology* topology,
-        std::vector<CollectiveImpl*> implementation_per_dimension,
-        std::vector<bool> dimensions_involved,
+        const std::vector<CollectiveImpl*>& implementation_per_dimension,
+        const std::vector<bool>& dimensions_involved,
         ComType collective_type,
         int explicit_priority,
         CommunicatorGroup* communicator_group);
@@ -346,12 +347,15 @@ class Sys : public Callable {
 
     // Keyed bucket store, never iterated in time order (the network backend
     // owns the time-ordered queue), so a hash map avoids the red-black tree's
-    // O(log n) lookups and per-node allocation. NOTE: callbacks invoked from
-    // call_events() may register further events, which can rehash this map --
-    // so never hold an iterator across a callback; bind a reference to the
-    // bucket list (stable across rehash) and erase by key.
+    // O(log n) lookups and per-node allocation. Buckets are vectors (no
+    // per-entry node allocation), iterated BY INDEX in call_events(). NOTE:
+    // callbacks invoked from call_events() may register further events, which
+    // can rehash this map and reallocate the current bucket -- so never hold
+    // an iterator across a callback; bind a reference to the bucket vector
+    // (mapped references are stable across rehash), copy each tuple out
+    // before invoking, and erase by key.
     std::unordered_map<Tick,
-                       std::list<std::tuple<Callable*, EventType, CallData*>>>
+                       std::vector<std::tuple<Callable*, EventType, CallData*>>>
         event_queue;
     int total_nodes;
     int dim_to_break;
@@ -364,6 +368,14 @@ class Sys : public Callable {
     int num_streams;
     static uint8_t* dummy_data;
     std::map<std::string, LogicalTopology*> logical_topologies;
+    // Cached raw pointers to the four logical_topologies entries, so the
+    // per-collective path skips the string-keyed map probe. Assigned at
+    // every site that (re)populates the map (both constructors and
+    // break_dimension); the map remains the owner.
+    LogicalTopology* all_reduce_topology = nullptr;
+    LogicalTopology* reduce_scatter_topology = nullptr;
+    LogicalTopology* all_gather_topology = nullptr;
+    LogicalTopology* all_to_all_topology = nullptr;
     std::vector<CollectiveImpl*> all_reduce_implementation_per_dimension;
     std::vector<CollectiveImpl*> reduce_scatter_implementation_per_dimension;
     std::vector<CollectiveImpl*> all_gather_implementation_per_dimension;

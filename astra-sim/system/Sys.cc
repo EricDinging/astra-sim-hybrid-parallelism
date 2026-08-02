@@ -70,9 +70,12 @@ Sys::SchedulerUnit::SchedulerUnit(Sys* sys,
 }
 
 void Sys::SchedulerUnit::notify_stream_added(int vnet) {
-    stream_pointer[vnet] = sys->active_Streams[vnet].begin();
+    // One map lookup instead of one per loop iteration (std::map mapped
+    // references are stable; list::end() is unaffected by insert/erase).
+    auto& queue = sys->active_Streams[vnet];
+    stream_pointer[vnet] = queue.begin();
     advance(stream_pointer[vnet], running_streams[vnet]);
-    while (stream_pointer[vnet] != sys->active_Streams[vnet].end() &&
+    while (stream_pointer[vnet] != queue.end() &&
            running_streams[vnet] < queue_threshold) {
         (*stream_pointer[vnet])->init();
         running_streams[vnet]++;
@@ -107,9 +110,11 @@ void Sys::SchedulerUnit::notify_stream_removed(int vnet, Tick running_time) {
         }
         sys->schedule(max);
     }
-    stream_pointer[vnet] = sys->active_Streams[vnet].begin();
+    // Same single-lookup hoist as notify_stream_added.
+    auto& queue = sys->active_Streams[vnet];
+    stream_pointer[vnet] = queue.begin();
     advance(stream_pointer[vnet], running_streams[vnet]);
-    while (stream_pointer[vnet] != sys->active_Streams[vnet].end() &&
+    while (stream_pointer[vnet] != queue.end() &&
            running_streams[vnet] < queue_threshold) {
         (*stream_pointer[vnet])->init();
         running_streams[vnet]++;
@@ -223,14 +228,18 @@ Sys::Sys(int id,
     // collective communication
     this->num_streams = 0;
 
-    logical_topologies["AllReduce"] = new GeneralComplexTopology(
-        id, physical_dims, all_reduce_implementation_per_dimension);
-    logical_topologies["ReduceScatter"] = new GeneralComplexTopology(
-        id, physical_dims, reduce_scatter_implementation_per_dimension);
-    logical_topologies["AllGather"] = new GeneralComplexTopology(
-        id, physical_dims, all_gather_implementation_per_dimension);
-    logical_topologies["AllToAll"] = new GeneralComplexTopology(
-        id, physical_dims, all_to_all_implementation_per_dimension);
+    logical_topologies["AllReduce"] = all_reduce_topology =
+        new GeneralComplexTopology(id, physical_dims,
+                                   all_reduce_implementation_per_dimension);
+    logical_topologies["ReduceScatter"] = reduce_scatter_topology =
+        new GeneralComplexTopology(id, physical_dims,
+                                   reduce_scatter_implementation_per_dimension);
+    logical_topologies["AllGather"] = all_gather_topology =
+        new GeneralComplexTopology(id, physical_dims,
+                                   all_gather_implementation_per_dimension);
+    logical_topologies["AllToAll"] = all_to_all_topology =
+        new GeneralComplexTopology(id, physical_dims,
+                                   all_to_all_implementation_per_dimension);
 
     memBus = new MemBus("NPU", "MA", this, inp_L, inp_o, inp_g, inp_G,
                         model_shared_bus, communication_delay, true);
@@ -344,14 +353,18 @@ Sys::Sys(int id,
     // collective communication
     this->num_streams = 0;
 
-    logical_topologies["AllReduce"] = new GeneralComplexTopology(
-        id, physical_dims, all_reduce_implementation_per_dimension);
-    logical_topologies["ReduceScatter"] = new GeneralComplexTopology(
-        id, physical_dims, reduce_scatter_implementation_per_dimension);
-    logical_topologies["AllGather"] = new GeneralComplexTopology(
-        id, physical_dims, all_gather_implementation_per_dimension);
-    logical_topologies["AllToAll"] = new GeneralComplexTopology(
-        id, physical_dims, all_to_all_implementation_per_dimension);
+    logical_topologies["AllReduce"] = all_reduce_topology =
+        new GeneralComplexTopology(id, physical_dims,
+                                   all_reduce_implementation_per_dimension);
+    logical_topologies["ReduceScatter"] = reduce_scatter_topology =
+        new GeneralComplexTopology(id, physical_dims,
+                                   reduce_scatter_implementation_per_dimension);
+    logical_topologies["AllGather"] = all_gather_topology =
+        new GeneralComplexTopology(id, physical_dims,
+                                   all_gather_implementation_per_dimension);
+    logical_topologies["AllToAll"] = all_to_all_topology =
+        new GeneralComplexTopology(id, physical_dims,
+                                   all_to_all_implementation_per_dimension);
 
     memBus = new MemBus("NPU", "MA", this, inp_L, inp_o, inp_g, inp_G,
                         model_shared_bus, communication_delay, true);
@@ -669,9 +682,7 @@ Tick Sys::boostedTick() {
             }
         }
     }
-    timespec_t tmp = ts->comm_NI->sim_get_time();
-    Tick tick = tmp.time_val / CLOCK_PERIOD;
-    return tick;
+    return ts->comm_NI->sim_get_time_ns();
 }
 
 void Sys::sys_panic(string msg) {
@@ -693,12 +704,20 @@ void Sys::call_events() {
     if (it == event_queue.end()) {
         return;
     }
-    // Bind a reference to the bucket list: a callback may register new events
-    // and rehash event_queue, which would invalidate `it` but not this
-    // reference. Same-tick events appended during dispatch are left un-invoked
-    // and dropped by the erase below, matching the previous behavior.
+    // Bind a reference to the bucket: a callback may register new events and
+    // rehash event_queue, which would invalidate `it` but not this reference
+    // (mapped references survive rehash; iterators do not). Same-tick events
+    // appended during dispatch ARE invoked in this same pass -- iteration is
+    // by index with size() re-read each step, matching the old std::list
+    // behavior where push_back inserted before the end sentinel. This is
+    // load-bearing for bit-comparability: zero-delay CommProcessingFinished
+    // (small messages) and zero-runtime roofline ops append to the current
+    // tick and must run now, in append order. Each tuple is copied out before
+    // the call because the callback may append to this very bucket and
+    // reallocate its storage.
     auto& callables = it->second;
-    for (auto& callable : callables) {
+    for (size_t i = 0; i < callables.size(); i++) {
+        const auto callable = callables[i];
         try {
             pending_events--;
             (get<0>(callable))->call(get<1>(callable), get<2>(callable));
@@ -756,7 +775,11 @@ void Sys::handleEvent(void* arg) {
         delete ehd;
     } else if ((event == EventType::NPU_to_MA) ||
                (event == EventType::MA_to_NPU)) {
+        // Dead on the analytical backends (nothing schedules handleEvent with
+        // these event types); delete for consistency with the sibling
+        // branches should a backend ever exercise it.
         all_sys[id]->call_events();
+        delete ehd;
     } else if (event == EventType::RendezvousSend) {
         RendezvousSendData* rsd = (RendezvousSendData*)ehd;
         rsd->send.call(EventType::General, nullptr);
@@ -794,13 +817,13 @@ void Sys::handleEvent(void* arg) {
 
 LogicalTopology* Sys::get_logical_topology(ComType comm_type) {
     if (comm_type == ComType::All_Reduce) {
-        return logical_topologies["AllReduce"];
+        return all_reduce_topology;
     } else if (comm_type == ComType::All_to_All) {
-        return logical_topologies["AllToAll"];
+        return all_to_all_topology;
     } else if (comm_type == ComType::Reduce_Scatter) {
-        return logical_topologies["ReduceScatter"];
+        return reduce_scatter_topology;
     } else if (comm_type == ComType::All_Gather) {
-        return logical_topologies["AllGather"];
+        return all_gather_topology;
     } else {
         sys_panic("no known logical topology!");
         return nullptr;
@@ -824,11 +847,11 @@ vector<CollectiveImpl*> Sys::get_collective_implementation(ComType comm_type) {
 }
 
 DataSet* Sys::generate_all_reduce(uint64_t size,
-                                  vector<bool> involved_dimensions,
+                                  const vector<bool>& involved_dimensions,
                                   CommunicatorGroup* communicator_group,
                                   int explicit_priority) {
     if (communicator_group == nullptr) {
-        return generate_collective(size, logical_topologies["AllReduce"],
+        return generate_collective(size, all_reduce_topology,
                                    all_reduce_implementation_per_dimension,
                                    involved_dimensions, ComType::All_Reduce,
                                    explicit_priority, communicator_group);
@@ -843,11 +866,11 @@ DataSet* Sys::generate_all_reduce(uint64_t size,
 }
 
 DataSet* Sys::generate_all_to_all(uint64_t size,
-                                  vector<bool> involved_dimensions,
+                                  const vector<bool>& involved_dimensions,
                                   CommunicatorGroup* communicator_group,
                                   int explicit_priority) {
     if (communicator_group == nullptr) {
-        return generate_collective(size, logical_topologies["AllToAll"],
+        return generate_collective(size, all_to_all_topology,
                                    all_to_all_implementation_per_dimension,
                                    involved_dimensions, ComType::All_to_All,
                                    explicit_priority, communicator_group);
@@ -862,11 +885,11 @@ DataSet* Sys::generate_all_to_all(uint64_t size,
 }
 
 DataSet* Sys::generate_all_gather(uint64_t size,
-                                  vector<bool> involved_dimensions,
+                                  const vector<bool>& involved_dimensions,
                                   CommunicatorGroup* communicator_group,
                                   int explicit_priority) {
     if (communicator_group == nullptr) {
-        return generate_collective(size, logical_topologies["AllGather"],
+        return generate_collective(size, all_gather_topology,
                                    all_gather_implementation_per_dimension,
                                    involved_dimensions, ComType::All_Gather,
                                    explicit_priority, communicator_group);
@@ -881,11 +904,11 @@ DataSet* Sys::generate_all_gather(uint64_t size,
 }
 
 DataSet* Sys::generate_reduce_scatter(uint64_t size,
-                                      vector<bool> involved_dimensions,
+                                      const vector<bool>& involved_dimensions,
                                       CommunicatorGroup* communicator_group,
                                       int explicit_priority) {
     if (communicator_group == nullptr) {
-        return generate_collective(size, logical_topologies["ReduceScatter"],
+        return generate_collective(size, reduce_scatter_topology,
                                    reduce_scatter_implementation_per_dimension,
                                    involved_dimensions, ComType::Reduce_Scatter,
                                    explicit_priority, communicator_group);
@@ -902,8 +925,8 @@ DataSet* Sys::generate_reduce_scatter(uint64_t size,
 DataSet* Sys::generate_collective(
     uint64_t size,
     LogicalTopology* topology,
-    vector<CollectiveImpl*> implementation_per_dimension,
-    vector<bool> dimensions_involved,
+    const vector<CollectiveImpl*>& implementation_per_dimension,
+    const vector<bool>& dimensions_involved,
     ComType collective_type,
     int explicit_priority,
     CommunicatorGroup* communicator_group) {
@@ -1308,14 +1331,19 @@ int Sys::break_dimension(int model_parallel_npu_group) {
             }
             replicate = (CollectiveImpl*)(*it)->clone();
             all_to_all_implementation_per_dimension.insert(it, replicate);
-            logical_topologies["AllReduce"] = new GeneralComplexTopology(
-                id, logical_dims, all_reduce_implementation_per_dimension);
-            logical_topologies["ReduceScatter"] = new GeneralComplexTopology(
-                id, logical_dims, reduce_scatter_implementation_per_dimension);
-            logical_topologies["AllGather"] = new GeneralComplexTopology(
-                id, logical_dims, all_gather_implementation_per_dimension);
-            logical_topologies["AllToAll"] = new GeneralComplexTopology(
-                id, logical_dims, all_to_all_implementation_per_dimension);
+            logical_topologies["AllReduce"] = all_reduce_topology =
+                new GeneralComplexTopology(
+                    id, logical_dims, all_reduce_implementation_per_dimension);
+            logical_topologies["ReduceScatter"] = reduce_scatter_topology =
+                new GeneralComplexTopology(
+                    id, logical_dims,
+                    reduce_scatter_implementation_per_dimension);
+            logical_topologies["AllGather"] = all_gather_topology =
+                new GeneralComplexTopology(
+                    id, logical_dims, all_gather_implementation_per_dimension);
+            logical_topologies["AllToAll"] = all_to_all_topology =
+                new GeneralComplexTopology(
+                    id, logical_dims, all_to_all_implementation_per_dimension);
             this->logical_broken_dims = logical_dims;
             this->dim_to_break = dimension_to_break;
 
@@ -1449,12 +1477,14 @@ void Sys::schedule(int num) {
     int counter = min(num, ready_list_size);
     while (counter > 0) {
         int top_vn = ready_list.front()->phases_to_go.front().queue_id;
-        int total_waiting_streams = ready_list.size();
-        int total_phases = ready_list.front()->phases_to_go.size();
 
         proceed_to_next_vnet_baseline((StreamBaseline*)ready_list.front());
 
         if (ready_list.front()->current_queue_id == -1) {
+            // Diagnostics for a fatal invariant violation only; computed here
+            // (post-proceed) instead of every loop iteration.
+            int total_waiting_streams = ready_list.size();
+            int total_phases = ready_list.front()->phases_to_go.size();
             Sys::sys_panic(
                 "should not happen! stream id: " +
                 to_string(ready_list.front()->stream_id) +
@@ -1511,8 +1541,7 @@ void Sys::proceed_to_next_vnet_baseline(StreamBaseline* stream) {
     stream->current_queue_id = stream->phases_to_go.front().queue_id;
     stream->current_com_type = stream->phases_to_go.front().comm_type;
 
-    CollectivePhase vi = stream->phases_to_go.front();
-    stream->my_current_phase = vi;
+    stream->my_current_phase = stream->phases_to_go.front();
     stream->phases_to_go.pop_front();
     stream->initialized = false;
     stream->last_phase_change = Sys::boostedTick();

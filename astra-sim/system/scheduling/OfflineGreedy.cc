@@ -88,7 +88,7 @@ std::vector<int> OfflineGreedy::get_chunk_scheduling(
     long long chunk_id,
     uint64_t& remaining_data_size,
     uint64_t recommended_chunk_size,
-    std::vector<bool>& dimensions_involved,
+    const std::vector<bool>& dimensions_involved,
     InterDimensionScheduling inter_dim_scheduling,
     ComType comm_type) {
     if (chunk_schedule.find(chunk_id) != chunk_schedule.end()) {

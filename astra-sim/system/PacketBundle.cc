@@ -9,7 +9,7 @@ using namespace AstraSim;
 
 PacketBundle::PacketBundle(Sys* sys,
                            BaseStream* stream,
-                           std::list<MyPacket*> locked_packets,
+                           std::vector<MyPacket*> locked_packets,
                            bool needs_processing,
                            bool send_back,
                            uint64_t size,

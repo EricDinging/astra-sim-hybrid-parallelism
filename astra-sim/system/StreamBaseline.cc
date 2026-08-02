@@ -38,12 +38,14 @@ void StreamBaseline::init() {
 }
 
 void StreamBaseline::call(EventType event, CallData* data) {
+    // `data` is always non-null here: the only caller is PacketBundle::call,
+    // which forwards one of MemBus's preallocated per-variant SharedBusStat
+    // payloads. Those are owned by MemBus and only read here, so there is
+    // nothing to free (the old per-packet heap allocation and its delete,
+    // plus the vestigial null check, are gone).
     SharedBusStat* sharedBusStat = (SharedBusStat*)data;
     update_bus_stats(BusType::Both, sharedBusStat);
     my_current_phase.algorithm->run(EventType::General, data);
-    if (data != nullptr) {
-        delete sharedBusStat;
-    }
 }
 
 void StreamBaseline::consume(RecvPacketEventHandlerData* message) {

@@ -21,16 +21,19 @@ class MyPacket : public Callable {
     void set_notifier(Callable* c);
     void call(EventType event, CallData* data);
 
-    int cycles_needed;
-    int fm_id;
-    int stream_id;
-    Callable* notifier;
-    Callable* sender;
-    int preferred_vnet;
-    int preferred_dest;
-    int preferred_src;
-    uint64_t msg_size;
-    Tick ready_time;
+    // Default-initialized: the ctors only set the preferred_* fields and
+    // msg_size, so the rest used to start as indeterminate garbage (UB to
+    // read; byte-identical runs confirm nothing depended on the old values).
+    int cycles_needed = 0;
+    int fm_id = 0;
+    int stream_id = 0;
+    Callable* notifier = nullptr;
+    Callable* sender = nullptr;
+    int preferred_vnet = 0;
+    int preferred_dest = 0;
+    int preferred_src = 0;
+    uint64_t msg_size = 0;
+    Tick ready_time = 0;
 };
 
 }  // namespace AstraSim

@@ -42,10 +42,14 @@ void CommunicatorGroup::set_id(int id) {
 }
 
 CollectivePlan* CommunicatorGroup::get_collective_plan(ComType comm_type) {
-    if (comm_plans.find(comm_type) != comm_plans.end()) {
-        return comm_plans[comm_type];
+    // Single probe on hit (find iterator reused) and single insert on miss
+    // (the new plan is returned directly instead of re-looked-up).
+    const auto it = comm_plans.find(comm_type);
+    if (it != comm_plans.end()) {
+        return it->second;
     }
 
+    CollectivePlan* plan = nullptr;
     if (static_cast<uint64_t>(generator->total_nodes) == involved_NPUs.size()) {
         LogicalTopology* logical_topology =
             generator->get_logical_topology(comm_type);
@@ -53,10 +57,8 @@ CollectivePlan* CommunicatorGroup::get_collective_plan(ComType comm_type) {
             generator->get_collective_implementation(comm_type);
         std::vector<bool> dimensions_involved(10, true);
         bool should_be_removed = false;
-        comm_plans[comm_type] =
-            new CollectivePlan(logical_topology, collective_implementation,
-                               dimensions_involved, should_be_removed);
-        return comm_plans[comm_type];
+        plan = new CollectivePlan(logical_topology, collective_implementation,
+                                  dimensions_involved, should_be_removed);
     } else {
         LogicalTopology* logical_topology = new RingTopology(
             RingTopology::Dimension::Local, generator->id, involved_NPUs);
@@ -64,11 +66,9 @@ CollectivePlan* CommunicatorGroup::get_collective_plan(ComType comm_type) {
             new CollectiveImpl(CollectiveImplType::Ring)};
         std::vector<bool> dimensions_involved(1, true);
         bool should_be_removed = true;
-        comm_plans[comm_type] =
-            new CollectivePlan(logical_topology, collective_implementation,
-                               dimensions_involved, should_be_removed);
-        return comm_plans[comm_type];
+        plan = new CollectivePlan(logical_topology, collective_implementation,
+                                  dimensions_involved, should_be_removed);
     }
-    assert(false);
-    return nullptr;
+    comm_plans[comm_type] = plan;
+    return plan;
 }

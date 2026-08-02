@@ -34,7 +34,7 @@ class OfflineGreedy {
         long long chunk_id,
         uint64_t& remaining_data_size,
         uint64_t recommended_chunk_size,
-        std::vector<bool>& dimensions_involved,
+        const std::vector<bool>& dimensions_involved,
         InterDimensionScheduling inter_dim_scheduling,
         ComType comm_type);
     uint64_t get_chunk_size_from_elapsed_time(double elapsed_time,

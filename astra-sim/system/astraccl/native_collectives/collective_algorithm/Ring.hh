@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 #define __RING_HH__
 
 #include <deque>
+#include <vector>
 
 #include "astra-sim/system/MemBus.hh"
 #include "astra-sim/system/MyPacket.hh"
@@ -58,7 +59,10 @@ class Ring : public Algorithm {
     long total_packets_sent;
     long total_packets_received;
     uint64_t msg_size;
-    std::list<MyPacket*> locked_packets;
+    // vector, not list: always holds exactly one element at release
+    // (remained_packets_per_max_count == 1); moved into the PacketBundle,
+    // preserving push_back order.
+    std::vector<MyPacket*> locked_packets;
     bool processed;
     bool send_back;
     bool NPU_to_MA;

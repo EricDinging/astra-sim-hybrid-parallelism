@@ -6,6 +6,8 @@ LICENSE file in the root directory of this source tree.
 #ifndef __PACKET_BUNDLE_HH__
 #define __PACKET_BUNDLE_HH__
 
+#include <vector>
+
 #include "astra-sim/system/BaseStream.hh"
 #include "astra-sim/system/Callable.hh"
 #include "astra-sim/system/Common.hh"
@@ -19,7 +21,7 @@ class PacketBundle : public Callable {
   public:
     PacketBundle(Sys* sys,
                  BaseStream* stream,
-                 std::list<MyPacket*> locked_packets,
+                 std::vector<MyPacket*> locked_packets,
                  bool needs_processing,
                  bool send_back,
                  uint64_t size,
@@ -35,7 +37,11 @@ class PacketBundle : public Callable {
     void call(EventType event, CallData* data);
 
     Sys* sys;
-    std::list<MyPacket*> locked_packets;
+    // vector, not list: the collectives release exactly one packet per bundle
+    // in practice, and the buffer is moved in from the caller (one small
+    // allocation per release instead of one list node per push). Order is
+    // preserved: push_back + in-order iteration.
+    std::vector<MyPacket*> locked_packets;
     bool needs_processing;
     bool send_back;
     uint64_t size;
