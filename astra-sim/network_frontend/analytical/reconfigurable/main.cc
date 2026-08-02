@@ -438,7 +438,16 @@ int main(int argc, char* argv[]) {
         std::exit(1);
     }
     tm->set_fluid_mode(congestion_model == "fluid");
-    logger->info("congestion model: {}", congestion_model);
+    const auto fluid_lazy_finish =
+        cmd_line_parser.get<bool>("fluid-lazy-finish");
+    if (fluid_lazy_finish && congestion_model != "fluid") {
+        logger->critical(
+            "--fluid-lazy-finish requires --congestion-model=fluid");
+        std::exit(1);
+    }
+    tm->set_fluid_lazy_finish(fluid_lazy_finish);
+    logger->info("congestion model: {}{}", congestion_model,
+                 fluid_lazy_finish ? " (lazy finish)" : "");
 
     // DOR route-cache ceiling (on-demand routing; no-op in BFS mode).
     tm->set_route_cache_budget_bytes(static_cast<std::size_t>(

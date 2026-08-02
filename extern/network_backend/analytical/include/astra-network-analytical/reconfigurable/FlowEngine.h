@@ -48,6 +48,18 @@ class FlowEngine {
     /// ...and release them once the post-drain retune is done.
     void resume() noexcept;
 
+    /// Lazy finish-event rescheduling (--fluid-lazy-finish): keep at most
+    /// one outstanding finish event per flow. An event that fires before the
+    /// flow's bytes have drained (its rate dropped after arming) re-arms
+    /// itself at the then-current estimate, instead of the default eager
+    /// scheme that orphans a stale event on EVERY rate change. Cuts event
+    /// churn dramatically under congestion, but same-nanosecond event
+    /// insertion order differs from eager, so results are deterministic
+    /// within the mode yet not bit-comparable across modes.
+    void set_lazy_finish(bool enable) noexcept {
+        lazy_finish_ = enable;
+    }
+
   private:
     struct Flow {
         std::unique_ptr<Chunk> chunk;
@@ -58,6 +70,9 @@ class FlowEngine {
         EventTime last_update;                     // when `remaining` was banked
         uint64_t epoch;                            // invalidates stale events
         uint64_t id;
+        // Lazy mode only: absolute fire time of the outstanding finish
+        // event; 0 = none outstanding (parked or completed).
+        EventTime next_fire = 0;
     };
 
     /// Heap-allocated argument of the epoch-guarded transmission-finish event.
@@ -85,6 +100,7 @@ class FlowEngine {
     std::vector<std::unique_ptr<Chunk>> deferred;
     uint64_t next_flow_id = 0;
     bool paused = false;
+    bool lazy_finish_ = false;  // see set_lazy_finish
 };
 
 }  // namespace NetworkAnalyticalReconfigurable
