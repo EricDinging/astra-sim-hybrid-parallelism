@@ -50,11 +50,41 @@ class Link {
     Link(Bandwidth bandwidth, Latency latency) noexcept;
 
     /**
-     * Check if the link is busy.
+     * Check if the link is occupied right now: either flagged busy (mid-
+     * reconfiguration downtime, or serving a cold-path queued transmission)
+     * or arithmetically booked by hot-path sends (now < next_free_time).
+     * This is the occupancy answer wiring/drain checks and the fluid rate
+     * computation want.
      *
-     * @return true if the link is busy, false otherwise
+     * @return true if the link is occupied, false otherwise
      */
     [[nodiscard]] bool is_busy() const noexcept;
+
+    /**
+     * The busy FLAG only (reconfiguration downtime / cold-path transmission
+     * in flight), excluding arithmetic occupancy. Device::send uses this to
+     * decide hot vs cold path: hot-path sends append to the arithmetic
+     * booking themselves, so arithmetic occupancy must not divert them.
+     */
+    [[nodiscard]] bool is_flag_busy() const noexcept {
+        return busy;
+    }
+
+    /**
+     * Busy-until arithmetic: the time this link finishes everything booked
+     * on it so far (0 = never booked). Hot-path sends start at
+     * max(now, next_free_time) and push it forward; cold-path transmissions
+     * and reconfigures keep it in sync so hot sends after a cold stream
+     * cannot start early.
+     */
+    [[nodiscard]] EventTime next_free_time() const noexcept {
+        return next_free_time_;
+    }
+    void book_until(EventTime t) noexcept {
+        if (t > next_free_time_) {
+            next_free_time_ = t;
+        }
+    }
 
     /**
      * Try to send a chunk through the link.
@@ -64,6 +94,16 @@ class Link {
      * @param chunk the chunk to be served by the link
      */
     unsigned long send(std::unique_ptr<Chunk> chunk) noexcept;
+
+    /**
+     * Busy-until hot path: book the chunk's transmission arithmetically.
+     * Starts at max(now, next_free_time), schedules ONLY the chunk-arrival
+     * event, and advances next_free_time by serialization + 2x latency --
+     * the identical start/arrival/occupancy times the event-driven scheme
+     * produced, with one event per hop instead of two. Returns the new
+     * next_free_time.
+     */
+    EventTime book_transmission(std::unique_ptr<Chunk> chunk) noexcept;
 
     /**
      * Set the link as busy.
@@ -99,6 +139,10 @@ class Link {
     }
 
     static void schedule_event(EventTime event_time, Callback callback, void* const arg) noexcept;
+
+    /// Current simulation time from the shared event queue (for occupancy
+    /// checks outside the Link itself).
+    [[nodiscard]] static EventTime current_time() noexcept;
 
     /// Bind the preallocated link-free callback arg to the owning device
     /// (called once, from Device::connect).
@@ -148,6 +192,9 @@ class Link {
 
     /// flag to indicate if the link is busy
     bool busy;
+
+    /// Busy-until arithmetic occupancy (see next_free_time()).
+    EventTime next_free_time_ = 0;
 
     /**
      * Compute the serialization delay of a chunk on the link.

@@ -51,6 +51,16 @@ void Device::link_become_free(DeviceId link_id) noexcept {
     assert(pending_it != pending_chunks.end());
     auto& pending = pending_it->second;
 
+    // Lazy firing: hot-path bookings may extend the link's occupancy past
+    // this event's time (drain-report events are armed at the occupancy seen
+    // when the drain started). Re-arm at the current end instead of freeing
+    // early.
+    const auto now = Link::current_time();
+    if (!link->is_flag_busy() && now < link->next_free_time()) {
+        Link::schedule_event(link->next_free_time(), link_become_free, link->free_callback_arg());
+        return;
+    }
+
     // set link free
     link->set_free();
     link_freed_hook(link.get());
@@ -147,10 +157,20 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
     assert(link_it != links.end());
     const auto& link = link_it->second;
 
-    if (link->is_busy() || link->get_bandwidth() == Bandwidth(0) ||
-        chunk->get_topology_iteration() > topology_iteration) {
-        // link is busy, add the chunk to pending chunks
-        auto& pending = pending_chunks.find(next_dest_id)->second;
+    // Cold path: reconfiguration downtime or a cold transmission in flight
+    // (flag), a dead link, a chunk stamped for a future topology, or a
+    // non-empty pending queue (FIFO order with already-queued chunks must
+    // hold). These keep the event-driven machinery: the pending queue and
+    // link-free events carry the reconfigure/drain semantics.
+    // NOTE: arithmetic occupancy (next_free_time) deliberately does NOT
+    // divert to the cold path -- hot sends append to the arithmetic booking
+    // themselves, in FIFO order, with the same start times the event chain
+    // produced.
+    const auto pending_it = pending_chunks.find(next_dest_id);
+    assert(pending_it != pending_chunks.end());
+    if (link->is_flag_busy() || link->get_bandwidth() == Bandwidth(0) ||
+        chunk->get_topology_iteration() > topology_iteration || !pending_it->second.empty()) {
+        auto& pending = pending_it->second;
         pending.push_back(std::move(chunk));
         if (kVerboseLogging) {
             debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(next_dest_id) +
@@ -160,10 +180,8 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
         return;
     }
 
-    // send the chunk to the next dest
-    // delegate this task to the link (link-free event arg preallocated in it)
-    auto link_free_time = link->send(std::move(chunk));
-    Link::schedule_event(link_free_time, link_become_free, link->free_callback_arg());
+    // Hot path (busy-until): one arrival event, no link-free event.
+    link->book_transmission(std::move(chunk));
 }
 
 void Device::connect(const DeviceId id, const Bandwidth bandwidth, const Latency latency) noexcept {

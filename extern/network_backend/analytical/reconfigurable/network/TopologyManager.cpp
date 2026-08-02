@@ -94,8 +94,20 @@ void TopologyManager::drain_network() noexcept {
     for (int i = 0; i < devices_count; ++i) {
         auto device = topology->get_device(i);
         for (const auto& [id, link] : device->get_links()) {
-            if (id != i && !link->is_busy() && (!fluid_ || flow_engine_->active_flows(link.get()) == 0)) {
+            if (id == i) {
+                continue;
+            }
+            if (!link->is_busy() && (!fluid_ || flow_engine_->active_flows(link.get()) == 0)) {
                 increment_callback();
+            } else if (!link->is_flag_busy() && Link::current_time() < link->next_free_time()) {
+                // Busy-until: hot-path bookings occupy the link with no
+                // link-free event of their own, so arm a drain report at the
+                // booked end. The link_become_free handler re-arms itself if
+                // the occupancy grew, and reports exactly once when the link
+                // is truly idle -- the role the per-transmission free event
+                // played before. Flag-busy links still self-report via their
+                // own scheduled events.
+                Link::schedule_event(link->next_free_time(), Device::link_become_free, link->free_callback_arg());
             }
         }
     }
