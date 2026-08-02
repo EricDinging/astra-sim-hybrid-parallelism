@@ -34,18 +34,17 @@ void _DependancyLayer::take_node(const NodeId& node) {
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
   }
-  if (this->dependancy_free_nodes.find(node) ==
-      this->dependancy_free_nodes.end()) {
-    const auto& parents = this->child_map_parent[node];
+  // Per-node hot path: validate via the mutation's own return value instead
+  // of a separate find per set (erase/insert report presence), halving the
+  // hash probes. Same mutations, same errors on corrupt state.
+  if (this->dependancy_free_nodes.erase(node) == 0) {
     throw std::runtime_error(
         "Node " + std::to_string(node) +
         " is not dependancy free or already taken/released");
   }
-  if (this->ongoing_nodes.find(node) != this->ongoing_nodes.end()) {
+  if (!this->ongoing_nodes.insert(node).second) {
     throw std::runtime_error("Node is already taken");
   }
-  this->ongoing_nodes.insert(node);
-  this->dependancy_free_nodes.erase(node);
 }
 
 void _DependancyLayer::finish_node(const NodeId& node) {
@@ -53,24 +52,29 @@ void _DependancyLayer::finish_node(const NodeId& node) {
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
   }
-  if (this->ongoing_nodes.find(node) == this->ongoing_nodes.end()) {
+  // Per-node hot path: one probe per container instead of find-then-mutate
+  // pairs, and one child_map_parent lookup per child instead of three.
+  // Same mutations, same errors on corrupt state.
+  if (this->ongoing_nodes.erase(node) == 0) {
     throw std::runtime_error("Node is not taken");
   }
-  this->ongoing_nodes.erase(node);
-  for (auto& child : this->parent_map_child[node]) {
-    if (this->child_map_parent[child].find(node) ==
-        this->child_map_parent[child].end()) {
-      // This should not happen, but sanity check
-      throw std::runtime_error(
-          "Parent map child is not consistent with child map parent");
+  const auto pmc_it = this->parent_map_child.find(node);
+  if (pmc_it != this->parent_map_child.end()) {
+    for (auto& child : pmc_it->second) {
+      const auto cmp_it = this->child_map_parent.find(child);
+      if (cmp_it == this->child_map_parent.end() ||
+          cmp_it->second.erase(node) == 0) {
+        // This should not happen, but sanity check
+        throw std::runtime_error(
+            "Parent map child is not consistent with child map parent");
+      }
+      if (cmp_it->second.empty()) {
+        this->dependancy_free_nodes.insert(child);
+      }
     }
-    this->child_map_parent[child].erase(node);
-    if (this->child_map_parent[child].empty()) {
-      this->dependancy_free_nodes.insert(child);
-    }
+    this->parent_map_child.erase(pmc_it);
   }
   this->child_map_parent.erase(node);
-  this->parent_map_child.erase(node);
 }
 
 void _DependancyLayer::push_back_node(const NodeId& node) {
@@ -78,10 +82,9 @@ void _DependancyLayer::push_back_node(const NodeId& node) {
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
   }
-  if (this->ongoing_nodes.find(node) == this->ongoing_nodes.end()) {
+  if (this->ongoing_nodes.erase(node) == 0) {
     throw std::runtime_error("Node is not taken");
   }
-  this->ongoing_nodes.erase(node);
   this->dependancy_free_nodes.insert(node);
 }
 

@@ -17,13 +17,16 @@ template <typename K, typename V>
 class Cache {
  public:
   Cache(size_t capacity) : capacity(capacity) {}
+  // One hash probe per call (the find iterator is reused for every access);
+  // behavior is identical to the previous multi-probe version.
   void put(const K& key, const V& value) {
-    if (this->cache.find(key) != this->cache.end()) {
+    auto it = this->cache.find(key);
+    if (it != this->cache.end()) {
       // hit and update
-      this->lru.erase(this->cache[key].second);
+      this->lru.erase(it->second.second);
       this->lru.push_back(key);
-      this->cache[key].second = --this->lru.end();
-      this->cache[key].first = std::make_shared<V>(value);
+      it->second.second = --this->lru.end();
+      it->second.first = std::make_shared<V>(value);
     } else {
       // miss
       while (this->cache.size() >= this->capacity) {
@@ -34,46 +37,57 @@ class Cache {
       }
       // and put new
       this->lru.push_back(key);
-      this->cache[key] =
-          std::make_pair(std::make_shared<V>(value), --this->lru.end());
+      this->cache.emplace(
+          key, std::make_pair(std::make_shared<V>(value), --this->lru.end()));
     }
+  }
+
+  // put() + get_locked() fused into a single probe pair: stores the value
+  // and returns the stored pointer. Used on the raw-node miss path.
+  std::shared_ptr<const V> put_locked(const K& key, const V& value) {
+    this->put(key, value);
+    return this->cache.find(key)->second.first;
   }
   bool has(const K& key) {
     return this->cache.find(key) != this->cache.end();
   }
   std::weak_ptr<const V> get(const K& key) {
-    if (this->cache.find(key) == this->cache.end()) {
+    const auto it = this->cache.find(key);
+    if (it == this->cache.end()) {
       throw std::runtime_error("Key not found in cache");
     }
-    std::weak_ptr<const V> value(this->cache.at(key).first);
-    return value;
+    return std::weak_ptr<const V>(it->second.first);
   }
   std::shared_ptr<const V> get_locked(const K& key) {
-    if (this->cache.find(key) == this->cache.end()) {
+    const auto it = this->cache.find(key);
+    if (it == this->cache.end()) {
       throw std::runtime_error("Key not found in cache");
     }
-    return this->cache.at(key).first;
+    return it->second.first;
   }
   std::weak_ptr<const V> get_or_null(const K& key) {
-    if (this->cache.find(key) == this->cache.end()) {
+    const auto it = this->cache.find(key);
+    if (it == this->cache.end()) {
       return std::weak_ptr<V>();
     }
-    std::weak_ptr<const V> value(this->cache.at(key).first);
-    return value;
+    return std::weak_ptr<const V>(it->second.first);
   }
+  // Hot path: one hash probe per raw-node access (was find + at).
   std::shared_ptr<const V> get_or_null_locked(const K& key) {
-    if (this->cache.find(key) == this->cache.end()) {
+    const auto it = this->cache.find(key);
+    if (it == this->cache.end()) {
       return std::shared_ptr<const V>();
     }
-    return this->cache.at(key).first;
+    return it->second.first;
   }
 
   void remove(const K& key) {
-    if (this->cache.find(key) == this->cache.end()) {
+    const auto it = this->cache.find(key);
+    if (it == this->cache.end()) {
       throw std::runtime_error("Key not found in cache");
     }
-    this->lru.erase(this->cache[key].second);
-    this->cache.erase(key);
+    this->lru.erase(it->second.second);
+    this->cache.erase(it);
   }
 
   ~Cache() {

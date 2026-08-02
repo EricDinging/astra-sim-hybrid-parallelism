@@ -165,8 +165,7 @@ std::shared_ptr<const ChakraNode> ETFeeder::get_raw_chakra_node(
   this->chakra_file.seekg(pos);
   ChakraNode node_msg;
   ProtobufUtils::readMessage<ChakraNode>(this->chakra_file, node_msg);
-  ETFeeder::_node_cache.put(key, node_msg);
-  return ETFeeder::_node_cache.get_locked(key);
+  return ETFeeder::_node_cache.put_locked(key, node_msg);
 }
 
 void ETFeeder::graph_sanity_check() {
