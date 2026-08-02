@@ -111,9 +111,28 @@ class Link {
         return &free_callback_arg_;
     }
 
+    /// Fluid-model bookkeeping: number of flows currently occupying this
+    /// link, maintained by FlowEngine at flow register/deregister. Stored
+    /// here so the per-flow fair-share computation (min over links of
+    /// bw / count, re-run for every affected flow on every flow start and
+    /// finish) reads a member instead of probing FlowEngine's per-link
+    /// hash map. Unused (always 0) under the serial model.
+    [[nodiscard]] int fluid_flow_count() const noexcept {
+        return fluid_flow_count_;
+    }
+    void fluid_flow_inc() noexcept {
+        ++fluid_flow_count_;
+    }
+    void fluid_flow_dec() noexcept {
+        --fluid_flow_count_;
+    }
+
   private:
     /// preallocated argument shared by all link-free events of this link
     LinkFreeCallbackArg free_callback_arg_{nullptr, -1};
+
+    /// fluid-model active-flow count (see fluid_flow_count())
+    int fluid_flow_count_ = 0;
 
     /// event queue Link uses to schedule events
     static std::shared_ptr<EventQueue> event_queue;

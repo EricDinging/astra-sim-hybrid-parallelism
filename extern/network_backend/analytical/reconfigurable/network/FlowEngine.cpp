@@ -63,6 +63,7 @@ void FlowEngine::begin_flow(std::unique_ptr<Chunk> chunk) noexcept {
     touched.reserve(flow.links.size());
     for (const auto& link : flow.links) {
         link_flows[link.get()].push_back(id);
+        link->fluid_flow_inc();
         touched.push_back(link.get());
     }
     flows.emplace(id, std::move(flow));
@@ -71,8 +72,10 @@ void FlowEngine::begin_flow(std::unique_ptr<Chunk> chunk) noexcept {
 }
 
 int FlowEngine::active_flows(const Link* const link) const noexcept {
-    const auto it = link_flows.find(link);
-    return it == link_flows.end() ? 0 : static_cast<int>(it->second.size());
+    // The count lives on the Link (maintained at register/deregister), so
+    // this is O(1) with no hashing -- it is read per link per affected flow
+    // in compute_rate on every flow start/finish.
+    return link->fluid_flow_count();
 }
 
 void FlowEngine::on_link_updated(Link* const link) noexcept {
@@ -111,7 +114,7 @@ double FlowEngine::compute_rate(const Flow& flow) const noexcept {
         if (link->is_busy() || link->get_bandwidth() <= Bandwidth(0)) {
             return 0.0;
         }
-        const auto count = active_flows(link.get());
+        const auto count = link->fluid_flow_count();
         assert(count > 0);
         const double share = bw_GBps_to_Bpns(link->get_bandwidth()) / static_cast<double>(count);
         if (rate < 0.0 || share < rate) {
@@ -183,7 +186,14 @@ void FlowEngine::transmission_finished(void* const arg) noexcept {
     touched.reserve(flow.links.size());
     for (const auto& link : flow.links) {
         auto& ids = self->link_flows.at(link.get());
-        ids.erase(std::remove(ids.begin(), ids.end(), flow.id), ids.end());
+        // Swap-and-pop: O(1) removal instead of an O(F) shift. The per-link
+        // id order is irrelevant -- recompute_flows_on sorts the affected
+        // set before processing, so results are unchanged.
+        const auto pos = std::find(ids.begin(), ids.end(), flow.id);
+        assert(pos != ids.end());
+        *pos = ids.back();
+        ids.pop_back();
+        link->fluid_flow_dec();
         if (ids.empty()) {
             self->link_flows.erase(link.get());
             Link::increment_callback();
