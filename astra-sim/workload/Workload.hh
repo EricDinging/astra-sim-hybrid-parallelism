@@ -151,17 +151,21 @@ class Workload : public Callable {
     CommunicatorGroup* extract_comm_group(
         const std::shared_ptr<Chakra::ETFeederNode>& node);
 
-    // (cg_id, node_id) -> ordinal map, pre-computed from the trace via a
+    // Per-CG collective ordinals, pre-computed from the trace via a
     // min-node-id Kahn traversal, so ordinals are (a) invariant across ranks
     // of a CG even if ranks issue collectives in different orders and (b) a
     // linear extension of the trace DAG (required by the in-order admission
     // gate below; plain node-id order is not dependency-consistent).
-    std::unordered_map<int, std::unordered_map<uint64_t, int>>
-        cg_node_to_ordinal_;
+    // Flat node -> ordinal map (a node belongs to exactly one CG, so the
+    // former outer cg level only cost an extra probe per lookup). Ordinals
+    // are contiguous 0..n-1 within each CG; cg_ordinal_count_ records n per
+    // CG so the admission reset can rebuild the unadmitted sets.
+    std::unordered_map<uint64_t, int> node_to_cg_ordinal_;
+    std::unordered_map<int, int> cg_ordinal_count_;
 
     // --- Deadlock-free collective admission ---------------------------------
     // A comm group's collectives are admitted strictly in ordinal order (the
-    // rank-invariant order from cg_node_to_ordinal_), at most
+    // rank-invariant order from node_to_cg_ordinal_), at most
     // HardwareResource::kMaxInflightCommPerGroup in flight per group. Because
     // every member rank admits the same collectives in the same order, the
     // oldest unfinished collective of a group always gets a slot on all of its
@@ -172,7 +176,7 @@ class Workload : public Callable {
     // admitted in the CURRENT iteration; only the smallest one is admissible.
     // A plain cursor would wedge after a valve bypass admits out of order, so
     // we track the exact unadmitted set instead. Rebuilt (from
-    // cg_node_to_ordinal_) at construction and at every iteration boundary.
+    // cg_ordinal_count_) at construction and at every iteration boundary.
     std::unordered_map<int, std::set<int>> cg_unadmitted_ordinals_;
 
     // --- Ordered mirror of the resolver's dependency-free set --------------

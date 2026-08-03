@@ -107,7 +107,7 @@ Workload::Workload(Sys* sys,
     // (No comm_group_list scan here: it fed only a legacy-path debug log,
     // and the scan cost a full extra trace parse per rank per attach.)
 
-    // Pre-compute (cg_id, node_id) -> ordinal map. Two consumers, two
+    // Pre-compute the node -> collective-ordinal map. Two consumers, two
     // requirements:
     //   * the deterministic stream-ID computation in issue_coll_comm() needs
     //     ordinals that are invariant across all ranks of a CG;
@@ -189,9 +189,9 @@ Workload::Workload(Sys* sys,
             }
         }
         for (auto& kv : cg_to_node_ids) {
-            auto& ord_map = cg_node_to_ordinal_[kv.first];
+            cg_ordinal_count_[kv.first] = static_cast<int>(kv.second.size());
             for (size_t i = 0; i < kv.second.size(); ++i) {
-                ord_map[kv.second[i]] = static_cast<int>(i);
+                node_to_cg_ordinal_[kv.second[i]] = static_cast<int>(i);
             }
         }
         // Deadlock-freedom of per-group ordered admission (and correctness
@@ -434,8 +434,13 @@ void Workload::issue_pytorch_pg_metadata(
             if (existing != this->comm_groups.end()) {
                 delete existing->second;
             }
+            // The object's id must equal the registry key: issue_coll_comm
+            // keys the ordinal map by get_id(). This used to pass
+            // pgNameInt + 1 (solely to keep the legacy default stream base
+            // id*1e6 non-zero), which desynced the two and silently disabled
+            // the ordinal-based stream layout for metadata-built groups.
             CommunicatorGroup* cg = new CommunicatorGroup(
-                pgNameInt + 1, involved_NPUs, sys,
+                pgNameInt, involved_NPUs, sys,
                 (parent_job != nullptr ? parent_job->ordered_rings : false));
             // Scheduled jobs: apply the same windowed (job, cg)-unique
             // stream-id base as the comm_group.json path above. The
@@ -456,6 +461,12 @@ void Workload::issue_pytorch_pg_metadata(
                     kStreamsPerCG;
                 cg->num_streams = base;
                 cg->num_streams_base = base;
+            } else {
+                // Legacy one-shot path: keep the historical non-zero stream
+                // base bit-exactly ((pgNameInt + 1) * 1e6 -- the +1 that
+                // used to ride in the object's id lives here now).
+                cg->num_streams = (pgNameInt + 1) * 1000000;
+                cg->num_streams_base = cg->num_streams;
             }
             this->comm_groups[pgNameInt] = cg;
         }
@@ -576,13 +587,9 @@ bool Workload::comm_admission_in_order(
     if (cg_id < 0) {
         return true;
     }
-    const auto cg_it = cg_node_to_ordinal_.find(cg_id);
-    if (cg_it == cg_node_to_ordinal_.end()) {
+    const auto ord_it = node_to_cg_ordinal_.find(node->id());
+    if (ord_it == node_to_cg_ordinal_.end()) {
         // Legacy path without a precomputed ordinal map: no ordering.
-        return true;
-    }
-    const auto ord_it = cg_it->second.find(node->id());
-    if (ord_it == cg_it->second.end()) {
         return true;
     }
     const auto unadmitted_it = cg_unadmitted_ordinals_.find(cg_id);
@@ -599,12 +606,8 @@ void Workload::mark_comm_admitted(
     if (cg_id < 0) {
         return;
     }
-    const auto cg_it = cg_node_to_ordinal_.find(cg_id);
-    if (cg_it == cg_node_to_ordinal_.end()) {
-        return;
-    }
-    const auto ord_it = cg_it->second.find(node->id());
-    if (ord_it == cg_it->second.end()) {
+    const auto ord_it = node_to_cg_ordinal_.find(node->id());
+    if (ord_it == node_to_cg_ordinal_.end()) {
         return;
     }
     cg_unadmitted_ordinals_[cg_id].erase(ord_it->second);
@@ -612,10 +615,10 @@ void Workload::mark_comm_admitted(
 
 void Workload::reset_comm_admission_order() {
     cg_unadmitted_ordinals_.clear();
-    for (const auto& cg_entry : cg_node_to_ordinal_) {
+    for (const auto& cg_entry : cg_ordinal_count_) {
         auto& unadmitted = cg_unadmitted_ordinals_[cg_entry.first];
-        for (const auto& node_ordinal : cg_entry.second) {
-            unadmitted.insert(node_ordinal.second);
+        for (int ord = 0; ord < cg_entry.second; ++ord) {
+            unadmitted.insert(unadmitted.end(), ord);
         }
     }
 }
@@ -860,12 +863,9 @@ bool Workload::issue_coll_comm(
         int cg_id = comm_group->get_id();
         uint64_t nid = node->id();
         int ordinal = 0;
-        auto cg_it = cg_node_to_ordinal_.find(cg_id);
-        if (cg_it != cg_node_to_ordinal_.end()) {
-            auto n_it = cg_it->second.find(nid);
-            if (n_it != cg_it->second.end()) {
-                ordinal = n_it->second;
-            }
+        auto n_it = node_to_cg_ordinal_.find(nid);
+        if (n_it != node_to_cg_ordinal_.end()) {
+            ordinal = n_it->second;
         }
         if (ordinal >= kStreamsPerCG / kMaxStreamsPerCollective) {
             workload_logger()->critical(
@@ -1228,7 +1228,7 @@ void Workload::advance_to_next_iteration() {
     // at construction: same effect as rebuilding the feeder from the trace
     // file (a fresh resolver re-seeded from the DAG roots) without the
     // per-iteration protobuf re-parse, and the feeder-id-keyed node cache
-    // stays warm. cg_node_to_ordinal_ is invariant across iterations and is
+    // stays warm. node_to_cg_ordinal_ is invariant across iterations and is
     // NOT recomputed; hw_resource keeps its tics_* accumulators (whole-job
     // totals) while its in-flight counters are already 0 at a drain boundary.
     //
