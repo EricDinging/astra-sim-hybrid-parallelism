@@ -64,11 +64,19 @@ class EventQueue {
         CallbackArg callback_arg;
     };
 
-    /// min-heap comparator (std::*_heap build a max-heap w.r.t. the
-    /// comparator, so "greater" yields a min-heap)
-    static bool heap_after(const HeapEvent& a, const HeapEvent& b) noexcept {
-        return a.time > b.time || (a.time == b.time && a.seq > b.seq);
+    /// strict (time, seq) ordering -- seq is unique, so this is a total
+    /// order and the pop sequence is structure-independent
+    static bool event_before(const HeapEvent& a, const HeapEvent& b) noexcept {
+        return a.time < b.time || (a.time == b.time && a.seq < b.seq);
     }
+
+    /// 4-ary min-heap: half the depth of a binary heap and the four children
+    /// of a node are adjacent in memory, which roughly halves the cache-missy
+    /// element moves per pop (the sift-down dominated the event loop in
+    /// profiles).
+    static constexpr std::size_t kHeapArity = 4;
+    void sift_up(std::size_t i) noexcept;
+    void sift_down(std::size_t i) noexcept;
 
     /// current time of the event queue
     EventTime current_time;
