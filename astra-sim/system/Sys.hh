@@ -357,6 +357,13 @@ class Sys : public Callable {
     std::unordered_map<Tick,
                        std::vector<std::tuple<Callable*, EventType, CallData*>>>
         event_queue;
+    // Recycled (cleared) bucket vectors: call_events() moves a finished
+    // bucket's buffer here before erasing its map node, and
+    // try_register_event() moves one back in for a freshly inserted tick, so
+    // steady-state dispatch stops allocating/freeing a bucket buffer per
+    // tick.
+    std::vector<std::vector<std::tuple<Callable*, EventType, CallData*>>>
+        event_bucket_pool;
     int total_nodes;
     int dim_to_break;
     std::vector<int> logical_broken_dims;

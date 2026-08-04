@@ -7,7 +7,6 @@ LICENSE file in the root directory of this source tree.
 #define __RING_HH__
 
 #include <deque>
-#include <vector>
 
 #include "astra-sim/system/MemBus.hh"
 #include "astra-sim/system/MyPacket.hh"
@@ -51,7 +50,7 @@ class Ring : public Algorithm {
     int parallel_reduce;
     InjectionPolicy injection_policy;
     // deque, not list: push_back/pop_front only, and it chunk-allocates
-    // instead of one node per packet. Element references (locked_packets holds
+    // instead of one node per packet. Element references (locked_packet holds
     // &packets.back()) stay valid across push_back/pop_front at the ends.
     std::deque<MyPacket> packets;
     bool toggle;
@@ -59,10 +58,10 @@ class Ring : public Algorithm {
     long total_packets_sent;
     long total_packets_received;
     uint64_t msg_size;
-    // vector, not list: always holds exactly one element at release
-    // (remained_packets_per_max_count == 1); moved into the PacketBundle,
-    // preserving push_back order.
-    std::vector<MyPacket*> locked_packets;
+    // Single pointer, not a container: always exactly one locked packet at
+    // release (remained_packets_per_max_count == 1, asserted at both the
+    // insert and release sites); handed to the PacketBundle.
+    MyPacket* locked_packet = nullptr;
     bool processed;
     bool send_back;
     bool NPU_to_MA;

@@ -40,10 +40,12 @@ void DataSet::notify_stream_finished(StreamStat* data) {
             take_stream_stats_average();
             Callable* c = notifier_callable;
             EventType ev = notifier_event;
-            IntData* int_data = new IntData(my_id);
-            int_data->execution_time = finish_tick - creation_tick;
-            c->call(ev, int_data);
-            delete int_data;
+            // Stack object: the callee (Workload::call) only reads the
+            // payload during the call and never retains it (it was deleted
+            // right after the call here anyway).
+            IntData int_data(my_id);
+            int_data.execution_time = finish_tick - creation_tick;
+            c->call(ev, &int_data);
         }
     }
 }

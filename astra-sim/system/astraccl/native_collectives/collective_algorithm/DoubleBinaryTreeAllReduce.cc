@@ -30,8 +30,8 @@ DoubleBinaryTreeAllReduce::DoubleBinaryTreeAllReduce(int id,
 
 void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
     if (state == State::Begin && type == BinaryTree::Type::Leaf) {  // leaf.1
-        (new PacketBundle(stream->owner, stream, false, false, data_size,
-                          MemBus::Transmition::Usual))
+        PacketBundle::acquire(stream->owner, stream, false, false, data_size,
+                              MemBus::Transmition::Usual)
             ->send_to_MA();
         state = State::SendingDataToParent;
 
@@ -51,7 +51,7 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
         // receiving
         sim_request rcv_req;
         rcv_req.vnet = this->stream->current_queue_id;
-        RecvPacketEventHandlerData* ehd = new RecvPacketEventHandlerData(
+        RecvPacketEventHandlerData* ehd = RecvPacketEventHandlerData::acquire(
             stream, stream->owner->id, EventType::PacketReceived,
             stream->current_queue_id, stream->stream_id);
         stream->owner->front_end_sim_recv(0, Sys::dummy_data, data_size, UINT8,
@@ -62,8 +62,8 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
 
     } else if (state == State::WaitingDataFromParent &&
                type == BinaryTree::Type::Leaf) {  // leaf.4
-        (new PacketBundle(stream->owner, stream, false, false, data_size,
-                          MemBus::Transmition::Usual))
+        PacketBundle::acquire(stream->owner, stream, false, false, data_size,
+                              MemBus::Transmition::Usual)
             ->send_to_NPU();
         state = State::End;
 
@@ -75,7 +75,7 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
                type == BinaryTree::Type::Intermediate) {  // int.1
         sim_request rcv_req;
         rcv_req.vnet = this->stream->current_queue_id;
-        RecvPacketEventHandlerData* ehd = new RecvPacketEventHandlerData(
+        RecvPacketEventHandlerData* ehd = RecvPacketEventHandlerData::acquire(
             stream, stream->owner->id, EventType::PacketReceived,
             stream->current_queue_id, stream->stream_id);
         stream->owner->front_end_sim_recv(
@@ -84,7 +84,7 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
             ehd);
         sim_request rcv_req2;
         rcv_req2.vnet = this->stream->current_queue_id;
-        RecvPacketEventHandlerData* ehd2 = new RecvPacketEventHandlerData(
+        RecvPacketEventHandlerData* ehd2 = RecvPacketEventHandlerData::acquire(
             stream, stream->owner->id, EventType::PacketReceived,
             stream->current_queue_id, stream->stream_id);
         stream->owner->front_end_sim_recv(
@@ -96,16 +96,16 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
     } else if (state == State::WaitingForTwoChildData &&
                type == BinaryTree::Type::Intermediate &&
                event == EventType::PacketReceived) {  // int.2
-        (new PacketBundle(stream->owner, stream, true, false, data_size,
-                          MemBus::Transmition::Usual))
+        PacketBundle::acquire(stream->owner, stream, true, false, data_size,
+                              MemBus::Transmition::Usual)
             ->send_to_NPU();
         state = State::WaitingForOneChildData;
 
     } else if (state == State::WaitingForOneChildData &&
                type == BinaryTree::Type::Intermediate &&
                event == EventType::PacketReceived) {  // int.3
-        (new PacketBundle(stream->owner, stream, true, true, data_size,
-                          MemBus::Transmition::Usual))
+        PacketBundle::acquire(stream->owner, stream, true, true, data_size,
+                              MemBus::Transmition::Usual)
             ->send_to_NPU();
         state = State::SendingDataToParent;
 
@@ -129,7 +129,7 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
         // receiving
         sim_request rcv_req;
         rcv_req.vnet = this->stream->current_queue_id;
-        RecvPacketEventHandlerData* ehd = new RecvPacketEventHandlerData(
+        RecvPacketEventHandlerData* ehd = RecvPacketEventHandlerData::acquire(
             stream, stream->owner->id, EventType::PacketReceived,
             stream->current_queue_id, stream->stream_id);
         stream->owner->front_end_sim_recv(0, Sys::dummy_data, data_size, UINT8,
@@ -141,8 +141,8 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
     } else if (state == State::WaitingDataFromParent &&
                type == BinaryTree::Type::Intermediate &&
                event == EventType::PacketReceived) {  // int.6
-        (new PacketBundle(stream->owner, stream, true, true, data_size,
-                          MemBus::Transmition::Usual))
+        PacketBundle::acquire(stream->owner, stream, true, true, data_size,
+                              MemBus::Transmition::Usual)
             ->send_to_NPU();
         state = State::SendingDataToChilds;
 
@@ -176,7 +176,7 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
         int only_child_id = left_child >= 0 ? left_child : right_child;
         sim_request rcv_req;
         rcv_req.vnet = this->stream->current_queue_id;
-        RecvPacketEventHandlerData* ehd = new RecvPacketEventHandlerData(
+        RecvPacketEventHandlerData* ehd = RecvPacketEventHandlerData::acquire(
             stream, stream->owner->id, EventType::PacketReceived,
             stream->current_queue_id, stream->stream_id);
         stream->owner->front_end_sim_recv(
@@ -187,8 +187,8 @@ void DoubleBinaryTreeAllReduce::run(EventType event, CallData* data) {
 
     } else if (state == State::WaitingForOneChildData &&
                type == BinaryTree::Type::Root) {  // root.2
-        (new PacketBundle(stream->owner, stream, true, true, data_size,
-                          MemBus::Transmition::Usual))
+        PacketBundle::acquire(stream->owner, stream, true, true, data_size,
+                              MemBus::Transmition::Usual)
             ->send_to_NPU();
         state = State::SendingDataToChilds;
         return;

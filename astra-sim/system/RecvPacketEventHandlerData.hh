@@ -22,6 +22,19 @@ class RecvPacketEventHandlerData : public BasicEventHandlerData {
                                EventType event,
                                int vnet,
                                int stream_id);
+    // Freelist for the per-packet 5-arg construction path: one of these is
+    // new'd per received packet and deleted in Sys::handleEvent. acquire()
+    // reuses a released object (reset assigns every field the 5-arg
+    // constructor assigns, in the same order). The default-constructed sites
+    // (Workload / CustomAlgorithm recv nodes) stay on plain new but release
+    // into the same pool; acquire fully reinitializes either way.
+    // Single-threaded.
+    static RecvPacketEventHandlerData* acquire(BaseStream* owner,
+                                               int sys_id,
+                                               EventType event,
+                                               int vnet,
+                                               int stream_id);
+    static void release(RecvPacketEventHandlerData* data);
 
     Workload* workload;
     WorkloadLayerHandlerData* wlhd;

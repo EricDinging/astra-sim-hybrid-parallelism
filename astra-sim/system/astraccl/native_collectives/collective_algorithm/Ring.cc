@@ -5,6 +5,8 @@ LICENSE file in the root directory of this source tree.
 
 #include "astra-sim/system/astraccl/native_collectives/collective_algorithm/Ring.hh"
 
+#include <cassert>
+
 #include "astra-sim/system/PacketBundle.hh"
 #include "astra-sim/system/RecvPacketEventHandlerData.hh"
 
@@ -109,19 +111,18 @@ void Ring::run(EventType event, CallData* data) {
 }
 
 void Ring::release_packets() {
-    for (auto packet : locked_packets) {
-        packet->set_notifier(this);
-    }
+    assert(locked_packet != nullptr);
+    locked_packet->set_notifier(this);
     if (NPU_to_MA == true) {
-        (new PacketBundle(stream->owner, stream, std::move(locked_packets),
-                          processed, send_back, msg_size, transmition))
+        PacketBundle::acquire(stream->owner, stream, locked_packet, processed,
+                              send_back, msg_size, transmition)
             ->send_to_MA();
     } else {
-        (new PacketBundle(stream->owner, stream, std::move(locked_packets),
-                          processed, send_back, msg_size, transmition))
+        PacketBundle::acquire(stream->owner, stream, locked_packet, processed,
+                              send_back, msg_size, transmition)
             ->send_to_NPU();
     }
-    locked_packets.clear();
+    locked_packet = nullptr;
 }
 
 void Ring::process_stream_count() {
@@ -180,7 +181,8 @@ void Ring::insert_packet(Callable* sender) {
             stream->current_queue_id, curr_sender,
             curr_receiver));  // vnet Must be changed for alltoall topology
         packets.back().sender = sender;
-        locked_packets.push_back(&packets.back());
+        assert(locked_packet == nullptr);
+        locked_packet = &packets.back();
         processed = false;
         send_back = false;
         NPU_to_MA = true;
@@ -192,7 +194,8 @@ void Ring::insert_packet(Callable* sender) {
             stream->current_queue_id, curr_sender,
             curr_receiver));  // vnet Must be changed for alltoall topology
         packets.back().sender = sender;
-        locked_packets.push_back(&packets.back());
+        assert(locked_packet == nullptr);
+        locked_packet = &packets.back();
         if (comType == ComType::Reduce_Scatter ||
             (comType == ComType::All_Reduce && toggle)) {
             processed = true;
@@ -234,7 +237,7 @@ bool Ring::ready() {
         nullptr);  // stream_id+(packet.preferred_dest*50)
     sim_request rcv_req;
     rcv_req.vnet = this->stream->current_queue_id;
-    RecvPacketEventHandlerData* ehd = new RecvPacketEventHandlerData(
+    RecvPacketEventHandlerData* ehd = RecvPacketEventHandlerData::acquire(
         stream, stream->owner->id, EventType::PacketReceived,
         packet.preferred_vnet, packet.stream_id);
     // printf("Issuing ring from npu %d\n", stream->owner->id);
@@ -251,9 +254,7 @@ void Ring::exit() {
     if (packets.size() != 0) {
         packets.clear();
     }
-    if (locked_packets.size() != 0) {
-        locked_packets.clear();
-    }
+    locked_packet = nullptr;
     stream->owner->proceed_to_next_vnet_baseline((StreamBaseline*)stream);
     return;
 }

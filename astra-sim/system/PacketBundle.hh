@@ -6,8 +6,6 @@ LICENSE file in the root directory of this source tree.
 #ifndef __PACKET_BUNDLE_HH__
 #define __PACKET_BUNDLE_HH__
 
-#include <vector>
-
 #include "astra-sim/system/BaseStream.hh"
 #include "astra-sim/system/Callable.hh"
 #include "astra-sim/system/Common.hh"
@@ -21,7 +19,7 @@ class PacketBundle : public Callable {
   public:
     PacketBundle(Sys* sys,
                  BaseStream* stream,
-                 std::vector<MyPacket*> locked_packets,
+                 MyPacket* locked_packet,
                  bool needs_processing,
                  bool send_back,
                  uint64_t size,
@@ -32,16 +30,34 @@ class PacketBundle : public Callable {
                  bool send_back,
                  uint64_t size,
                  MemBus::Transmition transmition);
+    // Freelist: bundles are allocated once per packet and freed at the end of
+    // call(); acquire() reuses a released bundle (reset assigns exactly what
+    // the matching constructor assigns, in the same order) instead of hitting
+    // the allocator every packet. Single-threaded, like the rest of the
+    // system layer.
+    static PacketBundle* acquire(Sys* sys,
+                                 BaseStream* stream,
+                                 MyPacket* locked_packet,
+                                 bool needs_processing,
+                                 bool send_back,
+                                 uint64_t size,
+                                 MemBus::Transmition transmition);
+    static PacketBundle* acquire(Sys* sys,
+                                 BaseStream* stream,
+                                 bool needs_processing,
+                                 bool send_back,
+                                 uint64_t size,
+                                 MemBus::Transmition transmition);
+    static void release(PacketBundle* bundle);
     void send_to_MA();
     void send_to_NPU();
     void call(EventType event, CallData* data);
 
     Sys* sys;
-    // vector, not list: the collectives release exactly one packet per bundle
-    // in practice, and the buffer is moved in from the caller (one small
-    // allocation per release instead of one list node per push). Order is
-    // preserved: push_back + in-order iteration.
-    std::vector<MyPacket*> locked_packets;
+    // Single pointer, not a container: the collectives release exactly one
+    // packet per bundle (remained_packets_per_max_count == 1, asserted at the
+    // release sites); nullptr for the processing-only constructor.
+    MyPacket* locked_packet;
     bool needs_processing;
     bool send_back;
     uint64_t size;

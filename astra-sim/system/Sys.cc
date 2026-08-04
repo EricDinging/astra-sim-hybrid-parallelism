@@ -40,6 +40,15 @@ namespace AstraSim {
 uint8_t* Sys::dummy_data = new uint8_t[2];
 vector<Sys*> Sys::all_sys;
 
+namespace {
+// Freelist for the CallEvents wake-up payloads: exactly one is allocated per
+// first-event-of-a-tick in try_register_event and freed in handleEvent's
+// CallEvents branch (the only live delete site of a plain
+// BasicEventHandlerData). File-static because handleEvent is static;
+// single-threaded like the rest of the system layer.
+vector<BasicEventHandlerData*> call_events_ehd_pool;
+}  // namespace
+
 // SchedulerUnit --------------------------------------------------------------
 Sys::SchedulerUnit::SchedulerUnit(Sys* sys,
                                   vector<int> queues,
@@ -727,6 +736,11 @@ void Sys::call_events() {
                              e.what());
         }
     }
+    // Recycle the bucket's warm buffer instead of letting erase() destroy it:
+    // move it into the pool (the mapped reference is still valid even if a
+    // callback rehashed the map), then erase the now-empty node by key.
+    event_bucket_pool.push_back(std::move(callables));
+    event_bucket_pool.back().clear();
     event_queue.erase(now);
 }
 
@@ -747,13 +761,25 @@ void Sys::try_register_event(Callable* callable,
     // throwaway temporary list. A freshly inserted bucket means this is the
     // first event at event_time, so a CallEvents wake-up must be scheduled.
     auto [it, should_schedule] = event_queue.try_emplace(event_time);
+    if (should_schedule && !event_bucket_pool.empty()) {
+        // Fresh bucket: reuse a recycled (cleared) vector's buffer instead of
+        // growing the default-constructed one from zero.
+        it->second = std::move(event_bucket_pool.back());
+        event_bucket_pool.pop_back();
+    }
     it->second.push_back(make_tuple(callable, event, callData));
     if (should_schedule) {
         timespec_t tmp;
         tmp.time_res = NS;
         tmp.time_val = delta_cycles;
-        BasicEventHandlerData* data =
-            new BasicEventHandlerData(id, EventType::CallEvents);
+        BasicEventHandlerData* data;
+        if (call_events_ehd_pool.empty()) {
+            data = new BasicEventHandlerData(id, EventType::CallEvents);
+        } else {
+            data = call_events_ehd_pool.back();
+            call_events_ehd_pool.pop_back();
+            data->event = EventType::CallEvents;
+        }
         data->sys_id = id;
         comm_NI->sim_schedule(tmp, &Sys::handleEvent, data);
     }
@@ -772,7 +798,7 @@ void Sys::handleEvent(void* arg) {
 
     if (event == EventType::CallEvents) {
         all_sys[id]->call_events();
-        delete ehd;
+        call_events_ehd_pool.push_back(ehd);
     } else if ((event == EventType::NPU_to_MA) ||
                (event == EventType::MA_to_NPU)) {
         // Dead on the analytical backends (nothing schedules handleEvent with
@@ -807,7 +833,7 @@ void Sys::handleEvent(void* arg) {
         if (rcehd->custom_algorithm) {
             rcehd->custom_algorithm->call(event, rcehd->wlhd);
         }
-        delete rcehd;
+        RecvPacketEventHandlerData::release(rcehd);
     } else if (event == EventType::PacketSent) {
         SendPacketEventHandlerData* sehd = (SendPacketEventHandlerData*)ehd;
         sehd->callable->call(EventType::PacketSent, sehd->wlhd);
