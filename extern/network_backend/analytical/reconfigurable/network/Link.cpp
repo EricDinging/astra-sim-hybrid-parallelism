@@ -42,9 +42,9 @@ EventTime Link::current_time() noexcept {
 }
 
 Link::Link(const Bandwidth bandwidth, const Latency latency) noexcept
-    : bandwidth(bandwidth),
-      latency(latency),
-      busy(false) {
+    : busy(false),
+      bandwidth(bandwidth),
+      latency(latency) {
     assert(bandwidth >= 0);
     assert(latency >= 0);
 

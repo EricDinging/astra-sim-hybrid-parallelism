@@ -172,6 +172,25 @@ class Link {
     }
 
   private:
+    // Send-hot fields first (one cache line): Device::send reads busy,
+    // bandwidth, next_free_time_, bandwidth_Bpns and latency on every hop.
+    // Pure layout change, no semantics.
+
+    /// flag to indicate if the link is busy
+    bool busy;
+
+    /// bandwidth of the link in GB/s
+    Bandwidth bandwidth;
+
+    /// Busy-until arithmetic occupancy (see next_free_time()).
+    EventTime next_free_time_ = 0;
+
+    /// bandwidth of the link in B/ns, used in actual computation
+    Bandwidth bandwidth_Bpns;
+
+    /// latency of the link in ns
+    Latency latency;
+
     /// preallocated argument shared by all link-free events of this link
     LinkFreeCallbackArg free_callback_arg_{nullptr, -1};
 
@@ -180,21 +199,6 @@ class Link {
 
     /// event queue Link uses to schedule events
     static std::shared_ptr<EventQueue> event_queue;
-
-    /// bandwidth of the link in GB/s
-    Bandwidth bandwidth;
-
-    /// bandwidth of the link in B/ns, used in actual computation
-    Bandwidth bandwidth_Bpns;
-
-    /// latency of the link in ns
-    Latency latency;
-
-    /// flag to indicate if the link is busy
-    bool busy;
-
-    /// Busy-until arithmetic occupancy (see next_free_time()).
-    EventTime next_free_time_ = 0;
 
     /**
      * Compute the serialization delay of a chunk on the link.

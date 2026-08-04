@@ -18,6 +18,9 @@ using namespace NetworkAnalyticalReconfigurable;
 std::function<void()> Device::increment_callback = []() {};
 std::function<void(Link*)> Device::link_freed_hook = [](Link*) noexcept {};
 
+// Starts at 1 so a fresh Route (links_epoch = 0) is always stale.
+std::uint64_t Device::wiring_epoch = 1;
+
 Device::Device(const DeviceId id) noexcept : device_id(id), topology_iteration(0) {
     assert(id >= 0);
 }
@@ -168,15 +171,34 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
         }
     }
 
-    // get next dest
-    const auto* const next_dest = chunk->next_device();
-    const auto next_dest_id = next_dest->get_id();
-
-    // one lookup for link AND pending queue (the assert below already proves
-    // the next dest is connected -- a separate assert(connected(...)) would
-    // be a second search per hop, and asserts are live in release here)
-    auto* const port = find_port(next_dest_id);
-    assert(port != nullptr);
+    // Per-route port-index cache: skip the port-table lower_bound when this
+    // (route, hop) was already resolved under the current wiring epoch. The
+    // epoch is bumped by every connect/disconnect/reconfigure, so a cached
+    // index can never be read across a ports_ mutation; the cached port is
+    // exactly the one find_port(next_device id) would return, so behavior is
+    // identical to the lookup. (Route is shared across chunks; single-
+    // threaded sim, so the mutable writes are safe.)
+    const auto& route = chunk->get_route();
+    const auto cursor = chunk->get_cursor();
+    if (route.links_epoch != wiring_epoch) {
+        route.hop_ports.assign(route.size(), Route::kNoPort);
+        route.links_epoch = wiring_epoch;
+    }
+    auto& slot = route.hop_ports[cursor];
+    Port* port;
+    if (slot != Route::kNoPort) {
+        port = &ports_[slot].second;
+    } else {
+        // one lookup for link AND pending queue (the assert below already
+        // proves the next dest is connected -- a separate
+        // assert(connected(...)) would be a second search per hop, and
+        // asserts are live in release here)
+        const auto next_dest_id = chunk->next_device()->get_id();
+        const auto it = port_pos(next_dest_id);
+        assert(it != ports_.end() && it->first == next_dest_id);
+        slot = static_cast<std::uint32_t>(it - ports_.begin());
+        port = &it->second;
+    }
     const auto& link = port->link;
 
     // Cold path: reconfiguration downtime or a cold transmission in flight
@@ -193,7 +215,7 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
         auto& pending = port->pending;
         pending.push_back(std::move(chunk));
         if (kVerboseLogging) {
-            debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(next_dest_id) +
+            debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(ports_[slot].first) +
                         " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " +
                         std::to_string(pending.size()));
         }
@@ -218,6 +240,10 @@ void Device::connect(const DeviceId id, const Bandwidth bandwidth, const Latency
     auto link = std::make_shared<Link>(bandwidth, latency);
     link->set_free_callback_arg(this, id);
     ports_.insert(port_pos(id), {id, Port{std::move(link), {}}});
+
+    // ports_ changed (indices shifted, a new link exists): invalidate every
+    // Route's cached port indices.
+    ++wiring_epoch;
 }
 
 void Device::reconfigure(const BandwidthRow& bandwidth,
@@ -225,6 +251,11 @@ void Device::reconfigure(const BandwidthRow& bandwidth,
                          const LatencyRow& latency,
                          Latency reconfig_time,
                          bool scoped) noexcept {
+    // Link retunes don't move ports_, but bump the epoch anyway (cold path,
+    // and it keeps the invariant simple: any wiring-affecting operation
+    // invalidates every Route's cached port indices).
+    ++wiring_epoch;
+
     // bandwidth/latency are sparse per-device rows (absent == 0); links are
     // sparse too (~6 torus neighbors + OCS edges + self-loop), so we look up
     // each link id in the row rather than indexing a full-width vector.
@@ -326,6 +357,10 @@ void Device::disconnect(const DeviceId id) noexcept {
 
     // remove the port (link + pending queue)
     ports_.erase(it);
+
+    // ports_ changed (indices shifted, a link died): invalidate every Route's
+    // cached port indices.
+    ++wiring_epoch;
 }
 
 bool Device::connected(const DeviceId dest) const noexcept {

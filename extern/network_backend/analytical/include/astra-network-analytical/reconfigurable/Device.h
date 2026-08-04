@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "common/Type.h"
 #include "reconfigurable/Type.h"
+#include <cstdint>
 #include <functional>
 #include <list>
 #include <map>
@@ -145,6 +146,12 @@ class Device : public std::enable_shared_from_this<Device> {
      * @return true if connected to the given device, false otherwise
      */
     [[nodiscard]] bool connected(DeviceId dest) const noexcept;
+
+    /// Global wiring epoch: bumped by every operation that can change a
+    /// device->link mapping or a link's identity (connect, disconnect,
+    /// reconfigure). Route::hop_ports entries are valid only under a matching
+    /// epoch (see Route in reconfigurable/Type.h).
+    static std::uint64_t wiring_epoch;
 
   private:
     /// device Id
