@@ -13,6 +13,8 @@ using namespace NetworkAnalytical;
 
 namespace AstraSimAnalytical {
 
+class ChunkIdGeneratorEntry;
+
 /**
  * CallbackTrackerEntry manages sim_send() and sim_recv() callbacks
  * per each unique chunk.
@@ -71,6 +73,23 @@ class CallbackTrackerEntry {
      */
     void invoke_recv_handler() noexcept;
 
+    /**
+     * Cache the chunk-id-generator entry backing this chunk's
+     * (tag, src, dest, chunk_size) key, so the completion path can retire
+     * the chunk without re-hashing the generator map. Generator entries are
+     * stable under rehash and outlive every in-flight chunk of their key.
+     *
+     * @param entry pointer to the generator entry
+     */
+    void set_generator_entry(ChunkIdGeneratorEntry* entry) noexcept;
+
+    /**
+     * Get the cached chunk-id-generator entry.
+     *
+     * @return pointer to the generator entry
+     */
+    [[nodiscard]] ChunkIdGeneratorEntry* get_generator_entry() const noexcept;
+
   private:
     /// sim_send() callback event
     std::optional<Event> send_event;
@@ -81,6 +100,9 @@ class CallbackTrackerEntry {
     /// true if the transmission of the chunk is already finished, false
     /// otherwise
     bool transmission_finished;
+
+    /// chunk-id-generator entry of this chunk's key (for probe-free retire)
+    ChunkIdGeneratorEntry* generator_entry;
 };
 
 }  // namespace AstraSimAnalytical

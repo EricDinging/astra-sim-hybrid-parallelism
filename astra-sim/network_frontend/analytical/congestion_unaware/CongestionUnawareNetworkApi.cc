@@ -41,31 +41,24 @@ int CongestionUnawareNetworkApi::sim_send(void* const buffer,
                                           sim_request* const request,
                                           void (*msg_handler)(void*),
                                           void* const fun_arg) {
-    // query chunk id
+    // query chunk id (and the generator entry, for probe-free retire)
     const auto src = sim_comm_get_rank();
-    const auto chunk_id =
+    const auto [chunk_id, gen_entry] =
         CongestionUnawareNetworkApi::chunk_id_generator.create_send_chunk_id(
             tag, src, dst, count);
 
-    // search tracker
-    const auto entry =
-        callback_tracker.search_entry(tag, src, dst, count, chunk_id);
-    if (entry.has_value()) {
-        // recv operation already issued.
-        // add send event handler to the tracker
-        entry.value()->register_send_callback(msg_handler, fun_arg);
-    } else {
-        // recv operation not issued yet
-        // create new entry and insert send callback
-        auto* const new_entry =
-            callback_tracker.create_new_entry(tag, src, dst, count, chunk_id);
-        new_entry->register_send_callback(msg_handler, fun_arg);
-    }
+    // register the send callback (single probe: the entry is created here if
+    // the recv operation hasn't been issued yet)
+    auto* const entry =
+        &(callback_tracker.find_or_create_entry(tag, src, dst, count, chunk_id)
+              .first->second);
+    entry->set_generator_entry(gen_entry);
+    entry->register_send_callback(msg_handler, fun_arg);
 
-    // create chunk
-    auto arg = std::make_unique<std::tuple<int, int, int, uint64_t, int>>(
-        tag, src, dst, count, chunk_id);
-    const auto arg_ptr = static_cast<void*>(arg.release());
+    // create chunk; the arg carries the tracker-entry pointer so arrival
+    // needs no hash lookup
+    const auto arg_ptr = static_cast<void*>(
+        new ChunkArrivalArg{entry, tag, src, dst, count, chunk_id});
 
     // compute send communication delay (in AstraSim format)
     const auto send_delay_ns = topology->send(src, dst, count);

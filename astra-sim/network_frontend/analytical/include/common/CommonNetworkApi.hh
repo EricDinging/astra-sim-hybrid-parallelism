@@ -20,6 +20,21 @@ using namespace NetworkAnalytical;
 namespace AstraSimAnalytical {
 
 /**
+ * Heap payload of the chunk-arrival callback, created by sim_send(). Carries
+ * the tracker entry pointer directly (stable under unordered_map rehash) so
+ * process_chunk_arrival() needs no hash lookup, plus the key scalars for the
+ * erase probes on the completion path.
+ */
+struct ChunkArrivalArg {
+    CallbackTrackerEntry* entry;
+    int tag;
+    int src;
+    int dst;
+    uint64_t count;
+    int chunk_id;
+};
+
+/**
  * CommonNetworkApi implements common AstraNetworkAPI interface
  * that both congestion_unaware and congestion_aware network API inherit.
  */

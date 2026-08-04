@@ -12,7 +12,8 @@ using namespace AstraSimAnalytical;
 CallbackTrackerEntry::CallbackTrackerEntry() noexcept
     : send_event(std::nullopt),
       recv_event(std::nullopt),
-      transmission_finished(false) {}
+      transmission_finished(false),
+      generator_entry(nullptr) {}
 
 void CallbackTrackerEntry::register_send_callback(
     const Callback callback, const CallbackArg arg) noexcept {
@@ -57,4 +58,18 @@ void CallbackTrackerEntry::invoke_recv_handler() noexcept {
 
     // invoke recv event
     recv_event.value().invoke_event();
+}
+
+void CallbackTrackerEntry::set_generator_entry(
+    ChunkIdGeneratorEntry* const entry) noexcept {
+    assert(entry != nullptr);
+
+    generator_entry = entry;
+}
+
+ChunkIdGeneratorEntry* CallbackTrackerEntry::get_generator_entry()
+    const noexcept {
+    assert(generator_entry != nullptr);
+
+    return generator_entry;
 }

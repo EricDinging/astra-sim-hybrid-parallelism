@@ -50,55 +50,35 @@ class CallbackTracker {
         }
     };
 
+    /// underlying map type (also read by the deadlock post-mortem dump)
+    using Map = std::unordered_map<Key, CallbackTrackerEntry, KeyHash>;
+    using Iterator = Map::iterator;
+
     CallbackTracker() noexcept;
 
     /**
-     * Search for the entry identified by (tag, src, dest, chunk_size, chunk_id)
-     * tuple.
-     *
-     * @param tag tag of the sim_send() or sim_recv() call
-     * @param src src NPU ID of the sim_send() or sim_recv() call
-     * @param dest dest NPU ID of the sim_send() or sim_recv() call
-     * @param chunk_size chunk size of the sim_send() or sim_recv() call
-     * @param chunk_id id of the chunk
-     * @return the found entry if exists, std::nullopt otherwise
-     */
-    std::optional<CallbackTrackerEntry*> search_entry(int tag,
-                                                      int src,
-                                                      int dest,
-                                                      ChunkSize chunk_size,
-                                                      int chunk_id) noexcept;
-
-    /**
-     * Create a new entry identified by (tag, src, dest, chunk_size, chunk_id)
-     * tuple.
-     *
-     * @param tag tag of the sim_send() or sim_recv() call
-     * @param src src NPU ID of the sim_send() or sim_recv() call
-     * @param dest dest NPU ID of the sim_send() or sim_recv() call
-     * @param chunk_size chunk size of the sim_send() or sim_recv() call
-     * @param chunk_id id of the chunk
-     * @return the created entry
-     */
-    CallbackTrackerEntry* create_new_entry(int tag,
-                                           int src,
-                                           int dest,
-                                           ChunkSize chunk_size,
-                                           int chunk_id) noexcept;
-
-    /**
      * Get the entry identified by (tag, src, dest, chunk_size, chunk_id),
-     * creating it if absent — a single hash probe instead of the
-     * search_entry()-then-create_new_entry() double probe on the miss path.
+     * creating it if absent — a single hash probe. Returns the iterator so
+     * callers that erase the same entry in the same call (sim_recv's
+     * recv-after-arrival path) can do so without a second probe via
+     * erase_entry().
      *
-     * @return pair of (pointer to the entry, whether it already existed)
+     * @return pair of (iterator to the entry, whether it already existed)
      */
-    std::pair<CallbackTrackerEntry*, bool> find_or_create_entry(
-        int tag,
-        int src,
-        int dest,
-        ChunkSize chunk_size,
-        int chunk_id) noexcept;
+    std::pair<Iterator, bool> find_or_create_entry(int tag,
+                                                   int src,
+                                                   int dest,
+                                                   ChunkSize chunk_size,
+                                                   int chunk_id) noexcept;
+
+    /**
+     * Remove the entry the iterator points at, without hashing the key again.
+     * Only valid for an iterator obtained in the same call with no
+     * intervening insertion (rehash invalidates iterators).
+     *
+     * @param entry iterator to the entry to remove
+     */
+    void erase_entry(Iterator entry) noexcept;
 
     /**
      * Remove the entry identified by (tag, src, dest, chunk_size, chunk_id)
@@ -117,15 +97,14 @@ class CallbackTracker {
                    int chunk_id) noexcept;
 
     // Read-only view of unresolved entries, for deadlock post-mortem dumps.
-    [[nodiscard]] const std::unordered_map<Key, CallbackTrackerEntry, KeyHash>&
-    entries() const noexcept {
+    [[nodiscard]] const Map& entries() const noexcept {
         return tracker;
     }
 
   private:
     /// map from (tag, src, dest, chunk_size, chunk_id) tuple to
     /// CallbackTrackerEntry
-    std::unordered_map<Key, CallbackTrackerEntry, KeyHash> tracker;
+    Map tracker;
 };
 
 }  // namespace AstraSimAnalytical

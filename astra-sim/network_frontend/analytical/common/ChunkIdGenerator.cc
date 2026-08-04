@@ -12,7 +12,7 @@ ChunkIdGenerator::ChunkIdGenerator() noexcept {
     chunk_id_map = {};
 }
 
-int ChunkIdGenerator::create_send_chunk_id(
+std::pair<int, ChunkIdGeneratorEntry*> ChunkIdGenerator::create_send_chunk_id(
     const int tag,
     const int src,
     const int dest,
@@ -30,10 +30,10 @@ int ChunkIdGenerator::create_send_chunk_id(
 
     // increment id and return
     entry->second.increment_send_id();
-    return entry->second.get_send_id();
+    return {entry->second.get_send_id(), &(entry->second)};
 }
 
-int ChunkIdGenerator::create_recv_chunk_id(
+std::pair<int, ChunkIdGeneratorEntry*> ChunkIdGenerator::create_recv_chunk_id(
     const int tag,
     const int src,
     const int dest,
@@ -51,19 +51,22 @@ int ChunkIdGenerator::create_recv_chunk_id(
 
     // increment id and return
     entry->second.increment_recv_id();
-    return entry->second.get_recv_id();
+    return {entry->second.get_recv_id(), &(entry->second)};
 }
 
-void ChunkIdGenerator::retire_chunk(const int tag,
+void ChunkIdGenerator::retire_chunk(ChunkIdGeneratorEntry* const entry,
+                                    const int tag,
                                     const int src,
                                     const int dest,
                                     const ChunkSize chunk_size) noexcept {
-    const auto key = std::make_tuple(tag, src, dest, chunk_size);
-    const auto entry = chunk_id_map.find(key);
-    assert(entry != chunk_id_map.end());
+    assert(entry != nullptr);
 
-    entry->second.increment_completed();
-    if (entry->second.fully_retired()) {
-        chunk_id_map.erase(entry);
+    entry->increment_completed();
+    if (entry->fully_retired()) {
+        // sole keyed probe on the retire path: erase only on the
+        // fully-retired transition
+        const auto key = std::make_tuple(tag, src, dest, chunk_size);
+        [[maybe_unused]] const auto erased = chunk_id_map.erase(key);
+        assert(erased == 1);
     }
 }

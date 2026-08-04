@@ -10,6 +10,7 @@ LICENSE file in the root directory of this source tree.
 #include <cstdint>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 
 using namespace NetworkAnalytical;
 
@@ -55,45 +56,50 @@ class ChunkIdGenerator {
     ChunkIdGenerator() noexcept;
 
     /**
-     * Create unique chunk id for sim_send() call.
+     * Create unique chunk id for sim_send() call. Also returns the entry
+     * pointer (stable under rehash) so callers can retire the chunk later
+     * without re-hashing the key.
      *
      * @param tag tag of the sim_send() call
      * @param src src NPU ID of the sim_send() call
      * @param dest dest NPU ID of the sim_send() call
      * @param chunk_size chunk size of the sim_send() call
-     * @return unique sim_send() chunk id
+     * @return pair of (unique sim_send() chunk id, entry pointer)
      */
-    [[nodiscard]] int create_send_chunk_id(int tag,
-                                           int src,
-                                           int dest,
-                                           ChunkSize chunk_size) noexcept;
+    [[nodiscard]] std::pair<int, ChunkIdGeneratorEntry*> create_send_chunk_id(
+        int tag, int src, int dest, ChunkSize chunk_size) noexcept;
 
     /**
-     * Create unique chunk id for sim_recv call.
+     * Create unique chunk id for sim_recv call. Also returns the entry
+     * pointer (stable under rehash) so callers can retire the chunk later
+     * without re-hashing the key.
      *
      * @param tag tag of the sim_recv call
      * @param src src NPU ID of the sim_recv call
      * @param dest dest NPU ID of the sim_recv call
      * @param chunk_size chunk size of the sim_recv call
-     * @return unique sim_recv chunk id
+     * @return pair of (unique sim_recv chunk id, entry pointer)
      */
-    [[nodiscard]] int create_recv_chunk_id(int tag,
-                                           int src,
-                                           int dest,
-                                           ChunkSize chunk_size) noexcept;
+    [[nodiscard]] std::pair<int, ChunkIdGeneratorEntry*> create_recv_chunk_id(
+        int tag, int src, int dest, ChunkSize chunk_size) noexcept;
 
     /**
-     * Record one fully-retired chunk for the key and erase the entry once
-     * all its chunks retired with balanced send/recv counts. Without this
-     * the map gains one entry per distinct (tag, src, dest, chunk_size) for
-     * the life of the process -- multi-GB over a 50k-job run.
+     * Record one fully-retired chunk on the given entry and erase the entry
+     * once all its chunks retired with balanced send/recv counts. Without
+     * this the map gains one entry per distinct (tag, src, dest, chunk_size)
+     * for the life of the process -- multi-GB over a 50k-job run.
      *
+     * The entry pointer avoids a hash probe on the common path; only the
+     * fully-retired transition pays one keyed erase.
+     *
+     * @param entry generator entry of the retired chunk's key
      * @param tag tag of the retired chunk
      * @param src src NPU ID of the retired chunk
      * @param dest dest NPU ID of the retired chunk
      * @param chunk_size chunk size of the retired chunk
      */
-    void retire_chunk(int tag,
+    void retire_chunk(ChunkIdGeneratorEntry* entry,
+                      int tag,
                       int src,
                       int dest,
                       ChunkSize chunk_size) noexcept;

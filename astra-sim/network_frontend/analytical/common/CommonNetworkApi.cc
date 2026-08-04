@@ -34,35 +34,40 @@ CallbackTracker& CommonNetworkApi::get_callback_tracker() noexcept {
 void CommonNetworkApi::process_chunk_arrival(void* args) noexcept {
     assert(args != nullptr);
 
-    // parse chunk data
-    auto* const data =
-        static_cast<std::tuple<int, int, int, uint64_t, int>*>(args);
-    const auto [tag, src, dest, count, chunk_id] = *data;
+    // parse chunk data: the tracker entry pointer rides in the arg (set by
+    // sim_send), so no hash lookup is needed here
+    auto* const data = static_cast<ChunkArrivalArg*>(args);
+    auto* const entry = data->entry;
+    const auto tag = data->tag;
+    const auto src = data->src;
+    const auto dest = data->dst;
+    const auto count = data->count;
+    const auto chunk_id = data->chunk_id;
     delete data;
 
-    // search tracker
-    auto& tracker = CommonNetworkApi::get_callback_tracker();
-    const auto entry = tracker.search_entry(tag, src, dest, count, chunk_id);
-    assert(entry.has_value());  // entry must exist
+    assert(entry != nullptr);  // entry must exist
 
     // if both callbacks are registered, invoke both callbacks
-    if (entry.value()->both_callbacks_registered()) {
-        entry.value()->invoke_send_handler();
-        entry.value()->invoke_recv_handler();
+    if (entry->both_callbacks_registered()) {
+        entry->invoke_send_handler();
+        entry->invoke_recv_handler();
 
         // remove entry; also let the chunk-id generator drop the key once
         // all of its chunks retired, so the map stops growing for the whole
-        // run
+        // run. Read the generator-entry pointer before the pop frees the
+        // tracker entry.
+        auto* const gen_entry = entry->get_generator_entry();
+        auto& tracker = CommonNetworkApi::get_callback_tracker();
         tracker.pop_entry(tag, src, dest, count, chunk_id);
-        chunk_id_generator.retire_chunk(tag, src, dest, count);
+        chunk_id_generator.retire_chunk(gen_entry, tag, src, dest, count);
     } else {
         // run only send callback, as recv is not ready yet.
-        entry.value()->invoke_send_handler();
+        entry->invoke_send_handler();
 
         // mark the transmission as finished
         // so that recv callback will be invoked immediately
         // when sim_recv() is called
-        entry.value()->set_transmission_finished();
+        entry->set_transmission_finished();
     }
 }
 
@@ -84,7 +89,8 @@ Tick CommonNetworkApi::sim_get_time_ns() {
     // CLOCK_PERIOD is 1, so the historical path (uint64 -> long double,
     // divide by 1, truncate back) yields this same integer; return it
     // directly and skip the x87 round-trip.
-    static_assert(AstraSim::CLOCK_PERIOD == 1, "shortcut below assumes 1ns ticks");
+    static_assert(AstraSim::CLOCK_PERIOD == 1,
+                  "shortcut below assumes 1ns ticks");
     return event_queue->get_current_time();
 }
 
@@ -112,22 +118,24 @@ int CommonNetworkApi::sim_recv(void* const buffer,
                                sim_request* const request,
                                void (*msg_handler)(void*),
                                void* const fun_arg) {
-    // query chunk id
+    // query chunk id (and the generator entry, for probe-free retire)
     const auto dst = sim_comm_get_rank();
-    const auto chunk_id =
+    const auto [chunk_id, gen_entry] =
         CommonNetworkApi::chunk_id_generator.create_recv_chunk_id(tag, src, dst,
                                                                   count);
 
     // single probe: get the entry, creating it if send() wasn't called yet
-    const auto [entry, existed] =
+    const auto [it, existed] =
         callback_tracker.find_or_create_entry(tag, src, dst, count, chunk_id);
+    auto* const entry = &(it->second);
     if (existed && entry->is_transmission_finished()) {
         // send() already invoked and transmission already finished:
         // run callback immediately
 
-        // pop entry (and retire the chunk-id key when fully drained)
-        callback_tracker.pop_entry(tag, src, dst, count, chunk_id);
-        chunk_id_generator.retire_chunk(tag, src, dst, count);
+        // pop entry by iterator (no re-hash) and retire the chunk-id key
+        // via the generator-entry pointer when fully drained
+        callback_tracker.erase_entry(it);
+        chunk_id_generator.retire_chunk(gen_entry, tag, src, dst, count);
 
         // run recv callback immediately
         const auto delta = timespec_t{NS, 0};
@@ -135,6 +143,7 @@ int CommonNetworkApi::sim_recv(void* const buffer,
     } else {
         // transmission not finished (or send() not yet called on the
         // just-created entry): just register the callback
+        entry->set_generator_entry(gen_entry);
         entry->register_recv_callback(msg_handler, fun_arg);
     }
 
