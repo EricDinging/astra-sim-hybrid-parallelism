@@ -3,7 +3,6 @@
 
 #include <functional>
 #include <memory>
-#include <optional>
 #include "common.h"
 #include "et_def.pb.h"
 
@@ -15,6 +14,18 @@ class ETFeederNode {
  public:
   ETFeederNode(ETFeeder& etfeeder, NodeId node_id)
       : feeder(etfeeder), node_id(node_id) {}
+
+  /// The closed set of attribute names the typed accessors below use,
+  /// generated from et_feeder_node_attr.h. Values of these attributes are
+  /// memoized per node on first access (one scan of the protobuf attribute
+  /// list instead of a string-compare scan per accessor call).
+  enum class KnownAttr : int {
+#define REGISTER_ATTR_WITH_DEFAULT(attr_name, system_default_value) attr_name,
+#define REGISTER_ATTR(attr_name) attr_name,
+#include "et_feeder_node_attr.h"
+    kCount
+  };
+  static constexpr int kKnownAttrCount = static_cast<int>(KnownAttr::kCount);
 
   bool has_attr(const std::string& attr_name) const;
 
@@ -35,24 +46,33 @@ class ETFeederNode {
   template <typename T>
   T get_attr(const std::string& attr_name) const;
 
-#define REGISTER_ATTR_WITH_DEFAULT(attr_name, system_default_value) \
-  template <typename T>                                             \
-  T attr_name() const {                                             \
-    return this->get_attr<T>(#attr_name, (system_default_value));   \
-  }                                                                 \
-  template <typename T>                                             \
-  T attr_name(const T& default_value) const {                       \
-    return this->get_attr<T>(#attr_name, default_value);            \
+  // Memoized typed accessors for the KnownAttr set: same conversion
+  // semantics (and same errors) as the string-keyed get_attr overloads,
+  // reading from the per-node memo instead of rescanning the protobuf.
+  template <typename T>
+  T get_attr(KnownAttr attr, const T& default_value) const;
+
+  template <typename T>
+  T get_attr(KnownAttr attr) const;
+
+#define REGISTER_ATTR_WITH_DEFAULT(attr_name, system_default_value)         \
+  template <typename T>                                                     \
+  T attr_name() const {                                                     \
+    return this->get_attr<T>(KnownAttr::attr_name, (system_default_value)); \
+  }                                                                         \
+  template <typename T>                                                     \
+  T attr_name(const T& default_value) const {                               \
+    return this->get_attr<T>(KnownAttr::attr_name, default_value);          \
   }
 
-#define REGISTER_ATTR(attr_name)                         \
-  template <typename T>                                  \
-  T attr_name() const {                                  \
-    return this->get_attr<T>(#attr_name);                \
-  }                                                      \
-  template <typename T>                                  \
-  T attr_name(const T& default_value) const {            \
-    return this->get_attr<T>(#attr_name, default_value); \
+#define REGISTER_ATTR(attr_name)                                   \
+  template <typename T>                                            \
+  T attr_name() const {                                            \
+    return this->get_attr<T>(KnownAttr::attr_name);                \
+  }                                                                \
+  template <typename T>                                            \
+  T attr_name(const T& default_value) const {                      \
+    return this->get_attr<T>(KnownAttr::attr_name, default_value); \
   }
 
 // please mod the following header to add any new attributes
@@ -138,12 +158,43 @@ class ETFeederNode {
   ETFeeder& feeder;
   NodeId node_id;
   mutable std::weak_ptr<const ChakraNode> chakra_node;
-  // A node's type and is-CPU flag are immutable; the type()/is_cpu_op()
-  // accessors are hit many times per node visit (is_available, admission,
-  // issue, occupy, record_start), each otherwise re-locking the feeder's
-  // node cache. Memoize them on the node object (one per lookup).
-  mutable std::optional<ChakraProtoMsg::NodeType> cached_type;
-  mutable std::optional<bool> cached_is_cpu_op;
+
+  /// One known attribute's raw value: the protobuf value_case plus the
+  /// scalar bits (or the string for string/bytes kinds). Conversion to the
+  /// caller's type happens on access via the same converter switch as the
+  /// unmemoized path, so results and errors are identical.
+  struct RawAttrVal {
+    ChakraAttr::ValueCase kind = ChakraAttr::VALUE_NOT_SET;
+    bool present = false;
+    union {
+      double d;
+      float f;
+      int32_t i32;
+      int64_t i64;
+      uint32_t u32;
+      uint64_t u64;
+      bool b;
+    } num = {0.0};
+    std::string str; // kStringVal / kBytesVal only
+  };
+
+  /// Immutable node facts captured in one pass over the protobuf message
+  /// (the graph is static and readonly): the accessors on this class are
+  /// called several times per node visit, and each used to re-lock the raw
+  /// node cache and linearly rescan the attribute list with string
+  /// compares. Built lazily on first access.
+  struct AttrMemo {
+    std::string name;
+    uint64_t runtime = 0; // duration_micros
+    ChakraProtoMsg::NodeType type = ChakraProtoMsg::COMP_NODE;
+    RawAttrVal attrs[kKnownAttrCount];
+  };
+  mutable std::unique_ptr<AttrMemo> memo_;
+
+  const AttrMemo& memo() const;
+  static const char* known_attr_name(KnownAttr attr);
+  template <typename T>
+  T convert_raw(const RawAttrVal& val) const;
 
   std::shared_ptr<const ChakraNode> get_chakra_node() const;
 };
@@ -230,6 +281,93 @@ inline ChakraAttr ETFeederNode::get_attr<ChakraAttr>(
     const ChakraAttr& attr,
     const bool /*strict_type*/) const {
   return attr;
+}
+
+// Mirrors get_attr(const ChakraAttr&) case for case, reading the stored raw
+// value instead of the protobuf message. Same converters, same throws.
+template <typename T>
+T ETFeederNode::convert_raw(const RawAttrVal& val) const {
+  auto cvt = [&](auto value) -> T {
+    if (DEFAULT_STRICT_TYPING) {
+      return _TypeConverter<T>::strict_converter(value);
+    } else {
+      return _TypeConverter<T>::flagged_implicit_converter(value);
+    }
+  };
+  switch (val.kind) {
+    case ChakraAttr::kDoubleVal:
+      return cvt(val.num.d);
+    case ChakraAttr::kFloatVal:
+      return cvt(val.num.f);
+    case ChakraAttr::kInt32Val:
+      return cvt(val.num.i32);
+    case ChakraAttr::kInt64Val:
+      return cvt(val.num.i64);
+    case ChakraAttr::kUint32Val:
+      return cvt(val.num.u32);
+    case ChakraAttr::kUint64Val:
+      return cvt(val.num.u64);
+    case ChakraAttr::kSint32Val:
+      return cvt(val.num.i32);
+    case ChakraAttr::kSint64Val:
+      return cvt(val.num.i64);
+    case ChakraAttr::kFixed32Val:
+      return cvt(val.num.u32);
+    case ChakraAttr::kFixed64Val:
+      return cvt(val.num.u64);
+    case ChakraAttr::kSfixed32Val:
+      return cvt(val.num.i32);
+    case ChakraAttr::kSfixed64Val:
+      return cvt(val.num.i64);
+    case ChakraAttr::kBoolVal:
+      return cvt(val.num.b);
+    case ChakraAttr::kStringVal:
+    case ChakraAttr::kBytesVal:
+      return cvt(val.str);
+    default:
+      throw std::invalid_argument(
+          "Attribute type not supported, for list types please handle them manually");
+  }
+}
+
+template <typename T>
+T ETFeederNode::get_attr(const KnownAttr attr, const T& default_value) const {
+  const RawAttrVal& val = this->memo().attrs[static_cast<int>(attr)];
+  if (!val.present) {
+    return default_value;
+  }
+  return this->convert_raw<T>(val);
+}
+
+template <typename T>
+T ETFeederNode::get_attr(const KnownAttr attr) const {
+  const RawAttrVal& val = this->memo().attrs[static_cast<int>(attr)];
+  if (!val.present) {
+    throw std::runtime_error(
+        "Attribute " + std::string(known_attr_name(attr)) +
+        " not found in node " + std::to_string(this->node_id) +
+        " feeder->id=" + std::to_string(this->feeder._operator_id));
+  }
+  return this->convert_raw<T>(val);
+}
+
+// The ChakraAttr-typed accessor (e.g. get_attr_msg-style uses via the
+// template machinery) cannot be served from the raw memo -- fall back to
+// the protobuf scan, same as before.
+template <>
+inline ChakraAttr ETFeederNode::get_attr<ChakraAttr>(
+    const KnownAttr attr) const {
+  return this->get_attr<ChakraAttr>(std::string(known_attr_name(attr)));
+}
+template <>
+inline ChakraAttr ETFeederNode::get_attr<ChakraAttr>(
+    const KnownAttr attr,
+    const ChakraAttr& default_value) const {
+  const ChakraAttr* found = nullptr;
+  if (this->get_attr_msg(known_attr_name(attr), &found)) {
+    return *found;
+  }
+  return default_value;
 }
 
 } // namespace FeederV3
