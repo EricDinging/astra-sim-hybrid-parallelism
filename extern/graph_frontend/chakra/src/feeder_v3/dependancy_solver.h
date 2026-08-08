@@ -56,7 +56,7 @@ class _DependancyLayer {
 
   /**
    * @brief Rewind the layer to the captured pristine state: restore the edge
-   * maps and re-derive the dependancy-free roots. Requires a prior
+   * structure and re-derive the dependancy-free roots. Requires a prior
    * capture_pristine() and a fully-consumed graph (no ongoing and no
    * dependancy-free nodes), i.e. a drained iteration boundary.
    */
@@ -64,6 +64,9 @@ class _DependancyLayer {
 
   const std::unordered_set<NodeId>& get_dependancy_free_nodes() const;
   const std::unordered_set<NodeId>& get_ongoing_nodes() const;
+  // Edge queries are load-time-only APIs (sanity checks, tests): they read
+  // the edge maps, which are frozen into the sealed CSR at the first
+  // take_node() and then freed. Calling them after that throws.
   const std::unordered_set<NodeId>& get_children(NodeId node) const;
   const std::unordered_set<NodeId>& get_parents(NodeId node) const;
 
@@ -72,13 +75,41 @@ class _DependancyLayer {
   std::unordered_map<NodeId, std::unordered_set<NodeId>> parent_map_child;
   std::unordered_set<NodeId> dependancy_free_nodes;
   std::unordered_set<NodeId> ongoing_nodes;
-  // Pristine node->parents edges captured by capture_pristine(); empty until
-  // then. parent_map_child is re-derived from it on reset() by inversion.
-  std::unordered_map<NodeId, std::unordered_set<NodeId>>
-      pristine_child_map_parent;
   bool pristine_captured = false;
   bool dirty = true;
   void _helper_allocate_bucket(NodeId node_id);
+
+  // --- Sealed edge structure -------------------------------------------
+  // The maps above exist only while the graph is being built and scanned by
+  // load-time code. At the first take_node() the edges are frozen into a
+  // CSR (children lists per node, in the exact iteration order of the
+  // parent_map_child sets, so the sequence of insertions into
+  // dependancy_free_nodes is bit-for-bit the same as the map-based
+  // finish_node produced) plus a remaining-parent refcount per node, and
+  // the maps are freed. finish_node then costs one hash probe for the node
+  // and O(1) array work per child, instead of a hash find + set erase per
+  // child and two map erases per node.
+  bool sealed_ = false;
+  std::vector<NodeId> ids_; // dense index -> node id
+  // node id -> dense index: direct vector when ids are dense (the common
+  // case: trace nodes are numbered 0..N-1), hash map fallback otherwise
+  bool direct_index_ = false;
+  std::vector<uint32_t> id_to_dense_vec_;
+  std::unordered_map<NodeId, uint32_t> id_to_dense_map_;
+  std::vector<uint32_t> child_off_; // CSR offsets, size ids_.size()+1
+  std::vector<uint32_t> child_idx_; // children as dense indices
+  std::vector<uint32_t> remaining_; // live parent count per dense node
+  // Pristine replica recorded by capture_pristine(): the CSR and seed order
+  // that the map-based reset() would have produced, so reset() is a cheap
+  // array install instead of a map copy + rebuild.
+  std::vector<uint32_t> pristine_child_off_;
+  std::vector<uint32_t> pristine_child_idx_;
+  std::vector<uint32_t> pristine_remaining_;
+  std::vector<NodeId> pristine_seed_;
+
+  void ensure_dense_ids();
+  void seal_edges();
+  uint32_t dense_of(NodeId node) const;
 };
 
 class DependancyResolver {

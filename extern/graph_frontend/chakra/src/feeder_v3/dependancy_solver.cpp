@@ -29,11 +29,81 @@ void _DependancyLayer::add_node_children(
   }
 }
 
+void _DependancyLayer::ensure_dense_ids() {
+  if (!this->ids_.empty())
+    return;
+  this->ids_.reserve(this->child_map_parent.size());
+  NodeId max_id = 0;
+  for (const auto& it : this->child_map_parent) {
+    this->ids_.push_back(it.first);
+    if (it.first > max_id)
+      max_id = it.first;
+  }
+  // Direct-index when the id space is dense enough (trace nodes are
+  // typically numbered 0..N-1); hash map fallback for sparse ids.
+  if (max_id < this->ids_.size() * 2 + 64) {
+    this->direct_index_ = true;
+    this->id_to_dense_vec_.assign(max_id + 1, UINT32_MAX);
+    for (uint32_t i = 0; i < this->ids_.size(); ++i)
+      this->id_to_dense_vec_[this->ids_[i]] = i;
+  } else {
+    this->id_to_dense_map_.reserve(this->ids_.size());
+    for (uint32_t i = 0; i < this->ids_.size(); ++i)
+      this->id_to_dense_map_.emplace(this->ids_[i], i);
+  }
+}
+
+uint32_t _DependancyLayer::dense_of(NodeId node) const {
+  if (this->direct_index_) {
+    if (node < this->id_to_dense_vec_.size()) {
+      const uint32_t d = this->id_to_dense_vec_[node];
+      if (d != UINT32_MAX)
+        return d;
+    }
+  } else {
+    const auto it = this->id_to_dense_map_.find(node);
+    if (it != this->id_to_dense_map_.end())
+      return it->second;
+  }
+  throw std::runtime_error(
+      "Node " + std::to_string(node) + " unknown to dependancy layer");
+}
+
+void _DependancyLayer::seal_edges() {
+  this->ensure_dense_ids();
+  const size_t n = this->ids_.size();
+  this->child_off_.assign(n + 1, 0);
+  this->child_idx_.clear();
+  this->remaining_.assign(n, 0);
+  for (uint32_t i = 0; i < n; ++i) {
+    const NodeId id = this->ids_[i];
+    // Freeze the children in the parent_map_child set's iteration order:
+    // that is exactly the order the map-based finish_node visited them, so
+    // downstream insertion sequences stay identical.
+    const auto pmc_it = this->parent_map_child.find(id);
+    if (pmc_it != this->parent_map_child.end()) {
+      for (const NodeId child : pmc_it->second)
+        this->child_idx_.push_back(this->dense_of(child));
+    }
+    this->child_off_[i + 1] = static_cast<uint32_t>(this->child_idx_.size());
+    const auto cmp_it = this->child_map_parent.find(id);
+    this->remaining_[i] = cmp_it == this->child_map_parent.end()
+        ? 0
+        : static_cast<uint32_t>(cmp_it->second.size());
+  }
+  // The maps are dead from here on; free their memory.
+  this->child_map_parent = {};
+  this->parent_map_child = {};
+  this->sealed_ = true;
+}
+
 void _DependancyLayer::take_node(const NodeId& node) {
   if (this->dirty) {
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
   }
+  if (!this->sealed_)
+    this->seal_edges();
   // Per-node hot path: validate via the mutation's own return value instead
   // of a separate find per set (erase/insert report presence), halving the
   // hash probes. Same mutations, same errors on corrupt state.
@@ -54,32 +124,25 @@ void _DependancyLayer::finish_node(
     throw std::runtime_error(
         "dependancy layer is dirty, resolve_dependancy_free_nodes should be called first");
   }
-  // Per-node hot path: one probe per container instead of find-then-mutate
-  // pairs, and one child_map_parent lookup per child instead of three.
-  // Same mutations, same errors on corrupt state.
   if (this->ongoing_nodes.erase(node) == 0) {
     throw std::runtime_error("Node is not taken");
   }
-  const auto pmc_it = this->parent_map_child.find(node);
-  if (pmc_it != this->parent_map_child.end()) {
-    for (auto& child : pmc_it->second) {
-      const auto cmp_it = this->child_map_parent.find(child);
-      if (cmp_it == this->child_map_parent.end() ||
-          cmp_it->second.erase(node) == 0) {
-        // This should not happen, but sanity check
-        throw std::runtime_error(
-            "Parent map child is not consistent with child map parent");
-      }
-      if (cmp_it->second.empty()) {
-        this->dependancy_free_nodes.insert(child);
-        if (freed != nullptr) {
-          freed->push_back(child);
-        }
+  // finish_node is only reachable after take_node (which seals), so the CSR
+  // is live here: one dense lookup for the node, then a refcount decrement
+  // per child -- no per-child hash traffic, no map erases.
+  const uint32_t d = this->dense_of(node);
+  const uint32_t begin = this->child_off_[d];
+  const uint32_t end = this->child_off_[d + 1];
+  for (uint32_t k = begin; k < end; ++k) {
+    const uint32_t child = this->child_idx_[k];
+    if (--this->remaining_[child] == 0) {
+      const NodeId child_id = this->ids_[child];
+      this->dependancy_free_nodes.insert(child_id);
+      if (freed != nullptr) {
+        freed->push_back(child_id);
       }
     }
-    this->parent_map_child.erase(pmc_it);
   }
-  this->child_map_parent.erase(node);
 }
 
 void _DependancyLayer::push_back_node(const NodeId& node) {
@@ -118,7 +181,44 @@ void _DependancyLayer::capture_pristine() {
     throw std::runtime_error(
         "capture_pristine must run before any node is taken");
   }
-  this->pristine_child_map_parent = this->child_map_parent;
+  // Record, as compact arrays, exactly what the map-based reset() used to
+  // rebuild: it copied child_map_parent, then iterated the copy inverting
+  // edges into a fresh parent_map_child and seeding the roots in copy
+  // order. Perform that dance once here on scratch containers (the copy's
+  // and the fresh sets' iteration orders are what downstream consumers
+  // observed), freeze the result, and drop the scratch. reset() is then a
+  // cheap array install with bit-identical insertion sequences.
+  this->ensure_dense_ids();
+  const auto scratch_cmp = this->child_map_parent; // the copy, as before
+  std::unordered_map<NodeId, std::unordered_set<NodeId>> scratch_pmc;
+  this->pristine_seed_.clear();
+  for (const auto& it : scratch_cmp) {
+    scratch_pmc.try_emplace(it.first);
+    for (const auto& parent : it.second) {
+      scratch_pmc[parent].insert(it.first);
+    }
+    if (it.second.empty()) {
+      this->pristine_seed_.push_back(it.first);
+    }
+  }
+  const size_t n = this->ids_.size();
+  this->pristine_child_off_.assign(n + 1, 0);
+  this->pristine_child_idx_.clear();
+  this->pristine_remaining_.assign(n, 0);
+  for (uint32_t i = 0; i < n; ++i) {
+    const NodeId id = this->ids_[i];
+    const auto pmc_it = scratch_pmc.find(id);
+    if (pmc_it != scratch_pmc.end()) {
+      for (const NodeId child : pmc_it->second)
+        this->pristine_child_idx_.push_back(this->dense_of(child));
+    }
+    this->pristine_child_off_[i + 1] =
+        static_cast<uint32_t>(this->pristine_child_idx_.size());
+    const auto cmp_it = scratch_cmp.find(id);
+    this->pristine_remaining_[i] = cmp_it == scratch_cmp.end()
+        ? 0
+        : static_cast<uint32_t>(cmp_it->second.size());
+  }
   this->pristine_captured = true;
 }
 
@@ -130,17 +230,16 @@ void _DependancyLayer::reset() {
     throw std::runtime_error(
         "reset requires a fully-consumed graph (drained iteration boundary)");
   }
-  this->child_map_parent = this->pristine_child_map_parent;
-  this->parent_map_child.clear();
-  for (const auto& it : this->child_map_parent) {
-    const auto& node = it.first;
-    this->_helper_allocate_bucket(node);
-    for (const auto& parent : it.second) {
-      this->parent_map_child[parent].insert(node);
-    }
-    if (it.second.empty()) {
-      this->dependancy_free_nodes.insert(node);
-    }
+  // Install the pristine replica (copies: reset can run again at the next
+  // iteration boundary). Seed insertion order matches the map-based rebuild.
+  this->child_off_ = this->pristine_child_off_;
+  this->child_idx_ = this->pristine_child_idx_;
+  this->remaining_ = this->pristine_remaining_;
+  this->sealed_ = true;
+  this->child_map_parent = {};
+  this->parent_map_child = {};
+  for (const NodeId node : this->pristine_seed_) {
+    this->dependancy_free_nodes.insert(node);
   }
   if (this->dependancy_free_nodes.empty()) {
     throw std::runtime_error(
@@ -156,11 +255,19 @@ const std::unordered_set<NodeId>& _DependancyLayer::get_dependancy_free_nodes()
 
 const std::unordered_set<NodeId>& _DependancyLayer::get_children(
     NodeId node) const {
+  if (this->sealed_) {
+    throw std::logic_error(
+        "get_children is a load-time API; edges are sealed after the first take_node");
+  }
   return this->parent_map_child.at(node);
 }
 
 const std::unordered_set<NodeId>& _DependancyLayer::get_parents(
     NodeId node) const {
+  if (this->sealed_) {
+    throw std::logic_error(
+        "get_parents is a load-time API; edges are sealed after the first take_node");
+  }
   return this->child_map_parent.at(node);
 }
 
