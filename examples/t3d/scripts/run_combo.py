@@ -54,10 +54,14 @@ def find_binary(w: str) -> str:
     raise SystemExit(f"no binary under {w}/bin or the local build tree")
 
 
-def kill_stale_twin(combo_dir: str) -> None:
-    """Kill any sim already logging to this combo folder (whole process
-    group). Match on comm (truncated to 'AstraSim_Analyt'), not args --
-    matching args would find this script's own command line."""
+# comm(16) truncation of AstraSim_Analytical_Reconfigurable; also imported by
+# ckpt.py, so the fleet tools and this runner agree on how to find a sim.
+BIN_COMM = "AstraSim_Analyt"
+
+
+def live_sim_pgids(combo_dir: str) -> set[int]:
+    """Process groups of sims logging to this combo folder. Match on comm,
+    not args -- matching args would find this script's own command line."""
     ps = subprocess.run(
         ["ps", "-eo", "pgid,comm,args", "--no-headers"],
         capture_output=True,
@@ -67,9 +71,14 @@ def kill_stale_twin(combo_dir: str) -> None:
     pgids = set()
     for line in ps.splitlines():
         parts = line.split(None, 2)
-        if len(parts) == 3 and parts[1] == "AstraSim_Analyt" and needle in parts[2]:
+        if len(parts) == 3 and parts[1] == BIN_COMM and needle in parts[2]:
             pgids.add(int(parts[0]))
-    for pg in pgids:
+    return pgids
+
+
+def kill_stale_twin(combo_dir: str) -> None:
+    """Kill any sim already logging to this combo folder (whole group)."""
+    for pg in live_sim_pgids(combo_dir):
         try:
             os.killpg(pg, 9)
         except (ProcessLookupError, PermissionError):
@@ -148,6 +157,14 @@ def main() -> int:
             print(f"skip {exp}/{combo} (done)")
             return 0
         print(f"rerun {exp}/{combo} (arrivals newer than sim.done)")
+
+    # A sim restored by ckpt.py resume runs unwrapped (no run_combo parent)
+    # and has no sim.done yet; killing it as a "stale twin" would restart the
+    # combo from tick 0 and throw away the checkpointed progress.
+    if os.path.isfile(os.path.join(combo_dir, "criu-img", "restored.at")):
+        if live_sim_pgids(combo_dir):
+            print(f"skip {exp}/{combo} (ckpt.py-restored sim in flight)")
+            return 0
 
     kill_stale_twin(combo_dir)
     if os.path.isfile(done):
