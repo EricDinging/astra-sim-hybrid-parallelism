@@ -92,6 +92,11 @@ class TopologyManager {
     /// Default Router::kDefaultBudgetBytes (100 GiB). No-op in BFS mode.
     void set_route_cache_budget_bytes(std::size_t bytes) noexcept;
 
+    /// Drop every DOR route-cache entry. The cache is a pure accelerator and
+    /// rebuilds on demand; checkpoint prep calls this so a CRIU dump does not
+    /// carry tens of GB of rebuildable routes. No-op in BFS mode.
+    void clear_route_cache() noexcept;
+
     void precomputeRoutes(int topo_id) noexcept;
 
     /**

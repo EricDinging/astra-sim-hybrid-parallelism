@@ -76,6 +76,12 @@ class SchedRuntime {
         failed_npus_ = failed;
     }
 
+    // Drop rebuildable caches before a CRIU dump; invoked at the SIGUSR1
+    // safe point (see checkpoint_stop() in SchedRuntime.cc).
+    void set_checkpoint_prep(std::function<void()> prep) {
+        checkpoint_prep_ = std::move(prep);
+    }
+
     // Optional estimator used ONLY to fill SchedContext/est_duration for
     // context-aware placement rankings; independent of admission policies.
     void set_ctx_estimator(std::unique_ptr<DurationEstimator> est) {
@@ -124,6 +130,8 @@ class SchedRuntime {
     // and refresh it only after commit_placement (the only in-sweep cluster
     // mutation), instead of rebuilding the O(N) snapshot per attempt.
     PlacementResult attempt_place(JobInstance* job, const ClusterView& view);
+    // SIGUSR1 safe point; see the checkpoint block in SchedRuntime.cc.
+    void checkpoint_stop();
 
     NetworkAnalytical::EventQueue* event_queue_;
     std::vector<Sys*> all_sys_;
@@ -150,6 +158,7 @@ class SchedRuntime {
     std::map<std::array<int, 3>, std::uint64_t> defer_memo_;
     std::uint64_t detach_epoch_ = 0;
     std::function<void()> drain_diagnostic_;  // deadlock post-mortem hook
+    std::function<void()> checkpoint_prep_;   // SIGUSR1 checkpoint-prep hook
     std::unique_ptr<DurationEstimator> ctx_estimator_;
     // main.cc sets this from the --preserve-placement-order CLI flag (which
     // defaults to true). This false is only the fallback for code paths that

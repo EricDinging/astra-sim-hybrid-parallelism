@@ -121,9 +121,15 @@ class Cache {
     this->cache.erase(it);
   }
 
-  ~Cache() {
+  // Drop every entry (checkpoint prep). Same effect as full LRU eviction:
+  // outstanding weak_ptrs expire and the next get misses and re-reads.
+  void clear() {
     this->cache.clear();
     this->lru.clear();
+  }
+
+  ~Cache() {
+    clear();
   }
 
  private:

@@ -475,6 +475,12 @@ void TopologyManager::set_route_cache_budget_bytes(std::size_t bytes) noexcept {
     }
 }
 
+void TopologyManager::clear_route_cache() noexcept {
+    if (router_ != nullptr) {
+        router_->clear_cache();
+    }
+}
+
 void TopologyManager::send(std::unique_ptr<Chunk> chunk) noexcept {
     assert(chunk != nullptr);
     assert(chunk->current_device() != nullptr);

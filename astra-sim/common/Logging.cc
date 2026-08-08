@@ -70,6 +70,11 @@ void LoggerFactory::shutdown(void) {
     spdlog::shutdown();
 }
 
+void LoggerFactory::flush_all(void) {
+    spdlog::apply_all(
+        [](std::shared_ptr<spdlog::logger> logger) { logger->flush(); });
+}
+
 void LoggerFactory::init_default_components(const std::string& log_path) {
     std::filesystem::path folderPath(log_path);
 

@@ -17,7 +17,12 @@ LICENSE file in the root directory of this source tree.
 
 #include <algorithm>
 #include <cassert>
+#include <csignal>
+#include <cstdio>
 #include <cstdlib>
+
+#include <malloc.h>
+#include <unistd.h>
 
 namespace AstraSim {
 namespace Scheduling {
@@ -42,6 +47,56 @@ struct DetachCtx {
     SchedRuntime* runtime;
     JobInstance* job;
 };
+
+// --- CRIU checkpoint safe point ---------------------------------------------
+// `ckpt.py checkpoint` sends SIGUSR1. run()'s loop notices the flag at the
+// next event-bucket boundary (where the event queue is fully consistent),
+// sheds droppable memory, flushes logs, and SIGSTOPs itself so `criu dump`
+// captures a small, loop-aligned image. SIGCONT resumes the loop in place.
+volatile std::sig_atomic_t g_checkpoint_requested = 0;
+
+void request_checkpoint(int /*signum*/) {
+    g_checkpoint_requested = 1;
+}
+
+// jemalloc's control API when the allocator is linked in (USE_JEMALLOC=ON,
+// the default). Weak so the glibc-fallback build still links; the archive
+// member defining mallctl is already pulled in by malloc itself.
+extern "C" int mallctl(const char* name,
+                       void* oldp,
+                       size_t* oldlenp,
+                       void* newp,
+                       size_t newlen) __attribute__((weak));
+
+// Return freed heap pages to the OS so the CRIU image shrinks. jemalloc keeps
+// freed pages mapped, so without this purge a cleared route cache would not
+// reduce the dump size at all.
+void release_freed_memory() {
+    if (mallctl != nullptr) {
+        // "arena.<MALLCTL_ARENAS_ALL>.purge"; 4096 is jemalloc's stable ABI
+        // constant, spelled numerically so no jemalloc header is needed.
+        mallctl("arena.4096.purge", nullptr, nullptr, nullptr, 0);
+    } else {
+        malloc_trim(0);
+    }
+}
+
+long resident_mib() {
+    long pages_total = 0;
+    long pages_resident = 0;
+    FILE* statm = std::fopen("/proc/self/statm", "r");
+    if (statm == nullptr) {
+        return -1;
+    }
+    if (std::fscanf(statm, "%ld %ld", &pages_total, &pages_resident) != 2) {
+        pages_resident = -1;
+    }
+    std::fclose(statm);
+    if (pages_resident < 0) {
+        return -1;
+    }
+    return pages_resident * sysconf(_SC_PAGESIZE) / (1024 * 1024);
+}
 
 void fire_arrival(void* arg) {
     auto* ctx = static_cast<ArrivalCtx*>(arg);
@@ -436,9 +491,29 @@ bool SchedRuntime::simulation_done() const {
            pending_.empty() && registry_.no_running_jobs();
 }
 
+void SchedRuntime::checkpoint_stop() {
+    auto logger = LoggerFactory::get_logger("scheduling");
+    const long rss_before = resident_mib();
+    if (checkpoint_prep_) {
+        checkpoint_prep_();  // drop rebuildable caches (main.cc wires which)
+    }
+    release_freed_memory();
+    logger->info("checkpoint safe point: tick={} rss {} MiB -> {} MiB; "
+                 "stopping for CRIU dump (SIGCONT resumes)",
+                 event_queue_->get_current_time(), rss_before, resident_mib());
+    LoggerFactory::flush_all();
+    std::raise(SIGSTOP);
+    logger->info("resumed from checkpoint stop");
+}
+
 void SchedRuntime::run() {
+    std::signal(SIGUSR1, request_checkpoint);
     schedule_all_arrival_sentinels();
     while (true) {
+        if (g_checkpoint_requested != 0) {
+            g_checkpoint_requested = 0;
+            checkpoint_stop();
+        }
         event_queue_->proceed();
         if (event_queue_->finished()) {
             for (auto* sys : all_sys_) {

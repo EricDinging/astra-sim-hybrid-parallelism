@@ -123,6 +123,10 @@ static size_t node_cache_capacity() {
 Cache<std::tuple<ETFeederId, NodeId>, ChakraNode> ETFeeder::_node_cache(
     node_cache_capacity());
 
+void ETFeeder::clear_node_cache() {
+  _node_cache.clear();
+}
+
 void ETFeeder::build_index_dependancy_cache() {
   this->chakra_file.clear();
   this->chakra_file.seekg(0, std::ios::beg);

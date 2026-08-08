@@ -45,6 +45,12 @@ namespace FeederV3 {
 class ETFeeder {
  public:
   ChakraGlobalMetadata global_metadata;
+
+  // Drop the process-wide raw-node cache (checkpoint prep): every entry is
+  // re-readable from its trace file, so shedding it shrinks a CRIU image
+  // without changing behavior.
+  static void clear_node_cache();
+
   ETFeeder(const std::string& file_path)
       // Local deviation from upstream: dropped std::ios::app. chakra_file is a
       // read-only std::ifstream (no code writes to it), but std::ios::app makes

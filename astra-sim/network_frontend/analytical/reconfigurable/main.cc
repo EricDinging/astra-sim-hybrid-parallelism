@@ -14,6 +14,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/SchedRuntime.hh"
 #include "astra-sim/system/BaseStream.hh"  // DEBUG(deadlock-repro)
 #include "common/CmdLineParser.hh"
+#include "extern/graph_frontend/chakra/src/feeder_v3/et_feeder.h"
 #include "reconfigurable/ReconfigurableNetworkApi.hh"
 #include <astra-network-analytical/common/EventQueue.h>
 #include <astra-network-analytical/common/NetworkParser.h>
@@ -562,6 +563,14 @@ int main(int argc, char* argv[]) {
                                  Latency(scalar_latency));
     runtime.set_reconfig_hook(&reconfig_hook);
     runtime.set_failed_npus(failed_npus_set);
+    // CRIU checkpoint prep (SIGUSR1): both caches are pure accelerators —
+    // DOR routes recompute on demand, evicted chakra nodes re-read from the
+    // trace files — so drop them before the dump to shrink the image (at
+    // saturated 16^3 the node cache alone holds up to 4M protobuf nodes).
+    runtime.set_checkpoint_prep([tm]() {
+        tm->clear_route_cache();
+        Chakra::FeederV3::ETFeeder::clear_node_cache();
+    });
     const bool preserve_placement_order =
         cmd_line_parser.get<bool>("preserve-placement-order");
     runtime.set_preserve_placement_order(preserve_placement_order);

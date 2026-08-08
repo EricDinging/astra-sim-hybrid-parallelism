@@ -39,6 +39,9 @@ class LoggerFactory {
     static void init(const std::string& log_conf_path = "empty",
                      const std::string& log_path = "log");
     static void shutdown(void);
+    // Flush every registered logger (checkpoint prep: make on-disk logs
+    // current before the process is dumped).
+    static void flush_all(void);
 
   private:
     static void init_default_components(const std::string& log_path);
