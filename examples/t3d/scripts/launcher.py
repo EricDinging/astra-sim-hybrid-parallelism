@@ -26,7 +26,13 @@ import subprocess
 import cluster
 
 LOCAL = "local"
-PROBE_CMD = "nproc; awk '/MemAvailable/{print $2}' /proc/meminfo"
+# Third output line: 1 iff the host has the Haswell ISA floor (AVX2/BMI2/FMA)
+# the -march=haswell build needs; drives the -a flag sweep.py builds with.
+PROBE_CMD = (
+    "nproc; awk '/MemAvailable/{print $2}' /proc/meminfo; "
+    "if grep -m1 -q avx2 /proc/cpuinfo && grep -m1 -q bmi2 /proc/cpuinfo "
+    "&& grep -m1 -q fma /proc/cpuinfo; then echo 1; else echo 0; fi"
+)
 SSH_OPTS = [
     "-o",
     "BatchMode=yes",
@@ -51,8 +57,9 @@ def parse_workers(path: str) -> list[str]:
     return workers
 
 
-def probe(host: str) -> tuple[int, int]:
-    """(cpus, mem_available_gb) of a worker (LOCAL or user@host)."""
+def probe(host: str) -> tuple[int, int, bool]:
+    """(cpus, mem_available_gb, has_haswell_isa) of a worker (LOCAL or
+    user@host)."""
     if host == LOCAL:
         cmd = ["bash", "-c", PROBE_CMD]
     else:
@@ -60,8 +67,8 @@ def probe(host: str) -> tuple[int, int]:
     r = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
     if r.returncode != 0:
         raise RuntimeError(f"probe of {host} failed: {r.stderr.strip()[-200:]}")
-    cpus_s, mem_kb_s = r.stdout.split()
-    return int(cpus_s), int(mem_kb_s) // (1024 * 1024)
+    cpus_s, mem_kb_s, isa_s = r.stdout.split()
+    return int(cpus_s), int(mem_kb_s) // (1024 * 1024), isa_s == "1"
 
 
 # Target fill fraction of a host's available memory.
@@ -98,15 +105,21 @@ def slot_count(cpus: int, mem_gb: int, mem_per_run: int) -> int:
     return max(0, min(cpus - 2, mem_gb * MEM_TARGET_PCT // 100 // mem_per_run))
 
 
-def probe_all(workers: list[str], mem_per_run: int) -> dict[str, int]:
-    """host -> slots for every usable worker ([] probes the local machine).
-    Hosts that fail the probe or have zero slots are dropped with a warning;
-    all hosts unusable is an error."""
+def probe_all(workers: list[str], mem_per_run: int) -> tuple[dict[str, int], str]:
+    """(host -> slots, isa_floor) for every usable worker ([] probes the
+    local machine). Hosts that fail the probe or have zero slots are dropped
+    with a warning; all hosts unusable is an error.
+
+    isa_floor is the -a value the binary must be built with to run on every
+    usable host: "haswell" when all of them have AVX2/BMI2/FMA, else
+    "generic" (one binary is deployed fleet-wide, so one laggard host
+    lowers the floor for all)."""
     hosts = workers or [LOCAL]
     usable: dict[str, int] = {}
+    floor = "haswell"
     for h in hosts:
         try:
-            cpus, mem_gb = probe(h)
+            cpus, mem_gb, has_isa = probe(h)
         except (RuntimeError, subprocess.TimeoutExpired, ValueError) as e:
             print(f"WARN dropping {h}: {e}")
             continue
@@ -114,11 +127,14 @@ def probe_all(workers: list[str], mem_per_run: int) -> dict[str, int]:
         if n == 0:
             print(f"WARN dropping {h}: 0 slots ({cpus} cpus, {mem_gb} GB avail)")
             continue
+        if not has_isa:
+            print(f"NOTE {h}: no AVX2/BMI2/FMA -> generic (portable) build")
+            floor = "generic"
         usable[h] = n
         print(f"probe {h}: {cpus} cpus, {mem_gb} GB avail -> {n} slots")
     if not usable:
         raise SystemExit("no usable workers (all probes failed or 0 slots)")
-    return usable
+    return usable, floor
 
 
 def plan_assignments(
@@ -279,7 +295,7 @@ def probe_slots(hosts: list[str], mem_per_run: int) -> dict[str, int]:
 
     def one(h: str) -> tuple[str, int]:
         try:
-            cpus, mem_gb = probe(h)
+            cpus, mem_gb, _ = probe(h)
             return h, slot_count(cpus, mem_gb, mem_per_run)
         except (RuntimeError, subprocess.TimeoutExpired, ValueError):
             return h, 0

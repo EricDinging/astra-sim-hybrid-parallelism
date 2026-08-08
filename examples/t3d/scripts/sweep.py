@@ -24,6 +24,7 @@ import concurrent.futures
 import datetime
 import os
 import shutil
+import subprocess
 import tempfile
 import time
 
@@ -47,6 +48,24 @@ ASTRA_SIM_BIN = os.path.join(
     "bin",
     "AstraSim_Analytical_Reconfigurable",
 )
+
+
+def build_binary(isa_floor: str) -> None:
+    """(Re)build the reconfigurable binary via build.sh with the given ISA
+    floor ("auto" = detect on this machine, "generic" = fully portable,
+    "haswell" = require AVX2/BMI2/FMA on every machine that runs it).
+    Incremental: unchanged source with the same floor rebuilds in seconds,
+    and a floor change triggers the full rebuild it needs. Callers pass the
+    floor probed from the machines the binary will actually run on."""
+    build_sh = os.path.join(REPO, "build", "astra_analytical", "build.sh")
+    print(f"building simulator binary (-a {isa_floor}) ...")
+    r = subprocess.run([build_sh, "-a", isa_floor], capture_output=True, text=True)
+    if r.returncode != 0:
+        print(r.stdout[-2000:])
+        print(r.stderr[-2000:])
+        raise SystemExit(f"build.sh -a {isa_floor} failed (rc={r.returncode})")
+    print(f"binary ready: {ASTRA_SIM_BIN}")
+
 
 # trace length; override for quick dev tests, e.g. N_JOBS=20 ./reproduce.py gen ...
 # 65k (down from 100k): prefix analysis on the 100k sweeps showed the
@@ -275,9 +294,9 @@ def prereq(root: str = ROOT, jobs: str | None = None) -> None:
 
 def svc(root: str = ROOT) -> None:
     """(Re)measure every shape's isolated service time -> service_times.csv.
-    Needs the built reconfigurable binary and the tracelib."""
-    if not os.path.isfile(ASTRA_SIM_BIN):
-        raise SystemExit(f"binary not found: {ASTRA_SIM_BIN} (run build.sh first)")
+    Builds the reconfigurable binary if needed (runs locally, so the local
+    machine's ISA is the right floor); needs the tracelib."""
+    build_binary("auto")
     rc = measure_svc.main(
         [
             "--traces",
@@ -352,14 +371,8 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
 
     Placeability experiments have no combos to distribute; each is a local
     ~0.1s-per-probe census, run to completion before the real launch."""
-    for exp in [e for e in exps if experiments(root)[e] is None]:
-        placeability.run(exp, root, ASTRA_SIM_BIN)
-    exps = [e for e in exps if experiments(root)[e] is not None]
-    if not exps:
-        return
-
     cells_by_exp: dict[str, list[tuple[str, str]]] = {}
-    for exp in exps:
+    for exp in [e for e in exps if experiments(root)[e] is not None]:
         cs = combos(exp, root)
         for combo, _load in cs:
             if not os.path.isfile(
@@ -370,14 +383,26 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
                 )
         cells_by_exp[exp] = cs
 
+    # Probe the workers first: the binary is compiled here but runs on them,
+    # so their common ISA floor (not this machine's) picks the -a flag. The
+    # local machine always runs something too (placeability probes, or the
+    # whole sweep when workers.txt is empty), so it caps the floor as well.
     cap = cluster.capacity(cluster.load(root))
     ws = launcher.workspace(cap)
-    host_slots = launcher.probe_all(
+    host_slots, isa_floor = launcher.probe_all(
         launcher.parse_workers(workers_file or os.path.join(root, "workers.txt")),
         launcher.mem_per_run_gb(cap),
     )
-    if launcher.LOCAL not in host_slots and not os.path.isfile(ASTRA_SIM_BIN):
-        raise SystemExit(f"binary not found: {ASTRA_SIM_BIN} (run build.sh first)")
+    if isa_floor != "generic" and not launcher.probe(launcher.LOCAL)[2]:
+        print("NOTE local machine: no AVX2/BMI2/FMA -> generic (portable) build")
+        isa_floor = "generic"
+    build_binary(isa_floor)
+
+    for exp in [e for e in exps if experiments(root)[e] is None]:
+        placeability.run(exp, root, ASTRA_SIM_BIN)
+    exps = [e for e in exps if experiments(root)[e] is not None]
+    if not exps:
+        return
 
     # combo names repeat across experiments, so plan over exp-qualified ids
     qualified = [

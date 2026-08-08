@@ -19,21 +19,29 @@ sudo apt-get install cmake g++ libprotobuf-dev protobuf-compiler \
 # 2. Build the stage Docker image (from the REPO ROOT; needs network)
 docker buildx build -t astra:latest .
 
-# 3. Build the simulator binary
-build/astra_analytical/build.sh
-
-# 4. Prerequisites: cluster dims (prompted once -> cluster.json), then
+# 3. Prerequisites: cluster dims (prompted once -> cluster.json), then
 #    Chakra tracelib (~11 GB at 16x16x16) + measured service_times.csv
 ./reproduce.py prereq
 
-# 5. Generate arrival traces (or run ./reproduce.py bare for a picker)
+# 4. Generate arrival traces (or run ./reproduce.py bare for a picker)
 ./reproduce.py gen <experiment[,experiment...]|all>
 
-# 6. List your servers (user@host per line; empty/missing file = run locally),
+# 5. List your servers (user@host per line; empty/missing file = run locally),
 #    then launch
 echo you@server1.example.org >> workers.txt
 ./reproduce.py launch <experiment[,experiment...]|all>
 ```
+
+There is no separate compile step: `prereq` and `launch` build the simulator
+binary themselves via `build/astra_analytical/build.sh`. At launch the
+workers are probed over SSH for their CPU features, and the build enables
+the Haswell ISA floor (`-march=haswell`, ~15–20% faster sims, results
+byte-identical) only when **every** usable worker — and this machine —
+supports AVX2/BMI2/FMA; otherwise it falls back to a fully portable build
+automatically. Rebuilds are incremental, so an unchanged tree costs seconds.
+To build by hand anyway: `build/astra_analytical/build.sh` (`-a auto`
+detects the local CPU, `-a generic` forces portable, `-p gen|use` are the
+optional PGO phases — see `docs/superpowers/reports/2026-08-08-perf-round4.md`).
 
 For quick dev tests use short traces: `N_JOBS=20 ./reproduce.py gen <exp>`.
 `./reproduce.py clean` removes all results (keeps the prerequisites).
