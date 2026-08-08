@@ -36,9 +36,33 @@ function setup() {
 }
 
 function compile_astrasim_analytical() {
-  # compile AstraSim
+  # compile AstraSim. The optional PGO phase (-p gen|use) appends the
+  # profile-generate/-use flags through the CMakeLists EXTRA_*_FLAGS hooks:
+  #   build.sh -p gen        # instrumented binary; profiles land in
+  #                          # build/astra_analytical/pgo-profiles/
+  #   <run representative sims with the instrumented binary>
+  #   build.sh -p use        # rebuild optimized against those profiles
+  # Results are byte-identical to a plain build; only speed changes.
+  local extra_opt="" extra_link=""
+  resolve_march
+  if [[ ${pgo_phase:-} == "gen" ]]; then
+    mkdir -p "${PGO_DIR:?}"
+    extra_opt="-fprofile-generate -fprofile-dir=${PGO_DIR:?} -fprofile-update=single"
+    extra_link="-fprofile-generate -fprofile-dir=${PGO_DIR:?}"
+  elif [[ ${pgo_phase:-} == "use" ]]; then
+    extra_opt="-fprofile-use -fprofile-dir=${PGO_DIR:?} -fprofile-correction -Wno-missing-profile"
+    extra_link="-fprofile-use -fprofile-dir=${PGO_DIR:?} -fprofile-correction"
+  fi
+  if [[ ${march_arch:-} != "" ]]; then
+    # -ffp-contract=off pins FP semantics (no FMA contraction) so results
+    # stay byte-identical to a generic build; the win is integer/codegen.
+    # The binary then requires the named ISA level on every deploy target
+    # (haswell covers the current c6320/c6420/c6620/clnode farm groups).
+    extra_opt="${extra_opt} -march=${march_arch} -mtune=skylake -ffp-contract=off"
+  fi
   cd "${BUILD_DIR:?}" || exit
-  cmake .. -DBUILDTARGET="$1" -DENABLE_VERBOSE_LOGS=OFF
+  cmake .. -DBUILDTARGET="$1" -DENABLE_VERBOSE_LOGS=OFF \
+    -DEXTRA_OPT_FLAGS="${extra_opt}" -DEXTRA_LINK_FLAGS="${extra_link}"
   cmake --build . -j "${NUM_THREADS:?}"
 }
 
@@ -100,9 +124,33 @@ function print_usage() {
 build_target="all"
 build_as_debug=false
 should_clean=false
+pgo_phase=""
+march_arch="auto"
+PGO_DIR="${SCRIPT_DIR:?}/pgo-profiles"
+
+# Resolve -a auto: enable the haswell ISA floor iff the BUILD host has the
+# instructions (AVX2/BMI2/FMA), else fall back to a generic portable build.
+# Note this is a proxy: it checks the machine compiling the binary, not the
+# machines it will be copied to. Deploy targets must be >= Haswell (2013) /
+# any AMD Zen when the floor is enabled; use -a generic to force a build
+# that runs anywhere.
+function resolve_march() {
+  if [[ ${march_arch:?} == "auto" ]]; then
+    if grep -m1 -q "avx2" /proc/cpuinfo &&
+      grep -m1 -q "bmi2" /proc/cpuinfo &&
+      grep -m1 -q "fma" /proc/cpuinfo; then
+      march_arch="haswell"
+    else
+      march_arch=""
+    fi
+    echo "ISA floor (-a auto): ${march_arch:-generic}"
+  elif [[ ${march_arch} == "generic" ]]; then
+    march_arch=""
+  fi
+}
 
 # Process command-line options
-while getopts "t:ld" OPT; do
+while getopts "t:ldp:a:" OPT; do
   case "${OPT:?}" in
   t)
     build_target="${OPTARG:?}"
@@ -112,6 +160,19 @@ while getopts "t:ld" OPT; do
     ;;
   d)
     build_as_debug=true
+    ;;
+  p)
+    pgo_phase="${OPTARG:?}"
+    if [[ ${pgo_phase} != "gen" && ${pgo_phase} != "use" ]]; then
+      echo "Invalid PGO phase: ${pgo_phase} (expected gen or use)" >&2
+      exit 1
+    fi
+    ;;
+  a)
+    # ISA floor: "auto" (default) detects on the build host, "generic"
+    # forces a fully portable build, anything else (e.g. "haswell") is
+    # passed to -march verbatim. A floored binary SIGILLs on older CPUs.
+    march_arch="${OPTARG:?}"
     ;;
   *)
     exit 1

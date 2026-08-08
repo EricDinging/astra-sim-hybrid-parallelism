@@ -15,6 +15,20 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g")
 # TODO: Remove this once binary_function deprecation is resolved.
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error")
 
+# Extra flag injection point. The set(CMAKE_CXX_FLAGS ...) above runs before
+# project(), so it creates a normal variable that shadows the cache/env value
+# for the rest of the configure -- CXXFLAGS/-DCMAKE_CXX_FLAGS from outside are
+# silently swallowed. These cache options are the supported way to append
+# flags (used by build.sh for the PGO passes).
+set(EXTRA_OPT_FLAGS "" CACHE STRING "Extra C++ compile flags appended to all targets")
+set(EXTRA_LINK_FLAGS "" CACHE STRING "Extra linker flags appended to all targets")
+if(EXTRA_OPT_FLAGS)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${EXTRA_OPT_FLAGS}")
+endif()
+if(EXTRA_LINK_FLAGS)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${EXTRA_LINK_FLAGS}")
+endif()
+
 # Setup project
 project(AstraSim_Analytical)
 
