@@ -185,6 +185,15 @@ def main() -> int:
     env["LD_LIBRARY_PATH"] = (
         os.path.join(w, "lib") + ":" + env.get("LD_LIBRARY_PATH", "")
     )
+    # Back the sim's ~4 GB heap with transparent huge pages (jemalloc
+    # madvise; kernel default 'madvise' mode honors it, verified on the
+    # farm). Replicated paired A/Bs: -14% wall on 16^3 rfold, -11% on sfc,
+    # from ~2x fewer dTLB misses; results byte-identical, RSS unchanged.
+    # setdefault so a host-level MALLOC_CONF override wins. NOTE: measuring
+    # this needs THP_enabled:1 -- some tooling sandboxes set
+    # PR_SET_THP_DISABLE, which children inherit and which silently turns
+    # the madvise into a no-op.
+    env.setdefault("MALLOC_CONF", "thp:always,metadata_thp:always")
 
     cfg = os.path.join(w, "configs")
     dims = npus_per_dim(w)
