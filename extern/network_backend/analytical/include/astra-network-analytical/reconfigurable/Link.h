@@ -155,6 +155,17 @@ class Link {
         return &free_callback_arg_;
     }
 
+    /// Mirror of the owning port's pending-queue emptiness, maintained by
+    /// Device at every push/pop of that queue. Device::send's hot/cold
+    /// decision reads this instead of the port entry, so a hot send touches
+    /// only this Link's (already needed) cache line.
+    [[nodiscard]] bool has_pending() const noexcept {
+        return has_pending_;
+    }
+    void set_has_pending(const bool v) noexcept {
+        has_pending_ = v;
+    }
+
     /// Fluid-model bookkeeping: number of flows currently occupying this
     /// link, maintained by FlowEngine at flow register/deregister. Stored
     /// here so the per-flow fair-share computation (min over links of
@@ -178,6 +189,10 @@ class Link {
 
     /// flag to indicate if the link is busy
     bool busy;
+
+    /// pending-queue-nonempty mirror (see has_pending()); lives beside
+    /// `busy` so the hot-path reads share one cache line
+    bool has_pending_ = false;
 
     /// bandwidth of the link in GB/s
     Bandwidth bandwidth;

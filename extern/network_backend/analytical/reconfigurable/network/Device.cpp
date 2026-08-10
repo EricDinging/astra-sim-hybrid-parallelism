@@ -116,6 +116,7 @@ void Device::link_become_free(DeviceId link_id) noexcept {
 
     std::unique_ptr<Chunk> chunk = std::move(pending.front());
     pending.pop_front();
+    link->set_has_pending(!pending.empty());
 
     auto next_link_free_time = link->send(std::move(chunk));
 
@@ -171,51 +172,53 @@ void Device::send(std::unique_ptr<Chunk> chunk) noexcept {
         }
     }
 
-    // Per-route port-index cache: skip the port-table lower_bound when this
-    // (route, hop) was already resolved under the current wiring epoch. The
-    // epoch is bumped by every connect/disconnect/reconfigure, so a cached
-    // index can never be read across a ports_ mutation; the cached port is
-    // exactly the one find_port(next_device id) would return, so behavior is
-    // identical to the lookup. (Route is shared across chunks; single-
-    // threaded sim, so the mutable writes are safe.)
+    // Per-route link cache: skip the port-table lower_bound AND the port
+    // entry itself when this (route, hop) was already resolved under the
+    // current wiring epoch. The epoch is bumped by every connect/disconnect/
+    // reconfigure, so a cached pointer can never be read across a ports_
+    // mutation; the cached link is exactly the one find_port(next_device
+    // id)->link would return, so behavior is identical to the lookup. The
+    // port's queue state is mirrored on the Link (has_pending), so the hot
+    // path below reads only the Link's cache line. (Route is shared across
+    // chunks; single-threaded sim, so the mutable writes are safe.)
     const auto& route = chunk->get_route();
     const auto cursor = chunk->get_cursor();
     if (route.links_epoch != wiring_epoch) {
-        route.hop_ports.assign(route.size(), Route::kNoPort);
+        route.hop_links.assign(route.size(), nullptr);
         route.links_epoch = wiring_epoch;
     }
-    auto& slot = route.hop_ports[cursor];
-    Port* port;
-    if (slot != Route::kNoPort) {
-        port = &ports_[slot].second;
-    } else {
-        // one lookup for link AND pending queue (the assert below already
-        // proves the next dest is connected -- a separate
-        // assert(connected(...)) would be a second search per hop, and
-        // asserts are live in release here)
+    Link* link = route.hop_links[cursor];
+    if (link == nullptr) {
+        // the assert below already proves the next dest is connected -- a
+        // separate assert(connected(...)) would be a second search per hop,
+        // and asserts are live in release here
         const auto next_dest_id = chunk->next_device()->get_id();
         const auto it = port_pos(next_dest_id);
         assert(it != ports_.end() && it->first == next_dest_id);
-        slot = static_cast<std::uint32_t>(it - ports_.begin());
-        port = &it->second;
+        link = it->second.link.get();
+        route.hop_links[cursor] = link;
     }
-    const auto& link = port->link;
 
     // Cold path: reconfiguration downtime or a cold transmission in flight
     // (flag), a dead link, a chunk stamped for a future topology, or a
     // non-empty pending queue (FIFO order with already-queued chunks must
-    // hold). These keep the event-driven machinery: the pending queue and
-    // link-free events carry the reconfigure/drain semantics.
+    // hold; read via the Link's has_pending mirror). These keep the
+    // event-driven machinery: the pending queue and link-free events carry
+    // the reconfigure/drain semantics.
     // NOTE: arithmetic occupancy (next_free_time) deliberately does NOT
     // divert to the cold path -- hot sends append to the arithmetic booking
     // themselves, in FIFO order, with the same start times the event chain
     // produced.
     if (link->is_flag_busy() || link->get_bandwidth() == Bandwidth(0) ||
-        chunk->get_topology_iteration() > topology_iteration || !port->pending.empty()) {
+        chunk->get_topology_iteration() > topology_iteration || link->has_pending()) {
+        const auto next_dest_id = chunk->next_device()->get_id();
+        auto* const port = find_port(next_dest_id);
+        assert(port != nullptr && port->link.get() == link);
         auto& pending = port->pending;
         pending.push_back(std::move(chunk));
+        link->set_has_pending(true);
         if (kVerboseLogging) {
-            debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(ports_[slot].first) +
+            debug_print("Device " + std::to_string(device_id) + ": link to " + std::to_string(next_dest_id) +
                         " is busy or reconfiguring, adding chunk to pending queue. Pending queue size: " +
                         std::to_string(pending.size()));
         }
