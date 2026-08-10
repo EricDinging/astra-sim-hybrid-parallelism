@@ -7,6 +7,8 @@ LICENSE file in the root directory of this source tree.
 
 #include "common/Type.h"
 #include <cstdint>
+#include <queue>
+#include <unordered_map>
 #include <vector>
 
 namespace NetworkAnalytical {
@@ -54,7 +56,7 @@ class EventQueue {
     void schedule_event(EventTime event_time, Callback callback, CallbackArg callback_arg) noexcept;
 
   private:
-    /// One scheduled event. `seq` is a monotonic insertion counter: heap
+    /// One scheduled event. `seq` is a monotonic insertion counter: the pop
     /// order is (time asc, seq asc), so same-time events pop in insertion
     /// order -- the same FIFO the previous map<time, EventList> produced.
     struct HeapEvent {
@@ -70,13 +72,42 @@ class EventQueue {
         return a.time < b.time || (a.time == b.time && a.seq < b.seq);
     }
 
-    /// 4-ary min-heap: half the depth of a binary heap and the four children
-    /// of a node are adjacent in memory, which roughly halves the cache-missy
-    /// element moves per pop (the sift-down dominated the event loop in
-    /// profiles).
+    /// Two-level calendar structure. A single global heap paid a deep,
+    /// cache-cold sift per pop once congestion booked 10^4-10^5 events into
+    /// the future (26% of scatter-cell cycles at 16^3). Instead, events are
+    /// bucketed by coarse time epoch (time >> kEpochShift): only the epochs
+    /// at/below `near_epoch` live in the sorted `near` heap; later epochs
+    /// sit in unsorted per-epoch `far` buckets (O(1) append). When `near`
+    /// drains, the smallest far bucket is heapified wholesale. Every event
+    /// still pops in strict (time, seq) order -- all times in a far bucket
+    /// exceed every time in `near`, and a heap pops a total order
+    /// structure-independently -- so results are byte-identical to the
+    /// single-heap (and original map) implementation.
+    ///
+    /// Epoch width 2^12 ns (~4 us): narrower than a typical hop's
+    /// latency+serialization delta, so even next-hop arrival events land in
+    /// a *future* bucket (O(1) append) instead of the near heap, and the
+    /// near heap stays a few hundred events (L1/L2-resident, 2-4 levels).
+    /// Measured on the 16^3 uniform1024 random probe: 2^18 left 73% of
+    /// ~4.5k pending events in near (sift_down still 25% of cycles); 2^12
+    /// empties near to the current bucket's worth. Degenerate widths stay
+    /// correct: too-wide collapses to the old single heap, too-narrow costs
+    /// one small heapify per few events.
+    static constexpr unsigned kEpochShift = 12;
+
+    static std::uint64_t epoch_of(const EventTime time) noexcept {
+        return static_cast<std::uint64_t>(time) >> kEpochShift;
+    }
+
+    /// 4-ary min-heap over `near`: half the depth of a binary heap and the
+    /// four children of a node are adjacent in memory, which roughly halves
+    /// the cache-missy element moves per pop.
     static constexpr std::size_t kHeapArity = 4;
     void sift_up(std::size_t i) noexcept;
     void sift_down(std::size_t i) noexcept;
+
+    /// move the smallest far bucket into the (empty) near heap
+    void refill_near() noexcept;
 
     /// current time of the event queue
     EventTime current_time;
@@ -84,10 +115,23 @@ class EventQueue {
     /// next insertion sequence number
     std::uint64_t next_seq;
 
-    /// pending events as a flat binary heap ordered by (time, seq).
-    /// Replaces map<EventTime, EventList>: steady state costs no per-event
-    /// node allocation and no tree rebalance, only amortized vector pushes.
-    std::vector<HeapEvent> heap;
+    /// near events (epoch <= near_epoch) as a flat 4-ary heap ordered by
+    /// (time, seq)
+    std::vector<HeapEvent> near;
+
+    /// highest epoch admitted to `near`; far buckets are strictly above it
+    std::uint64_t near_epoch;
+
+    /// far events, unsorted, keyed by epoch; buckets are non-empty
+    std::unordered_map<std::uint64_t, std::vector<HeapEvent>> far;
+
+    /// total events across all far buckets
+    std::size_t far_count;
+
+    /// epochs present in `far`, smallest first. An epoch is pushed exactly
+    /// once (bucket creation) and popped exactly once (refill), and new
+    /// epochs are always > near_epoch, so entries are unique.
+    std::priority_queue<std::uint64_t, std::vector<std::uint64_t>, std::greater<>> far_epochs;
 };
 
 }  // namespace NetworkAnalytical
