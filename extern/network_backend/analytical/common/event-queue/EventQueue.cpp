@@ -4,11 +4,12 @@ LICENSE file in the root directory of this source tree.
 *******************************************************************************/
 
 #include "common/EventQueue.h"
+#include <algorithm>
 #include <cassert>
 
 using namespace NetworkAnalytical;
 
-EventQueue::EventQueue() noexcept : current_time(0), next_seq(0), near_epoch(0), far_count(0) {}
+EventQueue::EventQueue() noexcept : current_time(0), next_seq(0), cursor(0), near_epoch(0), far_count(0) {}
 
 EventTime EventQueue::get_current_time() const noexcept {
     return current_time;
@@ -16,25 +17,25 @@ EventTime EventQueue::get_current_time() const noexcept {
 
 bool EventQueue::finished() const noexcept {
     // check whether event queue is empty
-    return near.empty() && far_count == 0;
+    return near_empty() && far_count == 0;
 }
 
 void EventQueue::sift_up(std::size_t i) noexcept {
-    const HeapEvent v = near[i];
+    const HeapEvent v = side[i];
     while (i > 0) {
         const std::size_t parent = (i - 1) / kHeapArity;
-        if (!event_before(v, near[parent])) {
+        if (!event_before(v, side[parent])) {
             break;
         }
-        near[i] = near[parent];
+        side[i] = side[parent];
         i = parent;
     }
-    near[i] = v;
+    side[i] = v;
 }
 
 void EventQueue::sift_down(std::size_t i) noexcept {
-    const std::size_t n = near.size();
-    const HeapEvent v = near[i];
+    const std::size_t n = side.size();
+    const HeapEvent v = side[i];
     for (;;) {
         const std::size_t first_child = kHeapArity * i + 1;
         if (first_child >= n) {
@@ -43,21 +44,33 @@ void EventQueue::sift_down(std::size_t i) noexcept {
         std::size_t min_child = first_child;
         const std::size_t end = (first_child + kHeapArity < n) ? first_child + kHeapArity : n;
         for (std::size_t c = first_child + 1; c < end; ++c) {
-            if (event_before(near[c], near[min_child])) {
+            if (event_before(side[c], side[min_child])) {
                 min_child = c;
             }
         }
-        if (!event_before(near[min_child], v)) {
+        if (!event_before(side[min_child], v)) {
             break;
         }
-        near[i] = near[min_child];
+        side[i] = side[min_child];
         i = min_child;
     }
-    near[i] = v;
+    side[i] = v;
+}
+
+void EventQueue::pop_front() noexcept {
+    if (cursor < drain.size() && (side.empty() || event_before(drain[cursor], side.front()))) {
+        ++cursor;
+        return;
+    }
+    side.front() = side.back();
+    side.pop_back();
+    if (!side.empty()) {
+        sift_down(0);
+    }
 }
 
 void EventQueue::refill_near() noexcept {
-    assert(near.empty());
+    assert(near_empty());
     assert(far_count > 0);
 
     // adopt the smallest far bucket wholesale
@@ -65,27 +78,23 @@ void EventQueue::refill_near() noexcept {
     far_epochs.pop();
     const auto it = far.find(e);
     assert(it != far.end() && !it->second.empty());
-    near = std::move(it->second);
+    drain = std::move(it->second);
+    cursor = 0;
     far.erase(it);
-    far_count -= near.size();
+    far_count -= drain.size();
     near_epoch = e;
 
-    // heapify: sift down every internal node, bottom-up. The heap pops a
-    // strict total order, so the pop sequence is independent of this build
-    // order.
-    const std::size_t n = near.size();
-    if (n > 1) {
-        for (std::size_t i = (n - 2) / kHeapArity + 1; i-- > 0;) {
-            sift_down(i);
-        }
-    }
+    // One sort pass sets up cursor consumption for the whole bucket.
+    // (time, seq) is a strict total order (seq unique), so the sorted
+    // sequence -- and thus the pop order -- is deterministic.
+    std::sort(drain.begin(), drain.end(), event_before);
 }
 
 void EventQueue::proceed() noexcept {
     // to proceed, next event should exist
     assert(!finished());
 
-    if (near.empty()) {
+    if (near_empty()) {
         refill_near();
     }
 
@@ -96,26 +105,22 @@ void EventQueue::proceed() noexcept {
     // get seq >= watermark and are left for a subsequent proceed(), just as
     // they used to land in a fresh map entry after the detach.
     // (Same-time events always share the front epoch, so they are all in
-    // `near`: every far event's time strictly exceeds every near time.)
-    const EventTime time = near.front().time;
+    // the near stage: every far event's time strictly exceeds every near
+    // time.)
+    const EventTime time = front().time;
     assert(time >= current_time);
     current_time = time;
     const std::uint64_t watermark = next_seq;
 
-    while (!near.empty() && near.front().time == time && near.front().seq < watermark) {
-        // Pop the root: move the last element into its place and sift down.
-        // seq is unique, so (time, seq) is a strict total order and the pop
-        // sequence is identical for any correct priority-queue structure.
-        const HeapEvent event = near.front();
-        near.front() = near.back();
-        near.pop_back();
-        if (!near.empty()) {
-            sift_down(0);
-            // The next event to fire is now known; its callback argument
+    while (!near_empty() && front().time == time && front().seq < watermark) {
+        const HeapEvent event = front();
+        pop_front();
+        if (!near_empty()) {
+            // The next event to fire is known; its callback argument
             // (typically a Chunk or handler struct, cold after thousands of
             // intervening events) is prefetched behind the current callback's
             // execution. Semantics-free.
-            __builtin_prefetch(near.front().callback_arg);
+            __builtin_prefetch(front().callback_arg);
         }
         (*event.callback)(event.callback_arg);
     }
@@ -130,8 +135,8 @@ void EventQueue::schedule_event(const EventTime event_time,
 
     const std::uint64_t e = epoch_of(event_time);
     if (e <= near_epoch) {
-        near.push_back({event_time, next_seq++, callback, callback_arg});
-        sift_up(near.size() - 1);
+        side.push_back({event_time, next_seq++, callback, callback_arg});
+        sift_up(side.size() - 1);
         return;
     }
 

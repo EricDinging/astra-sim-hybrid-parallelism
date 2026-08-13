@@ -99,15 +99,31 @@ class EventQueue {
         return static_cast<std::uint64_t>(time) >> kEpochShift;
     }
 
-    /// 4-ary min-heap over `near`: half the depth of a binary heap and the
+    /// 4-ary min-heap over `side`: half the depth of a binary heap and the
     /// four children of a node are adjacent in memory, which roughly halves
     /// the cache-missy element moves per pop.
     static constexpr std::size_t kHeapArity = 4;
     void sift_up(std::size_t i) noexcept;
     void sift_down(std::size_t i) noexcept;
 
-    /// move the smallest far bucket into the (empty) near heap
+    /// move the smallest far bucket into the (empty) near stage
     void refill_near() noexcept;
+
+    /// near-stage emptiness (drain cursor exhausted and side heap empty)
+    [[nodiscard]] bool near_empty() const noexcept {
+        return cursor == drain.size() && side.empty();
+    }
+
+    /// smallest pending near event (min of the two stage heads)
+    [[nodiscard]] const HeapEvent& front() const noexcept {
+        if (cursor < drain.size() && (side.empty() || event_before(drain[cursor], side.front()))) {
+            return drain[cursor];
+        }
+        return side.front();
+    }
+
+    /// remove front() from its stage
+    void pop_front() noexcept;
 
     /// current time of the event queue
     EventTime current_time;
@@ -115,9 +131,18 @@ class EventQueue {
     /// next insertion sequence number
     std::uint64_t next_seq;
 
-    /// near events (epoch <= near_epoch) as a flat 4-ary heap ordered by
-    /// (time, seq)
-    std::vector<HeapEvent> near;
+    /// Near stage, part 1: the adopted bucket, sorted ascending by
+    /// (time, seq) once at refill and consumed front-to-back -- a pop is a
+    /// cursor increment instead of a heap sift (one sort pass per bucket
+    /// replaces a cache-missy sift per event).
+    std::vector<HeapEvent> drain;
+    std::size_t cursor;
+
+    /// Near stage, part 2: events scheduled INTO the near window after the
+    /// bucket was sorted (same-tick watermark deferrals and next-hop
+    /// arrivals landing a few hundred ns out). Small 4-ary min-heap;
+    /// front() merges the two stages, preserving the exact total order.
+    std::vector<HeapEvent> side;
 
     /// highest epoch admitted to `near`; far buckets are strictly above it
     std::uint64_t near_epoch;
