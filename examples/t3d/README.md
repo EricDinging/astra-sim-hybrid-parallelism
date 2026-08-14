@@ -70,7 +70,7 @@ For quick dev tests use short traces: `N_JOBS=20 ./reproduce.py gen <exp>`.
 
 ## Experiments
 
-Six load sweeps over Poisson arrivals, n=65000 jobs, seed 0: admission
+Six load sweeps over Poisson arrivals, n=60000 jobs, seed 0: admission
 (easy/swf/fifo) × job-size distribution (Pareto α=0.5 capped at 512/256/128,
 or uniform capped at 512). See `EXPERIMENTS` in `scripts/sweep.py`.
 

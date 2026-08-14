@@ -68,9 +68,10 @@ def build_binary(isa_floor: str) -> None:
 
 
 # trace length; override for quick dev tests, e.g. N_JOBS=20 ./reproduce.py gen ...
-# 65k (down from 100k): prefix analysis on the 100k sweeps showed the
-# JCT-vs-load trend (knee + 8x crossing) is stable from ~50k jobs on.
-N_JOBS = int(os.environ.get("N_JOBS", 65000))
+# 60k (down from 65k, originally 100k): prefix analysis on the 65k sweeps
+# showed stable combos converge by ~50k (<1% dev) and saturated combos scale
+# linearly with trace length at any length; 60k keeps margin at the knees.
+N_JOBS = int(os.environ.get("N_JOBS", 60000))
 # progress-poll (and work-steal) interval while launch blocks; override for
 # dev, e.g. POLL_SECS=10
 POLL_SECS = int(os.environ.get("POLL_SECS", 900))
