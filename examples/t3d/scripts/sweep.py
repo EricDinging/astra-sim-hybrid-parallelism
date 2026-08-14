@@ -381,20 +381,27 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
                 )
         cells_by_exp[exp] = cs
 
-    # Probe the workers first: the binary is compiled here but runs on them,
-    # so their common ISA floor (not this machine's) picks the -a flag. The
-    # local machine always runs something too (placeability probes, or the
-    # whole sweep when workers.txt is empty), so it caps the floor as well.
+    # Probe the workers first: binaries are compiled here but run on them,
+    # so each host's own ISA floor picks its -a flag -- haswell hosts get
+    # the haswell build, the rest the generic one. The local machine always
+    # runs something too (placeability probes, or the whole sweep when
+    # workers.txt is empty), so its floor is always among the builds and is
+    # built last, leaving the in-tree binary locally runnable.
     cap = cluster.capacity(cluster.load(root))
     ws = launcher.workspace(cap)
-    host_slots, isa_floor = launcher.probe_all(
+    host_slots, host_floors = launcher.probe_all(
         launcher.parse_workers(workers_file or os.path.join(root, "workers.txt")),
         launcher.mem_per_run_gb(cap),
     )
-    if isa_floor != "generic" and not launcher.probe(launcher.LOCAL)[2]:
-        print("NOTE local machine: no AVX2/BMI2/FMA -> generic (portable) build")
-        isa_floor = "generic"
-    build_binary(isa_floor)
+    local_floor = "haswell" if launcher.probe(launcher.LOCAL)[2] else "generic"
+    host_floors[launcher.LOCAL] = local_floor
+    stage = tempfile.mkdtemp(prefix=f"cluster{cap}_deploy_")
+    floors = set(host_floors[h] for h in host_slots) | {local_floor}
+    binaries: dict[str, str] = {}
+    for floor in sorted(floors - {local_floor}) + [local_floor]:
+        build_binary(floor)
+        os.makedirs(os.path.join(stage, floor))
+        binaries[floor] = shutil.copy2(ASTRA_SIM_BIN, os.path.join(stage, floor))
 
     for exp in [e for e in exps if experiments(root)[e] is None]:
         placeability.run(exp, root, ASTRA_SIM_BIN)
@@ -420,14 +427,12 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
             os.path.join(root, "runs", exp, "assignments.csv"), per_exp[exp]
         )
 
-    stage = tempfile.mkdtemp(prefix=f"cluster{cap}_deploy_")
-
     def deploy_and_start(host: str) -> None:
         cells = per_host[host]  # queue-entry names give LPT order, no sort
         launcher.deploy(
             host,
             root,
-            ASTRA_SIM_BIN,
+            binaries[host_floors[host]],
             stage,
             [f"runs/{e}/{c}/arrivals.csv" for e, c, _ in cells],
             ws,

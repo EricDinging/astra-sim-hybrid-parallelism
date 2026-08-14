@@ -105,18 +105,20 @@ def slot_count(cpus: int, mem_gb: int, mem_per_run: int) -> int:
     return max(0, min(cpus - 2, mem_gb * MEM_TARGET_PCT // 100 // mem_per_run))
 
 
-def probe_all(workers: list[str], mem_per_run: int) -> tuple[dict[str, int], str]:
-    """(host -> slots, isa_floor) for every usable worker ([] probes the
-    local machine). Hosts that fail the probe or have zero slots are dropped
-    with a warning; all hosts unusable is an error.
+def probe_all(
+    workers: list[str], mem_per_run: int
+) -> tuple[dict[str, int], dict[str, str]]:
+    """(host -> slots, host -> isa_floor) for every usable worker ([] probes
+    the local machine). Hosts that fail the probe or have zero slots are
+    dropped with a warning; all hosts unusable is an error.
 
-    isa_floor is the -a value the binary must be built with to run on every
-    usable host: "haswell" when all of them have AVX2/BMI2/FMA, else
-    "generic" (one binary is deployed fleet-wide, so one laggard host
-    lowers the floor for all)."""
+    A host's isa_floor is the -a value a binary must be built with to run on
+    it: "haswell" when it has AVX2/BMI2/FMA, else "generic". Each host gets
+    a binary built for its own floor, so a laggard host no longer lowers the
+    floor for the rest of the fleet."""
     hosts = workers or [LOCAL]
     usable: dict[str, int] = {}
-    floor = "haswell"
+    floors: dict[str, str] = {}
     for h in hosts:
         try:
             cpus, mem_gb, has_isa = probe(h)
@@ -129,12 +131,12 @@ def probe_all(workers: list[str], mem_per_run: int) -> tuple[dict[str, int], str
             continue
         if not has_isa:
             print(f"NOTE {h}: no AVX2/BMI2/FMA -> generic (portable) build")
-            floor = "generic"
         usable[h] = n
+        floors[h] = "haswell" if has_isa else "generic"
         print(f"probe {h}: {cpus} cpus, {mem_gb} GB avail -> {n} slots")
     if not usable:
         raise SystemExit("no usable workers (all probes failed or 0 slots)")
-    return usable, floor
+    return usable, floors
 
 
 def plan_assignments(
