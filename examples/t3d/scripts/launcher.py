@@ -84,12 +84,13 @@ def mem_per_run_gb(capacity: int) -> int:
     if capacity == 512:
         return 3
     if capacity == 4096:
-        # measured 2026-07-23: max VmHWM 2.65 GiB over 284 live 16x16x16 sims
-        # (all 7 policies, loads up to 1.00), flat across loads and
-        # plateau-shaped over time -- RSS tracks in-flight work (capacity),
-        # not queue depth or trace progress. 4 GiB = observed worst +50%;
-        # c6420-class hosts are CPU-bound at this value anyway.
-        return 4
+        # measured 2026-08-13: ~7.3 GiB RSS per live 16x16x16 sim (62 sims on
+        # a c6320, all policies) -- up from the 2.65 GiB VmHWM measured
+        # 2026-07-23, before the per-hop Link cache (ca2c76a) and two-level
+        # calendar queue (13def2a) added per-route/per-queue state. 4 GiB
+        # planning overcommitted 376 GB hosts by ~80 GB and swap-thrashed
+        # half the fleet; 8 GiB makes them memory-bound at ~39 slots.
+        return 8
     return max(4, 24 * capacity // 4096)
 
 
