@@ -218,6 +218,12 @@ def main() -> int:
                 f"--jobs-dir={jobs}",
                 f"--placement-policy={placement}",
                 f"--admission-policy={adm}",
+                # The DOR route cache's 100 GiB default "safety bound" is no
+                # bound at 39 sims/host: comm pairs accrete over the 60k-job
+                # trace and RSS grows for days (9.4G mean / 14.9G max at 35h,
+                # swap-thrashing the fleet). 4 GiB caps the cache within the
+                # launcher's 8 GiB envelope; eviction is a cheap full drop.
+                "--route-cache-budget-gb=4",
                 *extra,
             ],
             stdout=subprocess.DEVNULL,
