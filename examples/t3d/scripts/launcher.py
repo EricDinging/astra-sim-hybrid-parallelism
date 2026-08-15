@@ -75,14 +75,16 @@ def probe(host: str) -> tuple[int, int, bool]:
 MEM_TARGET_PCT = 85
 
 
-def mem_per_run_gb(capacity: int) -> int:
-    """Per-sim memory envelope for slot packing. ponytail: 3 GB flat at
-    8x8x8 -- an average over the fleet-measured mix (stable cells <=1 GB,
-    supercritical high-load scatter cells ~10 GB); rs630-class hosts go
-    cpu-bound before this average overfills them. Other capacities keep the
-    legacy envelope (24 GB at 4096 NPUs, linear, 4 GB floor)."""
+def mem_per_run_gb(capacity: int) -> float:
+    """Per-sim memory envelope for slot packing. 6.5 GB at 8x8x8: the 60k-job
+    traces cost ~6 GB per sim as a flat, load-independent floor (measured
+    2026-08-15 -- 440 live fleet sims 5.2-5.9 GiB VmHWM plus six local
+    load-1.00 probes plateauing at 5.8-6.0 GiB within 5 min), so an
+    average-based envelope is wrong: the old 3 GB flat average packed 22
+    slots on 125 GB c6525 hosts and swap-thrashed all 21. Other capacities
+    keep the legacy envelope (24 GB at 4096 NPUs, linear, 4 GB floor)."""
     if capacity == 512:
-        return 3
+        return 6.5
     if capacity == 4096:
         # measured 2026-08-13: ~7.3 GiB RSS per live 16x16x16 sim (62 sims on
         # a c6320, all policies) -- up from the 2.65 GiB VmHWM measured
@@ -99,11 +101,11 @@ def workspace(capacity: int) -> str:
     return f"/workspace/cluster{capacity}"
 
 
-def slot_count(cpus: int, mem_gb: int, mem_per_run: int) -> int:
+def slot_count(cpus: int, mem_gb: int, mem_per_run: float) -> int:
     """Concurrent sims a host can take: cpu-bound minus headroom, and
     memory-bound at mem_per_run GB per sim against MEM_TARGET_PCT of the
     available memory."""
-    return max(0, min(cpus - 2, mem_gb * MEM_TARGET_PCT // 100 // mem_per_run))
+    return max(0, min(cpus - 2, int(mem_gb * MEM_TARGET_PCT / 100 / mem_per_run)))
 
 
 def probe_all(

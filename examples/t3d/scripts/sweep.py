@@ -100,6 +100,9 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     (easy/swf/fifo); it only matters at launch time, so the three
     *-pareto<half>-* experiments generate identical (seed-pinned) arrivals.
 
+    The small1to32/large256to512 experiments are uniform-size traces confined
+    to a fixed absolute size band (small-job-only and large-job-only).
+
     The fail<pct> experiments are easy/swf/fifo-pareto<quarter> twins with a fraction
     of NPUs marked permanently failed (run_combo.py turns the pct into the
     binary's --failure-prob, rounding the failed-node count up).
@@ -143,6 +146,8 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         for adm in ("easy", "swf", "fifo")
     }
     uniform = ["--size-dist", "uniform", "--size-max", quarter]
+    small = ["--size-dist", "uniform", "--size-min", "1", "--size-max", "32"]
+    large = ["--size-dist", "uniform", "--size-min", "256", "--size-max", "512"]
     return {
         f"easy-pareto{half}-load-sweep": [*pareto, half],
         f"swf-pareto{half}-load-sweep": [*pareto, half],
@@ -163,6 +168,14 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"easy-uniform{quarter}-load-sweep": uniform,
         f"swf-uniform{quarter}-load-sweep": uniform,
         f"fifo-uniform{quarter}-load-sweep": uniform,
+        # small/large-job-only traces: sizes uniform over the distinct legal
+        # sizes in the range, shape uniform among legal shapes of that size
+        "easy-small1to32-load-sweep": small,
+        "swf-small1to32-load-sweep": small,
+        "fifo-small1to32-load-sweep": small,
+        "easy-large256to512-load-sweep": large,
+        "swf-large256to512-load-sweep": large,
+        "fifo-large256to512-load-sweep": large,
         # reconfigurability sweeps: same pareto<quarter> arrivals, but the
         # placements are rfold at every block granularity (see placements())
         f"easy-pareto{quarter}-blocksize-load-sweep": [*pareto, quarter],
