@@ -78,18 +78,32 @@ def legal_shapes(
     size_min: int | None = None,
     size_max: int | None = None,
     dims: frozenset[int] | None = None,
+    nd: int | None = None,
+    base: list[tuple[int, int, int]] | None = None,
 ) -> list[tuple[int, int, int]]:
     """Legal shapes for the model, in all_legal_shapes order (sorted by
     (size, shape)), optionally restricted to shapes whose size is in
-    [size_min, size_max] and whose every dimension is in `dims`.
+    [size_min, size_max], whose every dimension is in `dims`, and whose
+    dimensionality (ndim) is exactly `nd`.
 
     `dims` models trace-characteristic experiments that carve a sub-lattice out
-    of the geometric legal set (e.g. dims={1,4,8} = block-aligned shapes). It
-    never adds shapes outside the tracelib, so the existing trace library is
-    reused verbatim."""
+    of the geometric legal set (e.g. dims={1,4,8} = block-aligned shapes); `nd`
+    carves the 1D/2D/3D-only sub-lattices. Neither adds shapes outside the
+    tracelib, so the existing trace library is reused verbatim.
+
+    `base` replaces the default all_legal_shapes universe with an explicit
+    shape list (the donly sweeps pass the rfold-placeable expanded universe,
+    see placeability.rfold_placeable_file); it is re-sorted to the canonical
+    (size, shape) order, and the tracelib must cover it (prereq does)."""
+    if base is None:
+        base = shapes.all_legal_shapes(model)
+    else:
+        base = sorted(base, key=lambda t: (t[0] * t[1] * t[2], t))
     out: list[tuple[int, int, int]] = []
-    for s in shapes.all_legal_shapes(model):
+    for s in base:
         if dims is not None and not all(d in dims for d in s):
+            continue
+        if nd is not None and ndim(s) != nd:
             continue
         size = s[0] * s[1] * s[2]
         if size_min is not None and size < size_min:
@@ -218,13 +232,17 @@ def build_job_sequence(
     size_dist: str = "pareto",
     dims: frozenset[int] | None = None,
     snap: list[tuple[int, int, int]] | None = None,
+    nd: int | None = None,
+    base: list[tuple[int, int, int]] | None = None,
 ) -> list[tuple[int, tuple[int, int, int], int]]:
     """Draw n jobs as (size, shape, num_iterations).
 
     Size is drawn over the sorted DISTINCT-SIZE INDEX: `size_dist="pareto"`
     (truncated Pareto, small-size-favoring, exponent alpha) or "uniform" (each
     distinct legal size equally likely). Shape ~ uniform among the legal shapes
-    of that size (restricted to `dims` when given). Duration ~ clamped log-normal
+    of that size (restricted to `dims`/`nd` when given; the size index itself
+    runs over the restricted set, so e.g. nd=3 draws only sizes that have a 3D
+    shape). Duration ~ clamped log-normal
     over [1, max_iters] (sample_duration, params iter_median / iter_sigma).
 
     `snap` rounds each drawn shape onto a menu of curated target shapes AFTER
@@ -237,7 +255,7 @@ def build_job_sequence(
     Both index draws consume exactly one rng call, and shapes-of-size are taken
     in all_legal_shapes order, so the default (pareto, dims=None, snap=None)
     path is byte-identical to the original two-line sampler."""
-    allowed = legal_shapes(model, size_min, size_max, dims)
+    allowed = legal_shapes(model, size_min, size_max, dims, nd, base)
     sizes = sorted({a * b * c for (a, b, c) in allowed})
     m = len(sizes)
     by_size: dict[int, list[tuple[int, int, int]]] = {}
@@ -392,6 +410,21 @@ def main(argv: list[str] | None = None) -> int:
         "list, e.g. '1,4,8' for block-aligned shapes (default: all legal dims)",
     )
     ap.add_argument(
+        "--ndim",
+        type=int,
+        choices=(1, 2, 3),
+        default=None,
+        help="restrict shapes to exactly this dimensionality (1x1x1 counts "
+        "as 1D); the size distribution runs over the restricted size set",
+    )
+    ap.add_argument(
+        "--shapes-file",
+        default=None,
+        help="sample from exactly the shapes listed in this file (one AxBxC "
+        "per line, e.g. the rfold-placeable expanded universe written by "
+        "placeability.rfold_placeable_file) instead of all legal shapes",
+    )
+    ap.add_argument(
         "--snap-shapes",
         default=None,
         help="round each drawn shape onto the nearest target in this comma "
@@ -446,6 +479,11 @@ def main(argv: list[str] | None = None) -> int:
         else None
     )
 
+    base = None
+    if args.shapes_file:
+        with open(args.shapes_file) as f:
+            base = [shapes.parse_shape(ln.strip()) for ln in f if ln.strip()]
+
     rng = random.Random(args.seed)
     jobs = build_job_sequence(
         rng,
@@ -460,6 +498,8 @@ def main(argv: list[str] | None = None) -> int:
         args.size_dist,
         dims,
         snap,
+        args.ndim,
+        base,
     )
     svc_table = load_service_times(args.svc) if args.svc else None
     svc_of = make_svc_fn(svc_table, args.uniform_svc_ns)

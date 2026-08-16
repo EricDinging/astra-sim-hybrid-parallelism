@@ -123,6 +123,54 @@ def probe(
     return f"error rc={p.returncode}"
 
 
+def rfold_placeable_file(root: str, binary: str, cap: int) -> str:
+    """Probe every expanded-universe shape (shapes.expanded_legal_shapes, cap
+    = the donly sweeps' size cap) for placeability under rfold at its DEFAULT
+    block size on an idle torus, and cache the placed subset one AxBxC per
+    line in <root>/rfold_placeable<cap>.txt (delete the file to re-probe).
+
+    That file is the <nd>donly sampling universe: every arm those sweeps run
+    (rfold, scatter policies, ideal) can place 100% of a trace drawn from it,
+    so JCT is compared on identical fully-placed workloads. Probes need no
+    traces (see probe())."""
+    import shapes as shp
+
+    path = os.path.join(root, f"rfold_placeable{cap}.txt")
+    if os.path.isfile(path):
+        print(f"skip  {path} (exists; delete it to re-probe)")
+        return path
+    if not os.path.isfile(binary):
+        raise SystemExit(f"binary not found: {binary} (run build.sh first)")
+    dims = cluster.load(root)
+    dims_csv = ",".join(str(d) for d in dims)
+    cfg = os.path.join(root, "configs")
+    cands = shp.expanded_legal_shapes("bw", cap)
+    print(f"probing rfold(default-block) placeability of {len(cands)} shapes ...")
+    with concurrent.futures.ThreadPoolExecutor(os.cpu_count()) as ex:
+        outcomes = list(
+            ex.map(
+                lambda s: probe(
+                    binary, cfg, dims_csv, s, ["--placement-policy=rfold"], []
+                ),
+                cands,
+            )
+        )
+    placed = [s for s, o in zip(cands, outcomes) if o == "placed"]
+    odd = {o for o in outcomes if o not in ("placed", "dropped")}
+    if odd:
+        raise SystemExit(f"unexpected probe outcomes {odd} -- refusing to cache")
+    with open(path, "w") as f:
+        for s in placed:
+            f.write(f"{s[0]}x{s[1]}x{s[2]}\n")
+    by_nd_placed = {d: sum(1 for s in placed if ndim(s) == d) for d in (1, 2, 3)}
+    by_nd_all = {d: sum(1 for s in cands if ndim(s) == d) for d in (1, 2, 3)}
+    print(
+        f"wrote {path}: {len(placed)}/{len(cands)} placeable "
+        + " ".join(f"{d}D={by_nd_placed[d]}/{by_nd_all[d]}" for d in (1, 2, 3))
+    )
+    return path
+
+
 def run(exp: str, root: str, binary: str) -> None:
     """The whole census for one experiment, locally in parallel. Idempotent:
     a complete placeability.csv is not recomputed."""

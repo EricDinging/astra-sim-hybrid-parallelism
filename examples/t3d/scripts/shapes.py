@@ -78,6 +78,27 @@ def shapes_for_size(model: str, size: int) -> list[tuple[int, int, int]]:
     return [s for s in all_legal_shapes(model) if s[0] * s[1] * s[2] == size]
 
 
+# stage's --num_stacks: pp beyond it is rejected. Probed 2026-08-15 with
+# stage-in-docker: pp=32 fails; dp and tp are accepted at least up to 128.
+PP_MAX = 16
+
+
+def expanded_legal_shapes(model: str, size_cap: int) -> list[tuple[int, int, int]]:
+    """The shape universe when strict torus containment is NOT required
+    (i.e. firstfit is out of the placement mix and folding/scatter policies
+    place the ranks): dims no longer need to fit an axis, so dp and tp range
+    over every even-or-1 value up to `size_cap`, pp over even-or-1 up to
+    PP_MAX, with the product capped at `size_cap`. Same (size, shape) sort
+    as all_legal_shapes. A superset of the torus-fitting universe up to
+    size_cap (torus pp <= axis <= PP_MAX on the clusters we run)."""
+    _check_model(model)
+    dt = (1, *range(2, size_cap + 1, 2))
+    pp = (1, *range(2, min(size_cap, PP_MAX) + 1, 2))
+    out = [(a, b, c) for a in dt for b in dt for c in pp if a * b * c <= size_cap]
+    out.sort(key=lambda t: (t[0] * t[1] * t[2], t))
+    return out
+
+
 def fmt_shape(shape: tuple[int, int, int]) -> str:
     """(2, 4, 8) -> '2x4x8'."""
     return "x".join(str(d) for d in shape)

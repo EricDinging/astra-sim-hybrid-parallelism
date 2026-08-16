@@ -109,10 +109,14 @@ def select_shapes(
     model: str,
     only: str | None,
     smoke: bool,
+    extra_file: str | None = None,
 ) -> list[tuple[int, int, int]]:
     """Return the list of shapes requested by the CLI arguments.
 
-    Priority: ``--smoke`` > ``--only`` > full set.
+    Priority: ``--smoke`` > ``--only`` > full set (unioned with the shapes
+    listed one-AxBxC-per-line in ``extra_file`` when given -- the donly
+    sweeps' rfold-placeable expanded universe, which need not fit the torus
+    and so bypasses is_legal).
     """
     if smoke:
         return [(2, 2, 2)]
@@ -128,7 +132,12 @@ def select_shapes(
                 )
             selected.append(shape)
         return selected
-    return shapes.all_legal_shapes(model)
+    full = shapes.all_legal_shapes(model)
+    if extra_file:
+        with open(extra_file) as f:
+            listed = {shapes.parse_shape(ln.strip()) for ln in f if ln.strip()}
+        full = sorted(set(full) | listed, key=lambda t: (t[0] * t[1] * t[2], t))
+    return full
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +220,12 @@ def main(argv: list[str] | None = None) -> int:
         "--only", default=None, help="comma-separated shapes, e.g. 2x4x8,16x16x16"
     )
     ap.add_argument(
+        "--extra-shapes-file",
+        default=None,
+        help="also build the shapes listed in this file (one AxBxC per line; "
+        "may include non-torus-fitting shapes)",
+    )
+    ap.add_argument(
         "--smoke", action="store_true", help="build only 2x2x2 as a smoke test"
     )
     ap.add_argument(
@@ -237,7 +252,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     docker_argv = shlex.split(args.docker)
     out_dir = os.path.abspath(args.out)
-    requested = select_shapes(args.model, args.only, args.smoke)
+    requested = select_shapes(args.model, args.only, args.smoke, args.extra_shapes_file)
     todo = shapes_to_build(out_dir, args.model, requested)
 
     print(

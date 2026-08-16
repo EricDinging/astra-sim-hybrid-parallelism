@@ -101,7 +101,15 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     *-pareto<half>-* experiments generate identical (seed-pinned) arrivals.
 
     The small1to32/large256to512 experiments are uniform-size traces confined
-    to a fixed absolute size band (small-job-only and large-job-only).
+    to a fixed absolute size band (small-job-only and large-job-only). The
+    <nd>donly experiments keep the pareto<quarter> size draw but admit only
+    shapes of exactly that dimensionality (gen_arrivals --ndim), drawn from
+    the rfold-placeable slice of the EXPANDED shape universe (dims beyond a
+    torus axis, up to the quarter cap; pp capped at 16 by the stage model;
+    filtered by the idle-torus probe placeability.rfold_placeable_file so
+    every remaining arm places 100% of the trace and JCT is compared on
+    fully-placed workloads). They run without the firstfit placement arm,
+    whose strict containment cannot place those shapes (see placements()).
 
     The fail<pct> experiments are easy/swf/fifo-pareto<quarter> twins with a fraction
     of NPUs marked permanently failed (run_combo.py turns the pct into the
@@ -148,6 +156,17 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     uniform = ["--size-dist", "uniform", "--size-max", quarter]
     small = ["--size-dist", "uniform", "--size-min", "1", "--size-max", "32"]
     large = ["--size-dist", "uniform", "--size-min", "256", "--size-max", "512"]
+    ndonly = {
+        nd: [
+            *pareto,
+            quarter,
+            "--ndim",
+            str(nd),
+            "--shapes-file",
+            os.path.join(root, f"rfold_placeable{quarter}.txt"),
+        ]
+        for nd in (1, 2, 3)
+    }
     return {
         f"easy-pareto{half}-load-sweep": [*pareto, half],
         f"swf-pareto{half}-load-sweep": [*pareto, half],
@@ -176,6 +195,14 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         "easy-large256to512-load-sweep": large,
         "swf-large256to512-load-sweep": large,
         "fifo-large256to512-load-sweep": large,
+        # dimensionality-restricted traces: same truncated-Pareto size draw
+        # as the pareto<quarter> family, but over the sizes that have a
+        # 1D/2D/3D shape, then shape uniform within that dimensionality
+        **{
+            f"{adm}-{nd}donly-load-sweep": ndonly[nd]
+            for nd in (1, 2, 3)
+            for adm in ("easy", "swf", "fifo")
+        },
         # reconfigurability sweeps: same pareto<quarter> arrivals, but the
         # placements are rfold at every block granularity (see placements())
         f"easy-pareto{quarter}-blocksize-load-sweep": [*pareto, quarter],
@@ -190,7 +217,11 @@ def placements(exp: str, root: str = ROOT) -> list[str]:
     """The placement columns of an experiment. The blocksize experiment sweeps
     rfold's block granularity -- rfoldb<N> = rfold with --block-size NxNxN
     (see run_combo.policy_settings), doubling from 1x1x1 up to the whole
-    torus (folding-only) -- against the firstfit and ideal anchors."""
+    torus (folding-only) -- against the firstfit and ideal anchors. The
+    <nd>donly experiments drop firstfit: their expanded shape universe
+    contains shapes strict containment cannot place."""
+    if "donly-" in exp:
+        return [p for p in PLACEMENTS if p != "firstfit"]
     if "-blocksize-" not in exp:
         return PLACEMENTS
     dims = cluster.load(root)
@@ -285,8 +316,22 @@ def prereq(root: str = ROOT, jobs: str | None = None) -> None:
     shapes.init(dims)
     sync_network_yml(root, cluster.capacity(dims))
     build_schedules(root, dims)
+    # the <nd>donly experiments sample the rfold-placeable slice of the
+    # expanded (non-torus-fitting) universe at the quarter cap: probe it
+    # with the actual binary FIRST (no traces needed), then build/measure
+    # only the union of the standard universe and that placeable slice
+    cap = cluster.capacity(dims) // 4
+    build_binary("auto")
+    placeable = placeability.rfold_placeable_file(root, ASTRA_SIM_BIN, cap)
     rc = gen_traces.main(
-        ["--out", os.path.join(root, "tracelib"), "--cluster-dims", cluster.fmt(dims)]
+        [
+            "--out",
+            os.path.join(root, "tracelib"),
+            "--cluster-dims",
+            cluster.fmt(dims),
+            "--extra-shapes-file",
+            placeable,
+        ]
         + (["--jobs", jobs] if jobs else [])
     )
     if rc:
@@ -294,7 +339,9 @@ def prereq(root: str = ROOT, jobs: str | None = None) -> None:
     svc_table = os.path.join(root, "service_times.csv")
     # a table only counts as present when every legal shape is in it --
     # a partially failed measure (e.g. OOM on the big shapes) is re-run
-    expected = len(shapes.all_legal_shapes("bw"))
+    with open(placeable) as f:
+        listed = {shapes.parse_shape(ln.strip()) for ln in f if ln.strip()}
+    expected = len(set(shapes.all_legal_shapes("bw")) | listed)
     have = sum(1 for _ in open(svc_table)) - 1 if os.path.isfile(svc_table) else 0
     if have == expected:
         print(f"skip  {svc_table} ({have} shapes; delete it to re-measure)")
@@ -309,6 +356,8 @@ def svc(root: str = ROOT) -> None:
     Builds the reconfigurable binary if needed (runs locally, so the local
     machine's ISA is the right floor); needs the tracelib."""
     build_binary("auto")
+    dims = cluster.load(root)
+    placeable = os.path.join(root, f"rfold_placeable{cluster.capacity(dims) // 4}.txt")
     rc = measure_svc.main(
         [
             "--traces",
@@ -320,8 +369,11 @@ def svc(root: str = ROOT) -> None:
             "--out",
             os.path.join(root, "service_times.csv"),
             "--cluster-dims",
-            cluster.fmt(cluster.load(root)),
+            cluster.fmt(dims),
         ]
+        # the donly universe file exists once prereq has probed it; a bare
+        # svc() call before that measures the standard universe only
+        + (["--extra-shapes-file", placeable] if os.path.isfile(placeable) else [])
     )
     if rc:
         raise SystemExit(rc)

@@ -45,13 +45,21 @@ def legal_shapes_with_traces(
     model: str,
     traces: str,
     only: list[str] | None = None,
+    extra_file: str | None = None,
 ) -> list[tuple[int, int, int]]:
-    """Legal shapes (optionally restricted to `only`) that have a trace present."""
-    candidates = (
-        [shapes.parse_shape(s) for s in only]
-        if only
-        else shapes.all_legal_shapes(model)
-    )
+    """Legal shapes (optionally restricted to `only`) that have a trace present.
+    `extra_file` unions in the shapes it lists, one AxBxC per line (mirrors
+    gen_traces --extra-shapes-file)."""
+    if only:
+        candidates = [shapes.parse_shape(s) for s in only]
+    else:
+        candidates = shapes.all_legal_shapes(model)
+        if extra_file:
+            with open(extra_file) as f:
+                listed = {shapes.parse_shape(ln.strip()) for ln in f if ln.strip()}
+            candidates = sorted(
+                set(candidates) | listed, key=lambda t: (t[0] * t[1] * t[2], t)
+            )
     return [s for s in candidates if has_trace(traces, model, s)]
 
 
@@ -79,6 +87,11 @@ def write_single_job_dir(
         os.unlink(link)
     os.symlink(shape_trace_dir(traces, model, shape), link)
     return size
+
+
+def npus_dims(npus: str) -> tuple[int, ...]:
+    """The torus dims behind an '--npus-per-dim=A,B,C' value."""
+    return tuple(int(x) for x in npus.split(","))
 
 
 def run_one(
@@ -110,7 +123,16 @@ def run_one(
             f"--npus-per-dim={npus}",
             f"--job-arrival-file={os.path.join(d, 'arrivals.csv')}",
             f"--jobs-dir={os.path.join(d, 'jobs')}",
-            "--placement-policy=firstfit",
+            # firstfit needs the shape to fit the torus; expanded-universe
+            # shapes (dims beyond an axis) are placed by rfold at its default
+            # block instead -- exactly the sweep arm they run under, and the
+            # donly universe is pre-filtered to what it can place
+            # (placeability.rfold_placeable_file)
+            *(
+                ["--placement-policy=firstfit"]
+                if all(d <= n for d, n in zip(shape, npus_dims(npus)))
+                else ["--placement-policy=rfold"]
+            ),
             "--admission-policy=fifo",
         ]
         try:
@@ -162,6 +184,12 @@ def main(argv: list[str] | None = None) -> int:
         "--only", default=None, help="comma-separated shapes to restrict to"
     )
     ap.add_argument(
+        "--extra-shapes-file",
+        default=None,
+        help="also measure the shapes listed in this file (one AxBxC per "
+        "line; mirrors gen_traces --extra-shapes-file)",
+    )
+    ap.add_argument(
         "--cluster-dims",
         default=None,
         help="torus dims AxBxC (default: cluster.json in the example root)",
@@ -185,7 +213,9 @@ def main(argv: list[str] | None = None) -> int:
         resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
 
     only = args.only.split(",") if args.only else None
-    todo = legal_shapes_with_traces(args.model, args.traces, only)
+    todo = legal_shapes_with_traces(
+        args.model, args.traces, only, args.extra_shapes_file
+    )
     if not todo:
         ap.error("no legal shapes with traces found under --traces")
 
