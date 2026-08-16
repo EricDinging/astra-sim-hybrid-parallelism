@@ -457,7 +457,7 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
     ws = launcher.workspace(cap)
     host_slots, host_floors = launcher.probe_all(
         launcher.parse_workers(workers_file or os.path.join(root, "workers.txt")),
-        launcher.mem_per_run_gb(cap),
+        launcher.mem_per_run_gb(cap, exps),
     )
     local_floor = "haswell" if launcher.probe(launcher.LOCAL)[2] else "generic"
     host_floors[launcher.LOCAL] = local_floor
@@ -602,7 +602,7 @@ def monitor(exps: list[str], root: str = ROOT) -> None:
     )
     cap = cluster.capacity(cluster.load(root))
     ws = launcher.workspace(cap)
-    host_slots = launcher.probe_slots(hosts, launcher.mem_per_run_gb(cap))
+    host_slots = launcher.probe_slots(hosts, launcher.mem_per_run_gb(cap, exps))
     while True:
         with concurrent.futures.ThreadPoolExecutor(max(1, len(hosts))) as ex:
             snaps = dict(

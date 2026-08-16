@@ -22,6 +22,7 @@ import concurrent.futures
 import csv
 import os
 import subprocess
+from collections.abc import Sequence
 
 import cluster
 
@@ -75,24 +76,36 @@ def probe(host: str) -> tuple[int, int, bool]:
 MEM_TARGET_PCT = 85
 
 
-def mem_per_run_gb(capacity: int) -> float:
-    """Per-sim memory envelope for slot packing. 6.5 GB at 8x8x8: the 60k-job
-    traces cost ~6 GB per sim as a flat, load-independent floor (measured
-    2026-08-15 -- 440 live fleet sims 5.2-5.9 GiB VmHWM plus six local
-    load-1.00 probes plateauing at 5.8-6.0 GiB within 5 min), so an
-    average-based envelope is wrong: the old 3 GB flat average packed 22
-    slots on 125 GB c6525 hosts and swap-thrashed all 21. Other capacities
-    keep the legacy envelope (24 GB at 4096 NPUs, linear, 4 GB floor)."""
+def mem_per_run_gb(capacity: int, exps: Sequence[str] = ()) -> float:
+    """Per-sim memory envelope for slot packing, two-tier by trace family.
+
+    Peak RSS = feeder/per-NPU baseline + the 4 GiB-capped DOR route cache,
+    so it splits on job size, not just capacity (measured 2026-08-15/16):
+
+    - 8x8x8 non-large: small-family sims complete 60k jobs at 6.25 GiB
+      VmHWM; 6.5 holds with only 4% in-envelope margin, but the 15%
+      host-level reserve (MEM_TARGET_PCT) absorbs the tail.
+    - 8x8x8 large-only (256-512 NPU jobs): 8.9 GiB at ~10% trace progress
+      across 320 live fleet sims, then flat (cache/memos full); 6.5 packed
+      16 slots on 125 GB c6525 hosts and swap-thrashed amd103.
+    - 16x16x16 non-large: local load-0.90 probes plateau at 8.4-8.8 GiB
+      within 20 min (cache cap fills fast at 4096); the previous 8 GB
+      envelope ran the pareto128 fleet for weeks (~7.3 GiB live average,
+      2026-08-13) but is borderline against the 8.8 peak.
+    - 16x16x16 large-only: UNMEASURED (no 1024-2048 tracelib yet); 12 is
+      the 8x8x8 large:non-large ratio applied as a provisional envelope --
+      re-probe before the first real large-only 16^3 sweep.
+
+    A launch/monitor passes its experiment names; the large tier kicks in
+    when any of them is a large-only or half-capacity-pareto trace (those
+    draw jobs up to capacity/2). Called bare (exps=()), it returns the
+    non-large tier. Other capacities keep the legacy envelope (linear,
+    4 GB floor)."""
+    large = any("large" in e or f"pareto{capacity // 2}" in e for e in exps)
     if capacity == 512:
-        return 6.5
+        return 10 if large else 6.5
     if capacity == 4096:
-        # measured 2026-08-13: ~7.3 GiB RSS per live 16x16x16 sim (62 sims on
-        # a c6320, all policies) -- up from the 2.65 GiB VmHWM measured
-        # 2026-07-23, before the per-hop Link cache (ca2c76a) and two-level
-        # calendar queue (13def2a) added per-route/per-queue state. 4 GiB
-        # planning overcommitted 376 GB hosts by ~80 GB and swap-thrashed
-        # half the fleet; 8 GiB makes them memory-bound at ~39 slots.
-        return 8
+        return 12 if large else 10
     return max(4, 24 * capacity // 4096)
 
 
