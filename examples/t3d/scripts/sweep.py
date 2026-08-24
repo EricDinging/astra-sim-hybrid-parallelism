@@ -126,7 +126,7 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     onto whole-block targets within 4/3x, so the mean stays ~equal (9.17 ->
     9.11 at 8x8x8). The mono experiments take this to the limit: a
     single-shape menu maps EVERY job onto the probed most placeable
-    ~mean-size shape (4x2x1).
+    ~mean-size shape (4x2x1 at 8x8x8, 4x4x2 at 16x16x16).
 
     The placeability* experiments (one per failure rate, plus the no-failure
     baseline) are single-job empty-torus censuses handled entirely by
@@ -144,11 +144,18 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"{2 * half_axis}x{half_axis}x{half_axis}"
     ]
     rounded = [*pareto, quarter, "--snap-shapes", ",".join(menu)]
-    # mono: the rounded idea taken to the limit -- every job becomes the single
-    # most placeable ~mean-size shape. 4x2x1 was probed on 8x8x8: all six
-    # placements pack it 64/64 (tie with 8x1x1/2x2x2), and it has the best
-    # packed-torus JCT on 5 of 6 policies; size 8 ~ the base trace's mean 9.2
-    mono = [*pareto, quarter, "--snap-shapes", "4x2x1"]
+    # mono: the rounded idea taken to the limit -- every job becomes a single
+    # very placeable ~mean-size shape, probed per torus (packed-torus probe:
+    # cap/|S| identical jobs at t=0, fifo, all placements).
+    # - 8x8x8: 4x2x1. All six placements pack it 64/64 (tie with 8x1x1/2x2x2)
+    #   and it has the best packed-torus JCT on 5 of 6; size 8 ~ mean 9.1.
+    # - 16x16x16: 4x4x2 (2026-08-24). Mean pareto1024 size is 40.7; every
+    #   size-32 candidate packs 128/128 under all six, so JCT decides:
+    #   8x2x2 is best on 4/6 but worst under rfold (832 vs 254 ms for
+    #   8x4x1), 8x4x1 is rfold's best, 4x4x2 (379 ms rfold, 2nd) is the
+    #   4x4x4-block-aligned pick that no policy is badly handicapped by.
+    mono_shape = {8: "4x2x1", 16: "4x4x2"}[max(dims)]
+    mono = [*pareto, quarter, "--snap-shapes", mono_shape]
     fail = {
         f"{adm}-pareto{quarter}-fail{pct}-load-sweep": [*pareto, quarter]
         for pct in ("0.1", "0.2", "0.5", "1")
