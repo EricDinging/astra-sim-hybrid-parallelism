@@ -100,8 +100,9 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     (easy/swf/fifo); it only matters at launch time, so the three
     *-pareto<half>-* experiments generate identical (seed-pinned) arrivals.
 
-    The small1to32/large256to512 experiments are uniform-size traces confined
-    to a fixed absolute size band (small-job-only and large-job-only). The
+    The small<1..cap/16>/large<cap/2..cap> experiments are uniform-size traces
+    confined to a capacity-relative size band (small-job-only and
+    large-job-only; small1to32/large256to512 at 8x8x8). The
     <nd>donly experiments keep the pareto<quarter> size draw but admit only
     shapes of exactly that dimensionality (gen_arrivals --ndim), drawn from
     the rfold-placeable slice of the EXPANDED shape universe (dims beyond a
@@ -154,8 +155,9 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         for adm in ("easy", "swf", "fifo")
     }
     uniform = ["--size-dist", "uniform", "--size-max", quarter]
-    small = ["--size-dist", "uniform", "--size-min", "1", "--size-max", "32"]
-    large = ["--size-dist", "uniform", "--size-min", "256", "--size-max", "512"]
+    small_max, large_min = str(cap // 16), half
+    small = ["--size-dist", "uniform", "--size-min", "1", "--size-max", small_max]
+    large = ["--size-dist", "uniform", "--size-min", large_min, "--size-max", str(cap)]
     ndonly = {
         nd: [
             *pareto,
@@ -189,12 +191,12 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"fifo-uniform{quarter}-load-sweep": uniform,
         # small/large-job-only traces: sizes uniform over the distinct legal
         # sizes in the range, shape uniform among legal shapes of that size
-        "easy-small1to32-load-sweep": small,
-        "swf-small1to32-load-sweep": small,
-        "fifo-small1to32-load-sweep": small,
-        "easy-large256to512-load-sweep": large,
-        "swf-large256to512-load-sweep": large,
-        "fifo-large256to512-load-sweep": large,
+        f"easy-small1to{small_max}-load-sweep": small,
+        f"swf-small1to{small_max}-load-sweep": small,
+        f"fifo-small1to{small_max}-load-sweep": small,
+        f"easy-large{large_min}to{cap}-load-sweep": large,
+        f"swf-large{large_min}to{cap}-load-sweep": large,
+        f"fifo-large{large_min}to{cap}-load-sweep": large,
         # dimensionality-restricted traces: same truncated-Pareto size draw
         # as the pareto<quarter> family, but over the sizes that have a
         # 1D/2D/3D shape, then shape uniform within that dimensionality
