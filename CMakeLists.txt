@@ -121,7 +121,14 @@ set(TOPOMATCH_INCLUDE "${TOPOMATCH_PREFIX}/include")
 file(MAKE_DIRECTORY "${TOPOMATCH_INCLUDE}")
 ExternalProject_Add(topomatch_ep
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/extern/topomatch"
-    CONFIGURE_COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/extern/topomatch/configure"
+    # Restamp the pre-generated autotools output in dependency order first. A
+    # fresh checkout can write m4/*.m4 after aclocal.m4, and make then tries to
+    # regenerate aclocal.m4 with the exact automake the tree was bootstrapped
+    # with (aclocal-1.16) -- absent on anything modern, so build-aux/missing
+    # kills the build. Nothing here edits configure.ac, so the stamps are the
+    # only thing ever out of date.
+    CONFIGURE_COMMAND bash -c "cd <SOURCE_DIR> && touch configure.ac m4/*.m4 && touch aclocal.m4 && touch configure Makefile.in tm_config.h.in"
+    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/extern/topomatch/configure"
         "--prefix=${TOPOMATCH_PREFIX}"
         "CFLAGS=-I${SCOTCH_INCLUDE_DIR} -O3"
         "CPPFLAGS=-I${SCOTCH_INCLUDE_DIR}"
