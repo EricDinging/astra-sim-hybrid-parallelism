@@ -92,20 +92,25 @@ def mem_per_run_gb(capacity: int, exps: Sequence[str] = ()) -> float:
       within 20 min (cache cap fills fast at 4096); the previous 8 GB
       envelope ran the pareto128 fleet for weeks (~7.3 GiB live average,
       2026-08-13) but is borderline against the 8.8 peak.
-    - 16x16x16 large-only: UNMEASURED (no 1024-2048 tracelib yet); 12 is
-      the 8x8x8 large:non-large ratio applied as a provisional envelope --
-      re-probe before the first real large-only 16^3 sweep.
+    - 16x16x16 heavy (large-only 512-1024 and uniform 1-1024): measured
+      2026-09-03 on 251 GB hosts. uniform1024 at 20k-50k jobs: mean 12.5,
+      p90 15.5, max 17.3 GiB (rfold ~16), still climbing to ~40k jobs; the
+      old 10 envelope packed 19-20 slots, filled swap and OOM-killed a sim.
+      large512to1024 at <=15k jobs: mean 10.6, max 13.1, plateau
+      unconfirmed. 15 fits 13 slots/host: worst case 13 x 17.3 = 225 GB.
 
-    A launch/monitor passes its experiment names; the large tier kicks in
-    when any of them is a large-only or half-capacity-pareto trace (those
-    draw jobs up to capacity/2). Called bare (exps=()), it returns the
-    non-large tier. Other capacities keep the legacy envelope (linear,
-    4 GB floor)."""
-    large = any("large" in e or f"pareto{capacity // 2}" in e for e in exps)
+    A launch/monitor passes its experiment names; the heavy tier kicks in
+    when any of them is a large-only, half-capacity-pareto (jobs up to
+    capacity/2) or uniform (jobs up to capacity/4, mean capacity/8)
+    trace. Called bare (exps=()), it returns the light tier. Other
+    capacities keep the legacy envelope (linear, 4 GB floor)."""
+    large = any(
+        "large" in e or "uniform" in e or f"pareto{capacity // 2}" in e for e in exps
+    )
     if capacity == 512:
         return 10 if large else 6.5
     if capacity == 4096:
-        return 12 if large else 10
+        return 15 if large else 10
     return max(4, 24 * capacity // 4096)
 
 

@@ -40,9 +40,13 @@ def test_slot_count_bounds():
     assert launcher.slot_count(1, 100, 3) == 0  # no cpu headroom
 
 
-def test_mem_per_run_flat_at_512_legacy_elsewhere():
-    assert launcher.mem_per_run_gb(512) == 3  # measured fleet-average mix
-    assert launcher.mem_per_run_gb(4096) == 4  # measured 2026-07-23 +50%
+def test_mem_per_run_two_tier_at_512_and_4096_legacy_elsewhere():
+    assert launcher.mem_per_run_gb(512) == 6.5
+    assert launcher.mem_per_run_gb(512, ["fifo-large256to512-load-sweep"]) == 10
+    assert launcher.mem_per_run_gb(4096) == 10
+    assert launcher.mem_per_run_gb(4096, ["fifo-pareto1024-load-sweep"]) == 10
+    for heavy in ("fifo-large512to1024", "fifo-uniform1024", "fifo-pareto2048"):
+        assert launcher.mem_per_run_gb(4096, [f"{heavy}-load-sweep"]) == 15
     assert launcher.mem_per_run_gb(2048) == 12  # legacy envelope
     assert launcher.mem_per_run_gb(256) == 4  # floor
 
