@@ -13,6 +13,12 @@ Two modes, one script (dependency-free stdlib, like the other farm tooling):
       are quiet and the whole in-flight sweep state lives in <store>.
       --experiment filters which sims are dumped; the harness stop is always
       host-wide (one runner serves every experiment in a workspace).
+      --combo NAME dumps just that one combo and leaves the harness alone:
+      the sim's run_combo.py parent sees the kill and records rc=-9, the
+      other sims keep running. --leave-running snapshots instead of
+      evacuating: the sim is dumped at its safe point and SIGCONT'd, its
+      CSV outputs are copied while it is still paused so the store holds an
+      image-consistent set, and the harness is never touched.
 
   ckpt.py resume --workers workers.txt --store ./ckpts
       Distribute the not-yet-resumed checkpoints in <store> round-robin over
@@ -118,7 +124,9 @@ def ensure_criu(host: str) -> None:
     )
 
 
-def running_sims(host: str, experiment: str | None) -> list[dict]:
+def running_sims(
+    host: str, experiment: str | None, combo: str | None = None
+) -> list[dict]:
     """[{pid, combo_dir, jobs_dir}] of live sims on the host."""
     out = sh(host, "ps -eo pid,comm,args --no-headers", check=False)
     sims = []
@@ -135,6 +143,8 @@ def running_sims(host: str, experiment: str | None) -> list[dict]:
         if not combo_dir:
             continue
         if experiment and f"/runs/{experiment}/" not in combo_dir + "/":
+            continue
+        if combo and os.path.basename(combo_dir) != combo:
             continue
         sims.append(
             {"pid": int(parts[0]), "combo_dir": combo_dir, "jobs_dir": jobs_dir}
@@ -153,8 +163,10 @@ def signal_harness(host: str, sig: str) -> None:
     )
 
 
-def dump_one(host: str, sim: dict) -> dict:
-    """Safe-point stop + criu dump one sim; returns provenance for the manifest."""
+def dump_one(host: str, sim: dict, leave_running: bool = False) -> dict:
+    """Safe-point stop + criu dump one sim; returns provenance for the manifest.
+    leave_running: criu -R, then copy the outputs into criu-img/outputs/
+    while the sim is still paused and SIGCONT it."""
     pid, combo_dir = sim["pid"], sim["combo_dir"]
     img = f"{combo_dir}/criu-img"
     # SIGUSR1 -> wait for the self-SIGSTOP at the safe point.
@@ -172,7 +184,8 @@ def dump_one(host: str, sim: dict) -> dict:
     # (resume_one); kill it or it would write sim.done rc=97 the moment the
     # dump kills the sim. The [0] keeps the pattern from matching this very
     # pkill's own command line.
-    sh(host, f"pkill -f {shlex.quote(f'kill -[0] {pid} ')} || true", check=False)
+    if not leave_running:
+        sh(host, f"pkill -f {shlex.quote(f'kill -[0] {pid} ')} || true", check=False)
     prov = sh(
         host,
         f"set -e; rm -rf {shlex.quote(img)}; mkdir -p {shlex.quote(img)}; "
@@ -188,7 +201,8 @@ def dump_one(host: str, sim: dict) -> dict:
             # --shell-job: sweep sims run under run_combo.py, so they are not
             # session leaders; their session/pgroup leader lives outside the
             # dumped tree.
-            f"sudo criu dump -t {pid} -D {shlex.quote(img)} --shell-job -o dump.log && "
+            f"sudo criu dump -t {pid} -D {shlex.quote(img)} --shell-job "
+            f"{'-R ' if leave_running else ''}-o dump.log && "
             f'sudo chown -R "$(id -un):" {shlex.quote(img)}',
             timeout=1800,
         )
@@ -200,7 +214,18 @@ def dump_one(host: str, sim: dict) -> dict:
         raise RuntimeError(
             f"criu dump failed for {combo_dir} (sim resumed): {tail.strip()}"
         )
+    if leave_running:
+        # Outputs must match the image: copy them before the sim moves on.
+        # arrivals.csv is static input and is pulled separately.
+        sh(
+            host,
+            f"set -e; cd {shlex.quote(combo_dir)}; mkdir criu-img/outputs; "
+            "find . -maxdepth 1 -type f ! -name arrivals.csv "
+            "-exec cp -p {} criu-img/outputs/ \\; ; "
+            f"kill -CONT {pid}",
+        )
     return {
+        "leave_running": leave_running,
         "host": host,
         "combo_dir": combo_dir,
         "jobs_dir": sim["jobs_dir"],
@@ -217,33 +242,53 @@ def pull_one(host: str, store: str, m: dict) -> str:
     exp = os.path.basename(os.path.dirname(m["combo_dir"]))
     dst = os.path.join(store, exp, combo)
     os.makedirs(dst, exist_ok=True)
-    rsync(loc(host, m["combo_dir"] + "/"), dst + "/")
+    if m.get("leave_running"):
+        # The live sim keeps appending to its outputs; take the paused-time
+        # copies from the image dir instead of the combo dir's current files.
+        rsync(loc(host, m["combo_dir"] + "/criu-img/"), dst + "/criu-img/")
+        rsync(loc(host, m["combo_dir"] + "/arrivals.csv"), dst + "/")
+        outs = os.path.join(dst, "criu-img", "outputs")
+        for f in os.listdir(outs):
+            os.replace(os.path.join(outs, f), os.path.join(dst, f))
+        os.rmdir(outs)
+    else:
+        rsync(loc(host, m["combo_dir"] + "/"), dst + "/")
     with open(os.path.join(dst, MANIFEST), "w") as f:
         json.dump(m, f, indent=1)
     return f"{host}: pulled {exp}/{combo} -> {dst}"
 
 
 def checkpoint_host(
-    host: str, experiment: str | None, store: str
+    host: str,
+    experiment: str | None,
+    store: str,
+    combo: str | None = None,
+    leave_running: bool = False,
 ) -> tuple[list[str], int]:
-    """Dump every running sim on `host`, pull to the store: (report, nfail)."""
+    """Dump every running sim on `host`, pull to the store: (report, nfail).
+    Only a full-host kill-mode dump is an evacuation that freezes and then
+    kills the harness; a single combo or a live snapshot leaves it alone."""
     lines, fails = [], 0
-    sims = running_sims(host, experiment)
+    sims = running_sims(host, experiment, combo)
     if not sims:
         return [f"{host}: no running sims"], 0
     ensure_criu(host)
-    signal_harness(host, "STOP")  # nothing new may start or react
+    evacuate = not combo and not leave_running
+    if evacuate:
+        signal_harness(host, "STOP")  # nothing new may start or react
     dumped = []
     for sim in sims:  # sequential: parallel criu dumps thrash the same disk
         try:
-            dumped.append(dump_one(host, sim))
+            dumped.append(dump_one(host, sim, leave_running))
             lines.append(
                 f"{host}: dumped {os.path.basename(sim['combo_dir'])} (pid {sim['pid']})"
             )
         except (RuntimeError, subprocess.TimeoutExpired) as e:
             lines.append(f"{host}: FAIL {sim['combo_dir']}: {e}")
             fails += 1
-    if dumped:
+    if not evacuate:
+        pass
+    elif dumped:
         signal_harness(host, "KILL")  # host is quiet now
     else:
         # Every dump failed and every sim was SIGCONT'd — put the harness
@@ -349,7 +394,10 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
     fails = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(hosts)) as ex:
         for lines, nfail in ex.map(
-            lambda h: checkpoint_host(h, args.experiment, args.store), hosts
+            lambda h: checkpoint_host(
+                h, args.experiment, args.store, args.combo, args.leave_running
+            ),
+            hosts,
         ):
             print("\n".join(lines))
             fails += nfail
@@ -407,6 +455,12 @@ def main() -> int:
     c = sub.add_parser("checkpoint", parents=[common])
     c.add_argument(
         "--experiment", default=None, help="only sims of this experiment (default: all)"
+    )
+    c.add_argument("--combo", default=None, help="only this combo (dir basename)")
+    c.add_argument(
+        "--leave-running",
+        action="store_true",
+        help="snapshot: dump, then SIGCONT the sim instead of killing it",
     )
     c.set_defaults(fn=cmd_checkpoint)
     r = sub.add_parser("resume", parents=[common])
