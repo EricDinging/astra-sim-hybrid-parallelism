@@ -253,41 +253,85 @@ def test_blocksize_experiment_placements():
         assert sweep.placements("fifo-pareto128-load-sweep", root) == sweep.PLACEMENTS
 
 
-def test_prereq_builds_tracelib_and_skips_existing_svc():
-    traced, measured = [], []
-    real_traces, real_svc = sweep.gen_traces.main, sweep.svc
-    sweep.gen_traces.main = lambda argv: (traced.append(argv), 0)[1]
-    sweep.svc = lambda root: measured.append(root)
+def _size(s: tuple[int, int, int]) -> int:
+    return s[0] * s[1] * s[2]
+
+
+def test_prereq_probes_builds_tracelib_and_measures_only_missing():
+    traced, ran = [], []
+    real_traces, real_farm = sweep.gen_traces.main, sweep.farm
+
+    def fake_run(script, args, items, chunk, timeout):
+        """Stand-in for farm()'s runner: every probe places, every measure
+        reports svc=size*10, one batch at a time."""
+        ran.append((script, list(items)))
+        for i in range(0, len(items), chunk):
+            batch = items[i : i + chunk]
+            if script == "placeability.py":
+                out = "shape,outcome\n" + "".join(f"{s},placed\n" for s in batch)
+            else:
+                out = "shape,size,svc_per_iter_ns\n" + "".join(
+                    f"{s},{n},{n * 10}\n"
+                    for s in batch
+                    for n in [_size(shapes.parse_shape(s))]
+                )
+            yield "local", batch, out, ""
+
+    def fake_traces(argv):
+        traced.append(argv)
+        # "build" a trace for every requested shape (standard + extra file)
+        extra = argv[argv.index("--extra-shapes-file") + 1]
+        want = set(shapes.all_legal_shapes("bw"))
+        want |= {shapes.parse_shape(ln.strip()) for ln in open(extra) if ln.strip()}
+        for sh in want:
+            d = os.path.join(argv[argv.index("--out") + 1], "bw", shapes.fmt_shape(sh))
+            os.makedirs(d, exist_ok=True)
+            open(os.path.join(d, "chakra_trace.0.et"), "w").close()
+        return 0
+
+    sweep.gen_traces.main = fake_traces
+    sweep.farm = lambda root, workers_file: fake_run
     try:
         with tempfile.TemporaryDirectory() as root:
             # small dims: prereq (re)generates real NxN schedule matrices
             _mkroot(root, dims=(2, 2, 2))
             net_yml = _mkconfigs(root, npus=512)
-            sweep.prereq(root=root)  # no svc table yet -> measures
+            sweep.prereq(root=root)
             # the user's dims answer is synced into network.yml...
             assert "npus_count: [ 8 ]" in open(net_yml).read()
             # ...and the BW/LT schedule matrices are built to match
             bw = os.path.join(root, "configs", "bandwidth_schedule_torus.txt")
             row = open(bw).readlines()[1].split()
             assert len(row) == 8 and set(row) == {"0", "50"}
-            mesh_bw = os.path.join(root, "configs", "bandwidth_schedule_fullmesh.txt")
-            assert os.path.isfile(mesh_bw)
-            assert traced[0][traced[0].index("--out") + 1].endswith("tracelib")
             assert traced[0][traced[0].index("--cluster-dims") + 1] == "2x2x2"
-            assert measured == [root]
+            # probe ran over the expanded universe at the quarter cap (2)...
+            assert ran[0][0] == "placeability.py"
+            assert sorted(ran[0][1]) == sorted(
+                shapes.fmt_shape(s) for s in shapes.expanded_legal_shapes("bw", 2)
+            )
+            assert os.path.isfile(os.path.join(root, "rfold_placeable2.txt"))
+            # ...then the measure covered standard + placeable, largest first
+            assert ran[1][0] == "measure_svc.py"
+            sizes = [_size(shapes.parse_shape(s)) for s in ran[1][1]]
+            assert sizes == sorted(sizes, reverse=True)
             table = os.path.join(root, "service_times.csv")
-            with open(table, "w") as f:
-                f.write("shape,size,svc_per_iter_ns\n2x2x2,8,123\n")
-            sweep.prereq(root=root)  # partial (failed measure) -> re-measures
-            assert len(measured) == 2
-            with open(table, "w") as f:
-                f.write("shape,size,svc_per_iter_ns\n")
-                for s in shapes.all_legal_shapes("bw"):
-                    f.write(f"{shapes.fmt_shape(s)},{s[0] * s[1] * s[2]},123\n")
-            sweep.prereq(root=root)  # complete table -> tracelib only
-            assert len(traced) == 3 and len(measured) == 2
+            have = sweep.measure_svc.read_table(table)
+            assert len(have) == len(ran[1][1]) and have[(2, 2, 2)] == 80
+            # a shape dropped from the table -> only that one is re-measured
+            del have[(1, 1, 2)]
+            sweep.measure_svc.write_table(
+                table, [(s, _size(s), v) for s, v in have.items()]
+            )
+            sweep.prereq(root=root)
+            assert ran[2] == (
+                "measure_svc.py",
+                ["1x1x2"],
+            )  # probe file cached: no re-probe
+            assert sweep.measure_svc.read_table(table)[(1, 1, 2)] == 20
+            sweep.prereq(root=root)  # complete: nothing runs
+            assert len(ran) == 3 and len(traced) == 3
     finally:
-        sweep.gen_traces.main, sweep.svc = real_traces, real_svc
+        sweep.gen_traces.main, sweep.farm = real_traces, real_farm
 
 
 def test_progress_table_cells():

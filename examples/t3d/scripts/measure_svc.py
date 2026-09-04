@@ -23,12 +23,15 @@ import os
 import resource
 import shutil
 import subprocess
+import sys
 import tempfile
 
 import cluster
 import shapes
 
-SIM_TIMEOUT_S: int = 1200
+# a 1024-NPU single iteration at 16x16x16 runs for hours alone; the cap
+# only catches a wedged sim
+SIM_TIMEOUT_S: int = 6 * 3600
 
 
 def shape_trace_dir(traces: str, model: str, shape: tuple[int, int, int]) -> str:
@@ -101,6 +104,7 @@ def run_one(
     cfg: str,
     astra_sim: str,
     npus: str,
+    timeout: float = SIM_TIMEOUT_S,
 ) -> tuple[tuple[int, int, int], int, int | None, str | None]:
     """Run one isolated job. Returns (shape, size, svc_per_iter_ns, error)."""
     d = tempfile.mkdtemp(prefix="svc_")
@@ -127,7 +131,7 @@ def run_one(
             # shapes (dims beyond an axis) are placed by rfold at its default
             # block instead -- exactly the sweep arm they run under, and the
             # donly universe is pre-filtered to what it can place
-            # (placeability.rfold_placeable_file)
+            # (placeability.write_rfold_placeable)
             *(
                 ["--placement-policy=firstfit"]
                 if all(d <= n for d, n in zip(shape, npus_dims(npus)))
@@ -136,11 +140,9 @@ def run_one(
             "--admission-policy=fifo",
         ]
         try:
-            r = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=SIM_TIMEOUT_S
-            )
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         except subprocess.TimeoutExpired:
-            return (shape, size, None, f"sim timeout after {SIM_TIMEOUT_S}s")
+            return (shape, size, None, f"sim timeout after {timeout:.0f}s")
         if r.returncode != 0:
             # the binary logs fatal errors to stdout (spdlog), not stderr
             err = (r.stderr.strip() or r.stdout.strip())[-200:]
@@ -157,6 +159,17 @@ def run_one(
         return (shape, size, int(rows[0]["jct_ns"]), None)
     finally:
         shutil.rmtree(d, ignore_errors=True)
+
+
+def read_table(path: str) -> dict[tuple[int, int, int], int]:
+    """service_times.csv -> {shape: svc_per_iter_ns} ({} when absent)."""
+    if not os.path.isfile(path):
+        return {}
+    with open(path, newline="") as f:
+        return {
+            shapes.parse_shape(r["shape"]): int(r["svc_per_iter_ns"])
+            for r in csv.DictReader(f)
+        }
 
 
 def write_table(
@@ -194,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="torus dims AxBxC (default: cluster.json in the example root)",
     )
+    ap.add_argument("--timeout", type=float, default=SIM_TIMEOUT_S, help="per-sim s")
     args = ap.parse_args(argv)
 
     dims = (
@@ -225,7 +239,16 @@ def main(argv: list[str] | None = None) -> int:
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.jobs) as ex:
         npus = cluster.npus_arg(dims)
         futs = {
-            ex.submit(run_one, s, args.traces, args.model, cfg, args.astra_sim, npus): s
+            ex.submit(
+                run_one,
+                s,
+                args.traces,
+                args.model,
+                cfg,
+                args.astra_sim,
+                npus,
+                args.timeout,
+            ): s
             for s in todo
         }
         for fut in concurrent.futures.as_completed(futs):
@@ -236,9 +259,13 @@ def main(argv: list[str] | None = None) -> int:
                 results.append((shape, size, svc))
 
     write_table(args.out, results)
-    print(f"wrote {args.out}: {len(results)} shapes measured, {len(failures)} failed")
+    # status on stderr: --out /dev/stdout is the csv when run over ssh
+    print(
+        f"wrote {args.out}: {len(results)} shapes measured, {len(failures)} failed",
+        file=sys.stderr,
+    )
     for f in failures:
-        print(f"  FAIL {f}")
+        print(f"  FAIL {f}", file=sys.stderr)
     return 1 if failures else 0
 
 

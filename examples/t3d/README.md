@@ -79,9 +79,15 @@ or uniform capped at 512). See `EXPERIMENTS` in `scripts/sweep.py`.
 Builds the tracelib via stage-in-Docker (one trace per legal `A×B×C` shape:
 dims 1 or even ≤ 16, ≤ 4096 ranks — 729 shapes; resumable, built shapes are
 skipped) and measures each shape's isolated single-iteration JCT into
-`service_times.csv` (skipped when present; delete it to re-measure).
-`clean` never touches either. Env: `STAGE_IMAGE` (default `astra:latest`),
-`DOCKER` (default `sudo docker`), `JOBS` (parallelism, default nproc−2).
+`service_times.csv` (shapes already in it are skipped; delete it to
+re-measure everything). The `<nd>donly` sweeps' shape universe is probed
+first (`rfold_placeable<cap>.txt`). Both the probe and the measure prompt
+for a workers file (default `workers.txt`, empty = this machine) and run
+one sim per worker slot with dynamic balancing, so a rerun after a
+partial or interrupted measure only does the missing shapes. `clean` never
+touches any of these. Env: `STAGE_IMAGE` (default `astra:latest`),
+`DOCKER` (default `sudo docker`), `JOBS` (tracelib build parallelism,
+default nproc−2).
 
 ## Trace generation (`./reproduce.py gen`)
 

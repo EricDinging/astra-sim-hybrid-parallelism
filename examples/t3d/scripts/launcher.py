@@ -18,11 +18,15 @@ assignments.csv so collect pulls each combo from where it actually ran.
 
 from __future__ import annotations
 
+import collections
 import concurrent.futures
 import csv
 import os
+import queue
 import subprocess
-from collections.abc import Sequence
+import threading
+import time
+from collections.abc import Callable, Iterator, Sequence
 
 import cluster
 
@@ -479,6 +483,89 @@ def collect_host(host: str, root: str, exp: str, ws: str) -> None:
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         raise RuntimeError(f"collect from {host}: {r.stderr.strip()[-200:]}")
+
+
+# ssh exit status for "could not connect / connection lost" (the remote
+# command's own failures come back as its exit code, 1..254)
+SSH_LOST = 255
+# seconds between a host's slot start-ups: sshd's MaxStartups (default
+# 10:30:100) drops a burst of unauthenticated connections beyond 10
+SLOT_STAGGER_S = 0.3
+
+
+def pull_run(
+    host_slots: dict[str, int],
+    items: list[str],
+    chunk: int,
+    cmd_for: Callable[[str, list[str]], str],
+    timeout: float,
+) -> Iterator[tuple[str, list[str], str | None, str]]:
+    """Run `items` through every host's slots with dynamic balancing, one
+    driver thread per (host, slot). Each thread pulls the next `chunk`
+    items off a shared queue (so a host that finishes early keeps pulling
+    -- work stealing by construction), runs cmd_for(host, batch) on its
+    host over one blocking ssh (LOCAL: a local bash), and yields
+    (host, batch, stdout-or-None, stderr_tail) as batches complete, in
+    completion order. A batch whose command exits non-zero is yielded
+    failed and NOT retried (the caller decides). A slot whose ssh
+    connection is lost puts its batch back and retires; a batch nobody
+    could run is yielded failed at the end. Items are pulled in the
+    given order, so callers put the longest first (LPT)."""
+    pending = collections.deque(items)
+    lock = threading.Lock()
+    results: queue.Queue = queue.Queue()
+
+    def take() -> list[str]:
+        with lock:
+            return [pending.popleft() for _ in range(min(chunk, len(pending)))]
+
+    def slot(host: str, i: int) -> None:
+        time.sleep(SLOT_STAGGER_S * i)
+        while batch := take():
+            cmd = cmd_for(host, batch)
+            if host == LOCAL:
+                argv = ["bash", "-c", cmd]
+            else:
+                argv = ["ssh", *SSH_OPTS, "-o", "ServerAliveInterval=60", host, cmd]
+            try:
+                r = subprocess.run(
+                    argv, capture_output=True, text=True, timeout=timeout
+                )
+            except subprocess.TimeoutExpired:
+                results.put((host, batch, None, f"timeout after {timeout:.0f}s"))
+                continue
+            if r.returncode == SSH_LOST and host != LOCAL:
+                with lock:
+                    pending.extendleft(reversed(batch))
+                print(f"WARN {host}: connection lost, slot retired: {r.stderr[-200:]}")
+                return
+            out = r.stdout if r.returncode == 0 else None
+            results.put((host, batch, out, r.stderr.strip()[-200:]))
+
+    threads = [
+        threading.Thread(target=slot, args=(h, i), daemon=True)
+        for h, n in host_slots.items()
+        for i in range(n)
+    ]
+    for t in threads:
+        t.start()
+    done = 0
+    while done < len(items):
+        if not any(t.is_alive() for t in threads) and results.empty():
+            break  # every slot retired: whatever is left can't be run
+        try:
+            host, batch, out, err = results.get(timeout=1)
+        except queue.Empty:
+            continue
+        done += len(batch)
+        yield host, batch, out, err
+    for t in threads:
+        t.join()
+    with lock:
+        left = list(pending)
+        pending.clear()
+    if left:
+        yield "-", left, None, "no host could run these (all slots retired)"
 
 
 def write_assignments(path: str, rows: list[tuple[str, str, str]]) -> None:

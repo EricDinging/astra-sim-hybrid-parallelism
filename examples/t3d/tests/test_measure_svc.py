@@ -67,6 +67,14 @@ def test_write_table_header_and_sort():
         assert rows[2] == ["2x2x2", "8", "1500"]
 
 
+def test_read_table_roundtrip_and_absent():
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "svc.csv")
+        assert measure_svc.read_table(out) == {}
+        measure_svc.write_table(out, [((2, 2, 2), 8, 123), ((1, 1, 1), 1, 5)])
+        assert measure_svc.read_table(out) == {(1, 1, 1): 5, (2, 2, 2): 123}
+
+
 if __name__ == "__main__":
     fns = [
         v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)

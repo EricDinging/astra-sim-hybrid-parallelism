@@ -16,14 +16,19 @@ locally. Results land in runs/<exp>/placeability.csv.
 
 from __future__ import annotations
 
+import argparse
 import concurrent.futures
 import csv
 import os
 import subprocess
+import sys
 import tempfile
 
 import cluster
 import run_combo  # failure_flags
+
+# an idle-torus probe is ~0.1 s; the cap only catches a wedged binary
+PROBE_TIMEOUT_S = 3600
 
 FAIL_PCTS = ["0.1", "0.2", "0.5", "1"]
 EXPS = ["placeability", *(f"placeability-fail{p}" for p in FAIL_PCTS)]
@@ -74,6 +79,7 @@ def probe(
     shape: tuple[int, int, int],
     pol_flags: list[str],
     extra: list[str],
+    timeout: float = PROBE_TIMEOUT_S,
 ) -> str:
     """One placement attempt -> placed | dropped | defer | timeout | error."""
     a, b, c = shape
@@ -107,7 +113,7 @@ def probe(
                 ],
                 capture_output=True,
                 text=True,
-                timeout=900,
+                timeout=timeout,
             )
         except subprocess.TimeoutExpired:
             return "timeout"
@@ -123,42 +129,32 @@ def probe(
     return f"error rc={p.returncode}"
 
 
-def rfold_placeable_file(root: str, binary: str, cap: int) -> str:
-    """Probe every expanded-universe shape (shapes.expanded_legal_shapes, cap
-    = the donly sweeps' size cap) for placeability under rfold at its DEFAULT
-    block size on an idle torus, and cache the placed subset one AxBxC per
-    line in <root>/rfold_placeable<cap>.txt (delete the file to re-probe).
+def rfold_placeable_path(root: str, cap: int) -> str:
+    return os.path.join(root, f"rfold_placeable{cap}.txt")
+
+
+def write_rfold_placeable(
+    path: str, cands: list[tuple[int, int, int]], outcomes: dict[str, str]
+) -> None:
+    """Cache the rfold(default-block) idle-torus placeable subset of the
+    expanded universe `cands` (shapes.expanded_legal_shapes at the donly
+    sweeps' size cap) one AxBxC per line in <root>/rfold_placeable<cap>.txt
+    (delete the file to re-probe). `outcomes` maps AxBxC -> probe() result
+    (produced by main() shards, see sweep.prereq).
 
     That file is the <nd>donly sampling universe: every arm those sweeps run
     (rfold, scatter policies, ideal) can place 100% of a trace drawn from it,
     so JCT is compared on identical fully-placed workloads. Probes need no
     traces (see probe())."""
-    import shapes as shp
-
-    path = os.path.join(root, f"rfold_placeable{cap}.txt")
-    if os.path.isfile(path):
-        print(f"skip  {path} (exists; delete it to re-probe)")
-        return path
-    if not os.path.isfile(binary):
-        raise SystemExit(f"binary not found: {binary} (run build.sh first)")
-    dims = cluster.load(root)
-    dims_csv = ",".join(str(d) for d in dims)
-    cfg = os.path.join(root, "configs")
-    cands = shp.expanded_legal_shapes("bw", cap)
-    print(f"probing rfold(default-block) placeability of {len(cands)} shapes ...")
-    with concurrent.futures.ThreadPoolExecutor(os.cpu_count()) as ex:
-        outcomes = list(
-            ex.map(
-                lambda s: probe(
-                    binary, cfg, dims_csv, s, ["--placement-policy=rfold"], []
-                ),
-                cands,
-            )
+    keys = [f"{s[0]}x{s[1]}x{s[2]}" for s in cands]
+    missing = [k for k in keys if k not in outcomes]
+    odd = {outcomes[k] for k in keys if k in outcomes} - {"placed", "dropped"}
+    if odd or missing:
+        raise SystemExit(
+            f"unexpected probe outcomes {odd}, {len(missing)} unprobed -- "
+            "refusing to cache"
         )
-    placed = [s for s, o in zip(cands, outcomes) if o == "placed"]
-    odd = {o for o in outcomes if o not in ("placed", "dropped")}
-    if odd:
-        raise SystemExit(f"unexpected probe outcomes {odd} -- refusing to cache")
+    placed = [s for s, k in zip(cands, keys) if outcomes[k] == "placed"]
     with open(path, "w") as f:
         for s in placed:
             f.write(f"{s[0]}x{s[1]}x{s[2]}\n")
@@ -168,7 +164,46 @@ def rfold_placeable_file(root: str, binary: str, cap: int) -> str:
         f"wrote {path}: {len(placed)}/{len(cands)} placeable "
         + " ".join(f"{d}D={by_nd_placed[d]}/{by_nd_all[d]}" for d in (1, 2, 3))
     )
-    return path
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Shard CLI for the rfold(default-block) idle-torus probe: probe the
+    --only shapes and write shape,outcome rows to --out (/dev/stdout when
+    run over ssh by launcher.pull_run). Status goes to stderr."""
+    ap = argparse.ArgumentParser(description="rfold placeability probe shard")
+    ap.add_argument("--only", required=True, help="comma-separated AxBxC shapes")
+    ap.add_argument("--out", required=True, help="shape,outcome csv path")
+    ap.add_argument("--cfg", required=True, help="configs dir")
+    ap.add_argument("--astra-sim", required=True, help="reconfigurable binary")
+    ap.add_argument("--cluster-dims", required=True, help="torus dims AxBxC")
+    ap.add_argument("--jobs", type=int, default=1, help="concurrent probes")
+    ap.add_argument("--timeout", type=float, default=PROBE_TIMEOUT_S)
+    args = ap.parse_args(argv)
+    dims_csv = ",".join(str(d) for d in cluster.parse_dims(args.cluster_dims))
+    cfg = os.path.abspath(args.cfg)
+    todo = [tuple(int(x) for x in s.split("x")) for s in args.only.split(",")]
+    with concurrent.futures.ThreadPoolExecutor(args.jobs) as ex:
+        outcomes = list(
+            ex.map(
+                lambda s: probe(
+                    args.astra_sim,
+                    cfg,
+                    dims_csv,
+                    s,
+                    ["--placement-policy=rfold"],
+                    [],
+                    args.timeout,
+                ),
+                todo,
+            )
+        )
+    with open(args.out, "w", newline="") as f:
+        w = csv.writer(f, lineterminator="\n")
+        w.writerow(["shape", "outcome"])
+        for s, o in zip(todo, outcomes):
+            w.writerow([f"{s[0]}x{s[1]}x{s[2]}", o])
+    print(f"probed {len(todo)} shapes -> {args.out}", file=sys.stderr)
+    return 0
 
 
 def run(exp: str, root: str, binary: str) -> None:
@@ -238,3 +273,7 @@ def summarize(exp: str, root: str) -> None:
         n, t = placed.get(pol, 0), total[pol]
         extra = "".join(f", {k}={v}" for k, v in sorted(odd.get(pol, {}).items()))
         print(f"  {pol:>14}: {n}/{t} ({100 * n / t:.1f}%){extra}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -9,7 +9,9 @@ Usage:
                                   cluster.json -- every later phase derives from it),
                                   then build the prerequisites: Chakra tracelib (via
                                   stage) + measured service_times.csv (both skipped
-                                  if present)
+                                  if present; prompts for a workers file -- the
+                                  placeability probe and the measure run slot-limited
+                                  on those workers, or locally when it is empty)
   ./reproduce.py gen [exps|all]   arrival-trace generation for one experiment (or all)
   ./reproduce.py launch [exps|all]    deploy to workers, start runners, monitor
                                   (prompts for a workers file, default workers.txt --
@@ -136,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.phase == "prereq":
         ensure_cluster()
-        sweep.prereq(jobs=os.environ.get("JOBS"))
+        sweep.prereq(jobs=os.environ.get("JOBS"), workers_file=ask_workers())
         return 0
     if args.phase == "clean":
         confirmed_clean()

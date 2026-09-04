@@ -93,7 +93,7 @@ def legal_shapes(
 
     `base` replaces the default all_legal_shapes universe with an explicit
     shape list (the donly sweeps pass the rfold-placeable expanded universe,
-    see placeability.rfold_placeable_file); it is re-sorted to the canonical
+    see placeability.write_rfold_placeable); it is re-sorted to the canonical
     (size, shape) order, and the tracelib must cover it (prereq does)."""
     if base is None:
         base = shapes.all_legal_shapes(model)
@@ -422,7 +422,7 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="sample from exactly the shapes listed in this file (one AxBxC "
         "per line, e.g. the rfold-placeable expanded universe written by "
-        "placeability.rfold_placeable_file) instead of all legal shapes",
+        "placeability.write_rfold_placeable) instead of all legal shapes",
     )
     ap.add_argument(
         "--snap-shapes",

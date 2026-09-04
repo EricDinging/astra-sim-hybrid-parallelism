@@ -153,6 +153,69 @@ def test_assignments_roundtrip():
         assert launcher.read_assignments(p) == rows
 
 
+def test_pull_run_local_pulls_in_chunks_and_reports_failures():
+    items = [f"s{i}" for i in range(10)]
+    seen = []
+    for host, batch, out, err in launcher.pull_run(
+        {launcher.LOCAL: 3},
+        items,
+        3,
+        lambda h, b: "false" if "s4" in b else f"echo {' '.join(b)}",
+        timeout=30,
+    ):
+        assert host == launcher.LOCAL and 1 <= len(batch) <= 3
+        seen.append((batch, out))
+    assert sorted(i for b, _ in seen for i in b) == items  # each item exactly once
+    outs = {tuple(b): o for b, o in seen}
+    assert outs[("s3", "s4", "s5")] is None  # failed batch: yielded, not retried
+    assert outs[("s0", "s1", "s2")] == "s0 s1 s2\n"
+
+
+def test_pull_run_lost_host_retires_and_others_take_its_work():
+    import subprocess
+
+    real_run = launcher.subprocess.run
+
+    def fake_run(argv, **kw):
+        if argv[0] == "ssh":
+            return subprocess.CompletedProcess(argv, launcher.SSH_LOST, "", "lost")
+        return real_run(argv, **kw)
+
+    launcher.subprocess.run = fake_run
+    launcher.SLOT_STAGGER_S = 0
+    try:
+        got = list(
+            launcher.pull_run(
+                {"u@dead": 2, launcher.LOCAL: 1},
+                ["a", "b", "c", "d"],
+                1,
+                lambda h, b: f"echo {b[0]}",
+                timeout=30,
+            )
+        )
+    finally:
+        launcher.subprocess.run = real_run
+    assert sorted(b[0] for _, b, _, _ in got) == ["a", "b", "c", "d"]
+    assert all(h == launcher.LOCAL and o == f"{b[0]}\n" for h, b, o, _ in got)
+
+
+def test_pull_run_all_slots_lost_yields_leftovers_failed():
+    import subprocess
+
+    real_run = launcher.subprocess.run
+    launcher.subprocess.run = lambda argv, **kw: subprocess.CompletedProcess(
+        argv, launcher.SSH_LOST, "", "lost"
+    )
+    launcher.SLOT_STAGGER_S = 0
+    try:
+        got = list(launcher.pull_run({"u@dead": 1}, ["a", "b"], 1, lambda h, b: "x", 5))
+    finally:
+        launcher.subprocess.run = real_run
+    assert got == [
+        ("-", ["a", "b"], None, "no host could run these (all slots retired)")
+    ]
+
+
 if __name__ == "__main__":
     fns = [
         v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)

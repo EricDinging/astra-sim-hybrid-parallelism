@@ -21,12 +21,15 @@ result csv files next to it.
 from __future__ import annotations
 
 import concurrent.futures
+import csv
 import datetime
+import io
 import os
 import shutil
 import subprocess
 import tempfile
 import time
+from collections.abc import Callable, Iterator
 
 import cluster
 import gen_arrivals
@@ -108,7 +111,7 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
     shapes of exactly that dimensionality (gen_arrivals --ndim), drawn from
     the rfold-placeable slice of the EXPANDED shape universe (dims beyond a
     torus axis, up to the quarter cap; pp capped at 16 by the stage model;
-    filtered by the idle-torus probe placeability.rfold_placeable_file so
+    filtered by the idle-torus probe placeability.write_rfold_placeable so
     every remaining arm places 100% of the trace and JCT is compared on
     fully-placed workloads). They run without the firstfit placement arm,
     whose strict containment cannot place those shapes (see placements()).
@@ -321,23 +324,126 @@ def build_schedules(root: str, dims: tuple[int, int, int]) -> None:
             print(f"built {p}: {cluster.fmt(dims)} {topo}, per-link {tag}={value}")
 
 
-def prereq(root: str = ROOT, jobs: str | None = None) -> None:
+def build_binaries(host_floors: dict[str, str], stage: str) -> dict[str, str]:
+    """Build one binary per ISA floor among host_floors (plus the local
+    machine's own, recorded as host_floors[LOCAL]) into <stage>/<floor>/
+    and return floor -> staged binary path. Binaries are compiled here but
+    run on the workers, so each host's own floor picks its -a flag --
+    haswell hosts get the haswell build, the rest the generic one. The
+    local floor is built last, leaving the in-tree binary locally
+    runnable (the local machine always runs something: placeability
+    probes, or the whole job when workers.txt is empty)."""
+    local_floor = "haswell" if launcher.probe(launcher.LOCAL)[2] else "generic"
+    host_floors[launcher.LOCAL] = local_floor
+    binaries: dict[str, str] = {}
+    for floor in sorted(set(host_floors.values()) - {local_floor}) + [local_floor]:
+        build_binary(floor)
+        os.makedirs(os.path.join(stage, floor))
+        binaries[floor] = shutil.copy2(ASTRA_SIM_BIN, os.path.join(stage, floor))
+    return binaries
+
+
+def farm(
+    root: str, workers_file: str | None
+) -> Callable[[str, list[str], list[str], int, float], Iterator]:
+    """Probe the workers (workers_file, default workers.txt; empty/missing
+    = the local machine), build their binaries, and return run(script,
+    args, items, chunk, timeout): deploy the workspace to every worker
+    (idempotent rsync, so a second call after gen_traces ships only the
+    new traces) and stream `items` through launcher.pull_run, invoking
+    scripts/<script> --only <batch> --out /dev/stdout on each host with
+    one sim per slot. Yields pull_run's (host, batch, csv_text|None, err)."""
+    dims = cluster.load(root)
+    cap = cluster.capacity(dims)
+    ws = launcher.workspace(cap)
+    host_slots, host_floors = launcher.probe_all(
+        launcher.parse_workers(workers_file or os.path.join(root, "workers.txt")),
+        launcher.mem_per_run_gb(cap),
+    )
+    stage = tempfile.mkdtemp(prefix=f"cluster{cap}_prereq_")
+    binaries = build_binaries(host_floors, stage)
+    remote_bin = f"{ws}/bin/{os.path.basename(ASTRA_SIM_BIN)}"
+
+    def cmd_for(script: str, args: list[str], host: str, batch: list[str]) -> str:
+        if host == launcher.LOCAL:
+            w, py, binary = root, f"python3 {HERE}/{script}", ASTRA_SIM_BIN
+        else:
+            w = ws
+            py = f"LD_LIBRARY_PATH={ws}/lib python3 {ws}/scripts/{script}"
+            binary = remote_bin
+        return (
+            f"cd {w} && {py} --cfg configs --astra-sim {binary} "
+            f"--cluster-dims {cluster.fmt(dims)} --jobs 1 --out /dev/stdout "
+            f"--only {','.join(batch)} {' '.join(args)}"
+        )
+
+    def run(
+        script: str, args: list[str], items: list[str], chunk: int, timeout: float
+    ) -> Iterator[tuple[str, list[str], str | None, str]]:
+        with concurrent.futures.ThreadPoolExecutor(len(host_slots)) as ex:
+            for _ in ex.map(
+                lambda h: launcher.deploy(
+                    h, root, binaries[host_floors[h]], stage, [], ws
+                ),
+                host_slots,
+            ):
+                pass
+        print(
+            f"{script}: {len(items)} items on {len(host_slots)} host(s), "
+            f"{sum(host_slots.values())} slots"
+        )
+        return launcher.pull_run(
+            host_slots, items, chunk, lambda h, b: cmd_for(script, args, h, b), timeout
+        )
+
+    return run
+
+
+PROBE_CHUNK = 50
+
+
+def prereq(
+    root: str = ROOT, jobs: str | None = None, workers_file: str | None = None
+) -> None:
     """Build the shared prerequisites for every experiment: the Chakra
     tracelib (idempotent/resumable -- already-built shapes are skipped) and
-    the measured service_times.csv (skipped when present; delete it to force
-    a re-measure). Neither is touched by clean(). Requires cluster.json
-    (./reproduce.py prereq prompts for it)."""
+    the measured service_times.csv (shapes already in it are skipped;
+    delete it to force a full re-measure). Neither is touched by clean().
+    Requires cluster.json (./reproduce.py prereq prompts for it).
+
+    The placeability probe and the service-time measure run on the
+    workers in workers_file (see farm; empty/missing = local machine),
+    slot-limited per host with dynamic balancing."""
     dims = cluster.load(root)
     shapes.init(dims)
     sync_network_yml(root, cluster.capacity(dims))
     build_schedules(root, dims)
+    run = farm(root, workers_file)
     # the <nd>donly experiments sample the rfold-placeable slice of the
     # expanded (non-torus-fitting) universe at the quarter cap: probe it
     # with the actual binary FIRST (no traces needed), then build/measure
     # only the union of the standard universe and that placeable slice
     cap = cluster.capacity(dims) // 4
-    build_binary("auto")
-    placeable = placeability.rfold_placeable_file(root, ASTRA_SIM_BIN, cap)
+    placeable = placeability.rfold_placeable_path(root, cap)
+    if os.path.isfile(placeable):
+        print(f"skip  {placeable} (exists; delete it to re-probe)")
+    else:
+        cands = shapes.expanded_legal_shapes("bw", cap)
+        outcomes: dict[str, str] = {}
+        for host, batch, out, err in run(
+            "placeability.py",
+            [],
+            [shapes.fmt_shape(s) for s in cands],
+            PROBE_CHUNK,
+            placeability.PROBE_TIMEOUT_S * PROBE_CHUNK + 120,
+        ):
+            if out is None:
+                print(f"WARN {host}: probe batch of {len(batch)} failed: {err}")
+                continue
+            for row in csv.DictReader(io.StringIO(out)):
+                outcomes[row["shape"]] = row["outcome"]
+            print(f"  probed {len(outcomes)}/{len(cands)}")
+        placeability.write_rfold_placeable(placeable, cands, outcomes)
     rc = gen_traces.main(
         [
             "--out",
@@ -351,47 +457,57 @@ def prereq(root: str = ROOT, jobs: str | None = None) -> None:
     )
     if rc:
         raise SystemExit(rc)
-    svc_table = os.path.join(root, "service_times.csv")
-    # a table only counts as present when every legal shape is in it --
-    # a partially failed measure (e.g. OOM on the big shapes) is re-run
-    with open(placeable) as f:
-        listed = {shapes.parse_shape(ln.strip()) for ln in f if ln.strip()}
-    expected = len(set(shapes.all_legal_shapes("bw")) | listed)
-    have = sum(1 for _ in open(svc_table)) - 1 if os.path.isfile(svc_table) else 0
-    if have == expected:
-        print(f"skip  {svc_table} ({have} shapes; delete it to re-measure)")
-    else:
-        if have:
-            print(f"re-measuring: {svc_table} has {have}/{expected} shapes")
-        svc(root)
+    svc(root, run, placeable)
 
 
-def svc(root: str = ROOT) -> None:
-    """(Re)measure every shape's isolated service time -> service_times.csv.
-    Builds the reconfigurable binary if needed (runs locally, so the local
-    machine's ISA is the right floor); needs the tracelib."""
-    build_binary("auto")
-    dims = cluster.load(root)
-    placeable = os.path.join(root, f"rfold_placeable{cluster.capacity(dims) // 4}.txt")
-    rc = measure_svc.main(
-        [
-            "--traces",
-            os.path.join(root, "tracelib"),
-            "--cfg",
-            os.path.join(root, "configs"),
-            "--astra-sim",
-            ASTRA_SIM_BIN,
-            "--out",
-            os.path.join(root, "service_times.csv"),
-            "--cluster-dims",
-            cluster.fmt(dims),
-        ]
-        # the donly universe file exists once prereq has probed it; a bare
-        # svc() call before that measures the standard universe only
-        + (["--extra-shapes-file", placeable] if os.path.isfile(placeable) else [])
-    )
-    if rc:
-        raise SystemExit(rc)
+def svc(root: str, run: Callable, extra_file: str | None = None) -> None:
+    """Measure the isolated service time of every shape with a trace that
+    is not yet in service_times.csv (standard universe + extra_file's
+    shapes), through `run` (see farm), largest first. The table is
+    rewritten after every result, so an interrupted measure resumes where
+    it stopped; a partially failed one (e.g. OOM on the big shapes) is
+    re-tried on the next call. Delete the table to re-measure everything."""
+    table = os.path.join(root, "service_times.csv")
+    have = measure_svc.read_table(table)
+    todo = [
+        s
+        for s in measure_svc.legal_shapes_with_traces(
+            "bw", os.path.join(root, "tracelib"), None, extra_file
+        )
+        if s not in have
+    ]
+    if not todo:
+        print(f"skip  {table} ({len(have)} shapes; delete it to re-measure)")
+        return
+    todo.sort(key=lambda s: (-s[0] * s[1] * s[2], s))
+    print(f"measuring {len(todo)} shapes ({len(have)} already in {table})")
+    rows = [(s, s[0] * s[1] * s[2], v) for s, v in have.items()]
+    failures = []
+    for host, batch, out, err in run(
+        "measure_svc.py",
+        ["--traces", "tracelib"],
+        [shapes.fmt_shape(s) for s in todo],
+        1,
+        measure_svc.SIM_TIMEOUT_S + 300,
+    ):
+        if out is None:
+            failures.append(f"{','.join(batch)} on {host}: {err}")
+            continue
+        for r in csv.DictReader(io.StringIO(out)):
+            rows.append(
+                (
+                    shapes.parse_shape(r["shape"]),
+                    int(r["size"]),
+                    int(r["svc_per_iter_ns"]),
+                )
+            )
+        measure_svc.write_table(table, rows)
+        print(f"  {len(rows) - len(have)}/{len(todo)} measured ({batch[0]} on {host})")
+    print(f"wrote {table}: {len(rows)} shapes, {len(failures)} failed")
+    for f in failures:
+        print(f"  FAIL {f}")
+    if failures:
+        raise SystemExit(1)
 
 
 def gen(exp: str, root: str = ROOT) -> None:
@@ -462,27 +578,15 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
                 )
         cells_by_exp[exp] = cs
 
-    # Probe the workers first: binaries are compiled here but run on them,
-    # so each host's own ISA floor picks its -a flag -- haswell hosts get
-    # the haswell build, the rest the generic one. The local machine always
-    # runs something too (placeability probes, or the whole sweep when
-    # workers.txt is empty), so its floor is always among the builds and is
-    # built last, leaving the in-tree binary locally runnable.
+    # Probe the workers first: each host's ISA floor picks its binary
     cap = cluster.capacity(cluster.load(root))
     ws = launcher.workspace(cap)
     host_slots, host_floors = launcher.probe_all(
         launcher.parse_workers(workers_file or os.path.join(root, "workers.txt")),
         launcher.mem_per_run_gb(cap, exps),
     )
-    local_floor = "haswell" if launcher.probe(launcher.LOCAL)[2] else "generic"
-    host_floors[launcher.LOCAL] = local_floor
     stage = tempfile.mkdtemp(prefix=f"cluster{cap}_deploy_")
-    floors = set(host_floors[h] for h in host_slots) | {local_floor}
-    binaries: dict[str, str] = {}
-    for floor in sorted(floors - {local_floor}) + [local_floor]:
-        build_binary(floor)
-        os.makedirs(os.path.join(stage, floor))
-        binaries[floor] = shutil.copy2(ASTRA_SIM_BIN, os.path.join(stage, floor))
+    binaries = build_binaries(host_floors, stage)
 
     for exp in [e for e in exps if experiments(root)[e] is None]:
         placeability.run(exp, root, ASTRA_SIM_BIN)
