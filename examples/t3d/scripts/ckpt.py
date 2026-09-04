@@ -79,7 +79,10 @@ SSH_OPTS = [
     "ControlPersist=60",
 ]
 LOCAL = "local"
-STOP_TIMEOUT_S = 120  # safe-point stop wait; event boundaries are ~instant
+# Safe-point stop wait. Event boundaries are ~instant on an idle host, but
+# a 16 GiB rfold sim on a swap-bound host took >2 min to shed its caches
+# and flush (2026-09-03, two sims left paused by the old 120 s limit).
+STOP_TIMEOUT_S = 1800
 MANIFEST = "ckpt_manifest.json"
 
 
@@ -180,7 +183,10 @@ def dump_one(host: str, sim: dict, leave_running: bool = False) -> dict:
         f"  s=$(ps -o stat= -p {pid} 2>/dev/null) "
         f'    || {{ echo "sim {pid} exited before the safe point" >&2; exit 1; }}; '
         f'  case "$s" in T*) exit 0;; esac; sleep 1; '
-        f'done; echo "sim {pid} not stopped after {STOP_TIMEOUT_S}s" >&2; exit 1',
+        # Never leave the sim paused: CONT it. If its self-SIGSTOP lands
+        # after this, it stays paused until someone CONTs it by hand.
+        f"done; kill -CONT {pid}; "
+        f'echo "sim {pid} not stopped after {STOP_TIMEOUT_S}s (CONT sent)" >&2; exit 1',
         timeout=STOP_TIMEOUT_S + 60,
     )
     # A sim that was itself restored earlier has a babysitter polling its pid
