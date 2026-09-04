@@ -10,17 +10,41 @@ Idempotent: skips a combo whose sim.done says rc=0, and kills a stale twin of
 itself (a sim logging to the same combo folder) before starting, so a
 relaunch never stacks two sims on one combo. Dependency-free stdlib so it
 runs unchanged on any worker.
+
+While the sim runs it is snapshotted in place at every CKPT_MILESTONES
+completed jobs (SIGUSR1 safe point + `criu dump -R`, same recipe as
+ckpt.py --leave-running): the image, paused-time output copies and a
+ckpt_manifest.json land in <combo>/criu-img, replacing the previous
+milestone's. Snapshots are best effort -- a missing criu or a failed dump
+is logged and the sim keeps running.
 """
 
 from __future__ import annotations
 
+import datetime
 import fcntl
+import hashlib
 import json
 import math
 import os
 import resource
+import shlex
+import shutil
+import signal
+import socket
 import subprocess
 import sys
+import time
+
+from progress import jobs_done
+
+# Live snapshots at these completed-job counts; each replaces the previous.
+CKPT_MILESTONES = tuple(range(10_000, 50_001, 10_000))
+CKPT_POLL_SECS = 60
+# Safe-point wait (see ckpt.STOP_TIMEOUT_S: a swap-bound rfold took >2 min).
+CKPT_STOP_TIMEOUT_S = 1800
+# criu command; tests point it at a stub.
+CRIU = os.environ.get("CRIU", "sudo -n criu")
 
 
 def npus_per_dim(w: str) -> str:
@@ -142,6 +166,111 @@ def policy_settings(pol: str) -> tuple[str, str, list[str]]:
     return pol, "torus", []
 
 
+def proc_state(pid: int) -> str | None:
+    """/proc state letter (R, S, T, ...) or None once the process is gone."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            return f.read().rsplit(")", 1)[1].split()[0]
+    except OSError:
+        return None
+
+
+def snapshot(pid: int, combo_dir: str, runs: str, jobs: int) -> None:
+    """Dump the running sim `pid` at its next safe point into
+    <combo>/criu-img, leaving it running. Built in criu-img.new and swapped
+    in only on success, so a failed dump keeps the previous milestone.
+    Host-wide flock: parallel dumps of ~15 GB images thrash one disk, and
+    serializing bounds the transient (old + new image) to one sim."""
+    with open(os.path.join(runs, ".ckpt.lock"), "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        new, img = combo_dir + "/criu-img.new", combo_dir + "/criu-img"
+        shutil.rmtree(new, ignore_errors=True)
+        os.makedirs(new)
+        os.kill(pid, signal.SIGUSR1)
+        for _ in range(CKPT_STOP_TIMEOUT_S):
+            st = proc_state(pid)
+            if st is None:
+                raise RuntimeError("sim exited before the safe point")
+            if st == "T":
+                break
+            time.sleep(1)
+        else:
+            os.kill(pid, signal.SIGCONT)
+            raise RuntimeError(f"not at safe point after {CKPT_STOP_TIMEOUT_S}s")
+        try:
+            cmd = (
+                f"{CRIU} dump -t {pid} -D {shlex.quote(new)} --shell-job -R -o dump.log"
+            )
+            if CRIU.startswith("sudo"):  # images are root-owned otherwise
+                cmd += f" && sudo -n chown -R {os.getuid()}:{os.getgid()} {shlex.quote(new)}"
+            r = subprocess.run(
+                ["bash", "-c", cmd], capture_output=True, text=True, timeout=1800
+            )
+            if r.returncode != 0:
+                raise RuntimeError(f"criu dump rc={r.returncode}: {r.stderr[-300:]}")
+            # Outputs must match the image: copy them while the sim is paused.
+            os.makedirs(new + "/outputs")
+            for f in os.listdir(combo_dir):
+                p = os.path.join(combo_dir, f)
+                if os.path.isfile(p) and f != "arrivals.csv":
+                    shutil.copy2(p, new + "/outputs/")
+        finally:
+            os.kill(pid, signal.SIGCONT)
+        exe = os.readlink(f"/proc/{pid}/exe")
+        with open(exe, "rb") as f:
+            md5 = hashlib.md5(f.read()).hexdigest()
+        with open(f"/proc/{pid}/cmdline") as f:
+            argv = f.read().split("\0")
+        jobs_dir = next(
+            (a.split("=", 1)[1] for a in argv if a.startswith("--jobs-dir=")), None
+        )
+        manifest = {  # same schema as ckpt.py's, so its tooling can consume it
+            "leave_running": True,
+            "host": socket.gethostname(),
+            "combo_dir": combo_dir,
+            "jobs_dir": jobs_dir,
+            "binary": exe,
+            "binary_md5": md5,
+            "cwd": os.readlink(f"/proc/{pid}/cwd"),
+            "pid": pid,
+            "jobs": jobs,
+            "dumped_at": datetime.datetime.now().isoformat(timespec="seconds"),
+        }
+        with open(new + "/ckpt_manifest.json", "w") as f:
+            json.dump(manifest, f, indent=1)
+        shutil.rmtree(img, ignore_errors=True)
+        os.rename(new, img)
+
+
+def babysit(
+    proc: subprocess.Popen,
+    combo_dir: str,
+    runs: str,
+    milestones: tuple[int, ...] = CKPT_MILESTONES,
+    poll: float = CKPT_POLL_SECS,
+) -> int:
+    """Wait for the sim, snapshotting once per crossed milestone (a poll that
+    finds several crossed takes one snapshot, at the latest). Returns rc."""
+    pending = list(milestones)
+    while True:
+        try:
+            return proc.wait(timeout=poll)
+        except subprocess.TimeoutExpired:
+            pass
+        n = jobs_done(combo_dir)
+        due = [m for m in pending if n >= m]
+        if not due:
+            continue
+        pending = pending[len(due) :]
+        try:
+            snapshot(proc.pid, combo_dir, runs, due[-1])
+            print(f"snapshot {combo_dir} at {due[-1]} jobs", flush=True)
+        except (OSError, RuntimeError, subprocess.SubprocessError) as e:
+            print(
+                f"WARN snapshot {combo_dir} at {due[-1]} jobs failed: {e}", flush=True
+            )
+
+
 def main() -> int:
     w, exp, combo = os.path.abspath(sys.argv[1]), sys.argv[2], sys.argv[3]
     combo_dir = os.path.join(w, "runs", exp, combo)
@@ -200,7 +329,7 @@ def main() -> int:
     placement, topo, extra = policy_settings(pol)
     extra += failure_flags(exp, dims)
     with open(os.path.join(combo_dir, "run.err"), "w") as err:
-        rc = subprocess.run(
+        proc = subprocess.Popen(
             [
                 find_binary(w),
                 f"--system-configuration={cfg}/system.json",
@@ -229,7 +358,8 @@ def main() -> int:
             stdout=subprocess.DEVNULL,
             stderr=err,
             env=env,
-        ).returncode
+        )
+        rc = babysit(proc, combo_dir, os.path.join(w, "runs"))
     with open(done, "w") as f:
         f.write(f"rc={rc}\n")
     print(f"done {exp}/{combo} rc={rc}")

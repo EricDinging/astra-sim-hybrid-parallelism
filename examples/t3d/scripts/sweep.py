@@ -31,6 +31,7 @@ import tempfile
 import time
 from collections.abc import Callable, Iterator
 
+import ckpt
 import cluster
 import gen_arrivals
 import gen_matrices
@@ -614,6 +615,8 @@ def launch(exps: list[str], root: str = ROOT, workers_file: str | None = None) -
 
     def deploy_and_start(host: str) -> None:
         cells = per_host[host]  # queue-entry names give LPT order, no sort
+        if host != launcher.LOCAL:
+            ckpt.ensure_criu(host)  # run_combo's milestone snapshots need it
         launcher.deploy(
             host,
             root,

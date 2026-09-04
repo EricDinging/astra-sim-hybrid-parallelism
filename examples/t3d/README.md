@@ -10,11 +10,15 @@ service times, results) is reproducible from source.
 
 ## Quick start
 
+Recommended system: **Ubuntu 26.04 LTS** (its stock packages, criu
+included, are all new enough).
+
 ```bash
-# 1. Install packages (Ubuntu): simulator build deps + Docker >= 23 for the
-#    stage trace generator
+# 1. Install packages: simulator build deps, Docker >= 23 for the stage
+#    trace generator, criu for the in-flight sim snapshots
 sudo apt-get install cmake g++ libprotobuf-dev protobuf-compiler \
-    libscotch-dev libhwloc-dev libjemalloc-dev libboost-dev rsync docker-buildx-plugin
+    libscotch-dev libhwloc-dev libjemalloc-dev libboost-dev rsync \
+    docker-buildx-plugin criu
 
 # 2. Build the stage Docker image (from the REPO ROOT; needs network)
 docker buildx build -t astra:latest .
@@ -31,6 +35,22 @@ docker buildx build -t astra:latest .
 echo you@server1.example.org >> workers.txt
 ./reproduce.py launch <experiment[,experiment...]|all>
 ```
+
+**If your Ubuntu's stock criu is older than 3.17 (22.04 ships 3.16.1, which
+segfaults on restore; 24.04 has no criu package at all), install it from
+the CRIU PPA instead:**
+
+```bash
+sudo add-apt-repository -y ppa:criu/ppa
+sudo apt-get update
+sudo apt-get install criu
+criu --version        # must print 3.17 or newer (the PPA gives 4.x)
+```
+
+`launch` runs the same check on every worker and pulls the PPA build in
+automatically where the stock one is too old, so the workers need nothing
+by hand; the install above is for this machine (local runs and
+`scripts/ckpt.py`).
 
 There is no separate compile step: `prereq` and `launch` build the simulator
 binary themselves via `build/astra_analytical/build.sh`. At launch the
@@ -113,6 +133,17 @@ runner that works through its queue. Sims write results (including
 per-job-flushed `progress.csv` and per-event `occupancy.csv`) straight into their
 combo folder. Relaunch is safe: finished combos are skipped, stale twins are
 killed.
+
+Every sim is also snapshotted in place as it passes 10k, 20k, … 50k
+completed jobs (`CKPT_MILESTONES` in `scripts/run_combo.py`): the wrapper
+sends the binary to its SIGUSR1 safe point, `criu dump -R`s it (the sim
+keeps running), and leaves the image, paused-time output copies and a
+`ckpt_manifest.json` in `<combo>/criu-img/` on the worker, replacing the
+previous milestone's image — so a crashed or OOM-killed sim can be
+restored from its last 10k boundary via `scripts/ckpt.py resume` after
+copying the combo dir into a store. `launch` installs criu on the workers;
+dumps on one host are serialized, so the disk holds at most one image per
+sim (≈ the sim's RSS, 13–17 GB at 4096) plus one in flight.
 
 ## Syncing results back (`./reproduce.py collect`)
 
