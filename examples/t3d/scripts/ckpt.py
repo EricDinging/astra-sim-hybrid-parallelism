@@ -13,7 +13,9 @@ Two modes, one script (dependency-free stdlib, like the other farm tooling):
       are quiet and the whole in-flight sweep state lives in <store>.
       --experiment filters which sims are dumped; the harness stop is always
       host-wide (one runner serves every experiment in a workspace).
-      --combo NAME dumps just that one combo and leaves the harness alone:
+      --no-pull leaves the images on the workers (manifest written into
+      criu-img/) instead of rsyncing them into <store>.
+      --combo NAME (or glob) dumps just those combos and leaves the harness alone:
       the sim's run_combo.py parent sees the kill and records rc=-9, the
       other sims keep running. --leave-running snapshots instead of
       evacuating: the sim is dumped at its safe point and SIGCONT'd, its
@@ -54,6 +56,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import datetime
+import fnmatch
 import glob
 import json
 import os
@@ -144,7 +147,7 @@ def running_sims(
             continue
         if experiment and f"/runs/{experiment}/" not in combo_dir + "/":
             continue
-        if combo and os.path.basename(combo_dir) != combo:
+        if combo and not fnmatch.fnmatch(os.path.basename(combo_dir), combo):
             continue
         sims.append(
             {"pid": int(parts[0]), "combo_dir": combo_dir, "jobs_dir": jobs_dir}
@@ -264,6 +267,7 @@ def checkpoint_host(
     store: str,
     combo: str | None = None,
     leave_running: bool = False,
+    pull: bool = True,
 ) -> tuple[list[str], int]:
     """Dump every running sim on `host`, pull to the store: (report, nfail).
     Only a full-host kill-mode dump is an evacuation that freezes and then
@@ -294,6 +298,14 @@ def checkpoint_host(
         # Every dump failed and every sim was SIGCONT'd — put the harness
         # back the way we found it instead of orphaning live sims.
         signal_harness(host, "CONT")
+    if not pull:
+        for m in dumped:  # manifest next to the image, for a later pull/resume
+            sh(
+                host,
+                f"cat > {shlex.quote(m['combo_dir'] + '/criu-img/' + MANIFEST)}"
+                f" <<'EOF'\n{json.dumps(m, indent=1)}\nEOF",
+            )
+        return lines, fails
     # Pulls are independent and network-bound; overlap a few per host.
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as ex:
         futs = {ex.submit(pull_one, host, store, m): m for m in dumped}
@@ -395,7 +407,12 @@ def cmd_checkpoint(args: argparse.Namespace) -> int:
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(hosts)) as ex:
         for lines, nfail in ex.map(
             lambda h: checkpoint_host(
-                h, args.experiment, args.store, args.combo, args.leave_running
+                h,
+                args.experiment,
+                args.store,
+                args.combo,
+                args.leave_running,
+                not args.no_pull,
             ),
             hosts,
         ):
@@ -456,7 +473,12 @@ def main() -> int:
     c.add_argument(
         "--experiment", default=None, help="only sims of this experiment (default: all)"
     )
-    c.add_argument("--combo", default=None, help="only this combo (dir basename)")
+    c.add_argument("--combo", default=None, help="only combos matching this glob")
+    c.add_argument(
+        "--no-pull",
+        action="store_true",
+        help="keep images on the workers; skip the rsync into --store",
+    )
     c.add_argument(
         "--leave-running",
         action="store_true",
