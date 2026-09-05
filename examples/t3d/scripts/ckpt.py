@@ -197,10 +197,13 @@ def dump_one(host: str, sim: dict, leave_running: bool = False) -> dict:
         sh(host, f"pkill -f {shlex.quote(f'kill -[0] {pid} ')} || true", check=False)
     prov = sh(
         host,
-        f"set -e; rm -rf {shlex.quote(img)}; mkdir -p {shlex.quote(img)}; "
+        f"set -eo pipefail; rm -rf {shlex.quote(img)}; mkdir -p {shlex.quote(img)}; "
         f"tr '\\0' '\\n' < /proc/{pid}/cmdline > {shlex.quote(img)}/cmdline; "
-        f"exe=$(readlink -f /proc/{pid}/exe); cwd=$(readlink -f /proc/{pid}/cwd); "
-        f'md5=$(md5sum "$exe" | cut -d" " -f1); '
+        # A binary rebuilt under a running sim leaves exe pointing at a deleted
+        # inode: hash the mapped file via /proc, and drop the ' (deleted)' tag.
+        f"exe=$(readlink -f /proc/{pid}/exe); exe=${{exe%% (deleted)}}; "
+        f"cwd=$(readlink -f /proc/{pid}/cwd); "
+        f'md5=$(md5sum /proc/{pid}/exe | cut -d" " -f1); '
         f'echo "$exe"; echo "$md5"; echo "$cwd"',
     ).splitlines()
     exe, md5, cwd = prov[0].strip(), prov[1].strip(), prov[2].strip()
@@ -210,8 +213,10 @@ def dump_one(host: str, sim: dict, leave_running: bool = False) -> dict:
             # --shell-job: sweep sims run under run_combo.py, so they are not
             # session leaders; their session/pgroup leader lives outside the
             # dumped tree.
+            # --ghost-limit: the sim may map a binary that was rebuilt (unlinked)
+            # after it started; CRIU must copy the ~100 MB ghost into the image.
             f"sudo criu dump -t {pid} -D {shlex.quote(img)} --shell-job "
-            f"{'-R ' if leave_running else ''}-o dump.log && "
+            f"--ghost-limit 256M {'-R ' if leave_running else ''}-o dump.log && "
             f'sudo chown -R "$(id -un):" {shlex.quote(img)}',
             timeout=1800,
         )
