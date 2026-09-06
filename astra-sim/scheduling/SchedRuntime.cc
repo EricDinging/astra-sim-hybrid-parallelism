@@ -130,8 +130,26 @@ SchedRuntime::SchedRuntime(NetworkAnalytical::EventQueue* eq,
       writer_(writer) {}
 
 ClusterView SchedRuntime::snapshot_cluster_view() const {
+    return snapshot_cluster_view_adjusted({}, {});
+}
+
+ClusterView SchedRuntime::snapshot_cluster_view_adjusted(
+    const std::unordered_set<int>& withheld,
+    const std::unordered_set<int>& released) const {
+    // Plain snapshots (the hot path) read busy_npus_ directly; only easyshape's
+    // adjusted views pay for a copy.
+    const std::unordered_set<int>* busy = &busy_npus_;
+    std::unordered_set<int> adjusted;
+    if (!withheld.empty() || !released.empty()) {
+        adjusted = busy_npus_;
+        for (int id : released) {
+            adjusted.erase(id);
+        }
+        adjusted.insert(withheld.begin(), withheld.end());
+        busy = &adjusted;
+    }
     std::vector<int> free = free_npus_excluding(
-        static_cast<int>(all_sys_.size()), busy_npus_, failed_npus_);
+        static_cast<int>(all_sys_.size()), *busy, failed_npus_);
     // Usable capacity excludes permanently-failed NPUs. Policies use
     // total_npus() only as the "job can never fit" DROP bound, so passing the
     // usable count makes oversized jobs DROP instead of DEFER forever. The
@@ -296,8 +314,9 @@ void SchedRuntime::commit_placement(JobInstance* job,
 }
 
 PlacementResult SchedRuntime::attempt_place(JobInstance* job,
-                                            const ClusterView& view) {
-    const bool sticky = placement_->defer_is_shape_sticky();
+                                            const ClusterView& view,
+                                            bool use_memo) {
+    const bool sticky = use_memo && placement_->defer_is_shape_sticky();
     if (sticky) {
         auto it = defer_memo_.find(job->shape);
         if (it != defer_memo_.end() && it->second == detach_epoch_) {
@@ -423,8 +442,15 @@ void SchedRuntime::easy_sweep() {
             continue;
         }
 
-        // DEFER: `head` is the pivot. Compute its count-based reservation from
-        // currently-running jobs' projected completion times, then backfill any
+        // DEFER: `head` is the pivot. easyshape reserves the pivot's probed
+        // placement; without one (or under plain easy) fall back to the
+        // count-based reservation below.
+        if (admission_->shape_aware_reservation() &&
+            easyshape_backfill(head, now, view)) {
+            return;
+        }
+        // Compute the pivot's count-based reservation from currently-running
+        // jobs' projected completion times, then backfill any
         // reservation-safe candidate that can place now.
         // Failed NPUs are permanently unavailable, so they reduce the usable
         // capacity that EASY's count-based reservation reasons about — exactly
@@ -484,6 +510,113 @@ void SchedRuntime::easy_sweep() {
         }
         return;  // pivot stays pending; this pass is done
     }
+}
+
+std::optional<ShapeReservation> SchedRuntime::probe_shape_reservation(
+    JobInstance* head, Tick now) {
+    // Drain order: same (projected_end, ranks, job_id) key as
+    // compute_reservation, so the two reservations agree on who frees first.
+    struct Ending {
+        Tick end;
+        const JobInstance* job;
+    };
+    std::vector<Ending> order;
+    order.reserve(running_jobs_.size());
+    for (const JobInstance* j : running_jobs_) {
+        const Tick exec = j->execution_time.value_or(now);
+        const auto est = static_cast<Tick>(j->est_duration.value_or(0));
+        order.push_back(Ending{std::max(now, exec + est), j});
+    }
+    std::sort(order.begin(), order.end(), [](const Ending& a, const Ending& b) {
+        if (a.end != b.end) {
+            return a.end < b.end;
+        }
+        if (a.job->num_ranks != b.job->num_ranks) {
+            return a.job->num_ranks < b.job->num_ranks;
+        }
+        return a.job->job_id < b.job->job_id;
+    });
+    // first_placeable_prefix only moves its upper bound on a true probe, so
+    // the last PLACED result it saw is the placement at the k it returns.
+    std::optional<PlacementResult> placed;
+    const auto places = [&](int k) {
+        std::unordered_set<int> released;
+        for (int i = 0; i < k; ++i) {
+            released.insert(order[i].job->rank_map.begin(),
+                            order[i].job->rank_map.end());
+        }
+        auto r =
+            attempt_place(head, snapshot_cluster_view_adjusted({}, released),
+                          /*use_memo=*/false);
+        if (r.outcome != PlacementOutcome::PLACED) {
+            return false;
+        }
+        placed = std::move(r);
+        return true;
+    };
+    const int k =
+        first_placeable_prefix(static_cast<int>(order.size()), places);
+    if (k < 0) {
+        return std::nullopt;
+    }
+    return ShapeReservation{k == 0 ? now : order[k - 1].end,
+                            std::move(placed->npus)};
+}
+
+bool SchedRuntime::easyshape_backfill(JobInstance* head,
+                                      Tick now,
+                                      ClusterView& view) {
+    auto logger = LoggerFactory::get_logger("scheduling");
+    if (shape_pivot_id_ != head->job_id) {
+        shape_res_ = probe_shape_reservation(head, now);
+        shape_pivot_id_ = head->job_id;
+        if (shape_res_) {
+            const auto [lo, hi] = std::minmax_element(shape_res_->npus.begin(),
+                                                      shape_res_->npus.end());
+            logger->info("job {} DEFER: shape reservation of {} NPUs [{}..{}] "
+                         "shadow +{} ns (waited {} ns, {} running)",
+                         head->job_id, shape_res_->npus.size(), *lo, *hi,
+                         shape_res_->shadow_time - now,
+                         now - head->arrival_time, running_jobs_.size());
+        } else {
+            logger->debug("job {} DEFER: no shape reservation; count-based "
+                          "fallback",
+                          head->job_id);
+        }
+    }
+    if (!shape_res_) {
+        return false;
+    }
+    const std::unordered_set<int> reserved(shape_res_->npus.begin(),
+                                           shape_res_->npus.end());
+    ClusterView view_excl = snapshot_cluster_view_adjusted(reserved, {});
+    std::vector<JobInstance*> candidates = pending_;
+    std::sort(candidates.begin(), candidates.end(), fcfs_less);
+    for (JobInstance* cand : candidates) {
+        if (cand == head) {
+            continue;
+        }
+        const Tick cand_end =
+            now + static_cast<Tick>(cand->est_duration.value_or(0));
+        // (a) ends before the pivot needs its region: any NPU, plain view
+        //     (memo-safe). (b) outlives the shadow time: the reserved NPUs
+        //     are withheld, and the memo is bypassed since this view is not
+        //     the true free set.
+        auto cr = cand_end <= shape_res_->shadow_time
+                      ? attempt_place(cand, view)
+                      : attempt_place(cand, view_excl, /*use_memo=*/false);
+        if (cr.outcome == PlacementOutcome::PLACED) {
+            commit_placement(cand, cr);
+            view = snapshot_cluster_view();
+            view_excl = snapshot_cluster_view_adjusted(reserved, {});
+        } else if (cr.outcome == PlacementOutcome::DROP) {
+            remove_from_pending(cand);
+            cand->status = JobStatus::DROPPED;
+            logger->warn("job {} DROPPED: {}", cand->job_id, cr.reason);
+        }
+        // DEFER: candidate cannot place now; leave it pending.
+    }
+    return true;
 }
 
 bool SchedRuntime::simulation_done() const {

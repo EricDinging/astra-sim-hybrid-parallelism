@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "astra-sim/scheduling/DurationEstimator.hh"
 #include "astra-sim/scheduling/Easy.hh"
+#include "astra-sim/scheduling/EasyShape.hh"
 #include "astra-sim/scheduling/Fifo.hh"
 #include "astra-sim/scheduling/JobInstance.hh"
 #include "astra-sim/scheduling/Ljdf.hh"
@@ -86,10 +87,10 @@ std::unique_ptr<AdmissionPolicy> make_admission_policy(
         return std::make_unique<Ljsfpack>();  // size-only: no estimator
     }
     if (name == "sjdf" || name == "ljdf" || name == "swf" || name == "easy" ||
-        name == "lwf") {
-        auto estimator =
-            make_duration_estimator(cfg.estimator_name, cfg.peak_perf,
-                                    cfg.local_mem_bw, cfg.max_link_bw);
+        name == "easyshape" || name == "lwf") {
+        auto estimator = make_duration_estimator(
+            cfg.estimator_name, cfg.peak_perf, cfg.local_mem_bw,
+            cfg.max_link_bw, cfg.svc_table_path);
         if (!estimator) {
             return nullptr;  // unsupported --duration-estimator
         }
@@ -104,6 +105,9 @@ std::unique_ptr<AdmissionPolicy> make_admission_policy(
         }
         if (name == "lwf") {
             return std::make_unique<Lwf>(std::move(estimator));
+        }
+        if (name == "easyshape") {
+            return std::make_unique<EasyShape>(std::move(estimator));
         }
         return std::make_unique<Easy>(std::move(estimator));
     }

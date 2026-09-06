@@ -10,6 +10,7 @@ LICENSE file in the root directory of this source tree.
 
 #include <memory>
 #include <string>
+#include <unordered_map>
 
 namespace AstraSim {
 namespace Scheduling {
@@ -44,12 +45,34 @@ class RooflineCommEstimator : public DurationEstimator {
     double max_link_bw_;
 };
 
-// Returns nullptr on an unknown estimator name.
+// Measured-table estimator: est = svc_per_iter_ns[shape] * num_iterations,
+// from a CSV with a header row containing `shape` and `svc_per_iter_ns`
+// columns (examples/t3d/service_times.csv: each shape's isolated
+// single-iteration JCT). On the t3d pareto traces it predicts the realized
+// duration to within 10% at p90, where roofline-comm underestimates by 2.4x
+// median (it prices one iteration, and a lower bound at that) -- so with
+// roofline-comm every running job looks overdue and EASY's shadow time
+// collapses to "now". Exits on a shape missing from the table.
+class SvcTableEstimator : public DurationEstimator {
+  public:
+    explicit SvcTableEstimator(const std::string& csv_path);
+    Tick estimate(const JobInstance& job) const override;
+    std::string name() const override {
+        return "svc-table";
+    }
+
+  private:
+    std::unordered_map<std::string, Tick> svc_per_iter_;
+};
+
+// Returns nullptr on an unknown estimator name. `svc_table_path` is read only
+// by svc-table; the three rates only by roofline-comm.
 std::unique_ptr<DurationEstimator> make_duration_estimator(
     const std::string& name,
     double peak_perf,
     double local_mem_bw,
-    double max_link_bw);
+    double max_link_bw,
+    const std::string& svc_table_path = "");
 
 }  // namespace Scheduling
 }  // namespace AstraSim

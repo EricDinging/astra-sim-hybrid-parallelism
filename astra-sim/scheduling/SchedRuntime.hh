@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 #define __ASTRASIM_SCHEDULING_SCHEDRUNTIME_HH__
 
 #include "astra-sim/scheduling/AdmissionPolicy.hh"
+#include "astra-sim/scheduling/Backfill.hh"
 #include "astra-sim/scheduling/ClusterView.hh"
 #include "astra-sim/scheduling/Common.hh"
 #include "astra-sim/scheduling/DurationEstimator.hh"
@@ -20,6 +21,7 @@ LICENSE file in the root directory of this source tree.
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -113,6 +115,14 @@ class SchedRuntime {
     // cannot place (the pivot), then backfills any reservation-safe candidate
     // that can place now. Selected when admission_->uses_backfill() is true.
     void easy_sweep();
+    // Shape-aware half of easy_sweep (easyshape): reserve the pivot's probed
+    // placement and backfill around it. Returns false when no shape
+    // reservation exists, so easy_sweep falls back to the count-based rule.
+    bool easyshape_backfill(JobInstance* head, Tick now, ClusterView& view);
+    // Probe the placement policy against the current free set plus the k
+    // earliest-ending running jobs, for the smallest k that places `head`.
+    std::optional<ShapeReservation> probe_shape_reservation(JobInstance* head,
+                                                            Tick now);
     // Non-blocking ("packing") sweep: admit every pending job that fits in the
     // policy's order, skipping (not blocking on) any that cannot place now.
     // Selected when admission_->skips_on_defer() is true.
@@ -120,6 +130,12 @@ class SchedRuntime {
     void remove_from_pending(JobInstance* job);
     bool simulation_done() const;
     ClusterView snapshot_cluster_view() const;
+    // snapshot_cluster_view with `withheld` NPUs also removed from the free
+    // set (easyshape's reserved region; a probe's drained prefix passes the
+    // complement via `released`, which re-adds busy NPUs).
+    ClusterView snapshot_cluster_view_adjusted(
+        const std::unordered_set<int>& withheld,
+        const std::unordered_set<int>& released) const;
     // One placement attempt for `job`: installs/clears the SchedContext
     // around placement_->try_place. When the policy declares
     // defer_is_shape_sticky(), a DEFER outcome is memoized per shape and
@@ -129,7 +145,13 @@ class SchedRuntime {
     // `view` is the sweep-maintained cluster snapshot: sweeps build it once
     // and refresh it only after commit_placement (the only in-sweep cluster
     // mutation), instead of rebuilding the O(N) snapshot per attempt.
-    PlacementResult attempt_place(JobInstance* job, const ClusterView& view);
+    // `use_memo` = false bypasses the DEFER memo both ways (neither consults
+    // nor records it): required whenever `view` is not the plain cluster
+    // snapshot (easyshape probes and reserved-region views), since the memo is
+    // only sound against the true free set.
+    PlacementResult attempt_place(JobInstance* job,
+                                  const ClusterView& view,
+                                  bool use_memo = true);
     // SIGUSR1 safe point; see the checkpoint block in SchedRuntime.cc.
     void checkpoint_stop();
 
@@ -157,6 +179,15 @@ class SchedRuntime {
     // (the failed set is fixed at startup) -- which invalidates every entry.
     std::map<std::array<int, 3>, std::uint64_t> defer_memo_;
     std::uint64_t detach_epoch_ = 0;
+    // easyshape reservation, held for the pivot's whole wait: every backfill
+    // admitted after the probe either ends by the shadow time or avoids the
+    // reserved NPUs, so the region drains monotonically and the pivot is
+    // guaranteed to place there (or somewhere earlier) without re-probing.
+    // Re-probing per detach would let the policy pick a different region
+    // each time, forfeiting the protection accumulated so far. nullopt with
+    // a matching pivot means "no shape reservation for this pivot".
+    int shape_pivot_id_ = -1;
+    std::optional<ShapeReservation> shape_res_;
     std::function<void()> drain_diagnostic_;  // deadlock post-mortem hook
     std::function<void()> checkpoint_prep_;   // SIGUSR1 checkpoint-prep hook
     std::unique_ptr<DurationEstimator> ctx_estimator_;

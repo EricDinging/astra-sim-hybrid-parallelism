@@ -7,6 +7,7 @@ LICENSE file in the root directory of this source tree.
 #include "astra-sim/scheduling/Common.hh"
 #include "astra-sim/scheduling/DurationEstimator.hh"
 #include "astra-sim/scheduling/Easy.hh"
+#include "astra-sim/scheduling/EasyShape.hh"
 #include "astra-sim/scheduling/JobInstance.hh"
 
 #include <gtest/gtest.h>
@@ -20,6 +21,7 @@ namespace {
 using AstraSim::Scheduling::ClusterView;
 using AstraSim::Scheduling::DurationEstimator;
 using AstraSim::Scheduling::Easy;
+using AstraSim::Scheduling::EasyShape;
 using AstraSim::Scheduling::JobArrival;
 using AstraSim::Scheduling::JobInstance;
 
@@ -68,6 +70,22 @@ TEST(EasyAdmission, UsesBackfillIsTrue) {
     std::vector<JobInstance*> pending;
     Easy policy = make_easy_and_prime(pending, {});
     EXPECT_TRUE(policy.uses_backfill());
+}
+
+TEST(EasyAdmission, ShapeAwareReservationIsFalse) {
+    std::vector<JobInstance*> pending;
+    Easy policy = make_easy_and_prime(pending, {});
+    EXPECT_FALSE(policy.shape_aware_reservation());
+}
+
+// easyshape: same FCFS + backfill machinery, but SchedRuntime reserves the
+// pivot's probed placement instead of an NPU count.
+TEST(EasyShapeAdmission, FlagsAndName) {
+    EasyShape policy(
+        std::make_unique<StubEstimator>(std::map<int, AstraSim::Tick>{}));
+    EXPECT_EQ(policy.name(), "easyshape");
+    EXPECT_TRUE(policy.uses_backfill());
+    EXPECT_TRUE(policy.shape_aware_reservation());
 }
 
 TEST(EasyAdmission, OnArrivalCachesEstimate) {

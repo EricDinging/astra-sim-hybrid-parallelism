@@ -14,7 +14,9 @@ LICENSE file in the root directory of this source tree.
 #include <algorithm>
 #include <cstdint>
 #include <fstream>
+#include <sstream>
 #include <string>
+#include <vector>
 
 namespace AstraSim {
 namespace Scheduling {
@@ -98,14 +100,75 @@ Tick RooflineCommEstimator::estimate(const JobInstance& job) const {
     return static_cast<Tick>(compute_ns + comm_ns);
 }
 
+SvcTableEstimator::SvcTableEstimator(const std::string& csv_path) {
+    auto logger = LoggerFactory::get_logger("scheduling");
+    std::ifstream f(csv_path);
+    if (!f) {
+        logger->critical("svc-table estimator: cannot read {}", csv_path);
+        std::exit(1);
+    }
+    auto split = [](const std::string& line) {
+        std::vector<std::string> cols;
+        std::stringstream ss(line);
+        for (std::string c; std::getline(ss, c, ',');) {
+            // Tolerate CRLF files and stray spaces around fields.
+            c.erase(c.find_last_not_of(" \t\r\n") + 1);
+            c.erase(0, c.find_first_not_of(" \t"));
+            cols.push_back(c);
+        }
+        return cols;
+    };
+    std::string line;
+    std::getline(f, line);
+    const auto header = split(line);
+    const auto col = [&](const char* want) {
+        for (std::size_t i = 0; i < header.size(); ++i) {
+            if (header[i] == want) {
+                return static_cast<int>(i);
+            }
+        }
+        logger->critical("svc-table estimator: {} lacks a '{}' column",
+                         csv_path, want);
+        std::exit(1);
+    };
+    const int shape_col = col("shape");
+    const int svc_col = col("svc_per_iter_ns");
+    while (std::getline(f, line)) {
+        const auto cols = split(line);
+        if (static_cast<int>(cols.size()) <= std::max(shape_col, svc_col)) {
+            continue;  // blank / short row
+        }
+        svc_per_iter_[cols[shape_col]] =
+            static_cast<Tick>(std::stoull(cols[svc_col]));
+    }
+}
+
+Tick SvcTableEstimator::estimate(const JobInstance& job) const {
+    const std::string shape = std::to_string(job.shape[0]) + "x" +
+                              std::to_string(job.shape[1]) + "x" +
+                              std::to_string(job.shape[2]);
+    const auto it = svc_per_iter_.find(shape);
+    if (it == svc_per_iter_.end()) {
+        LoggerFactory::get_logger("scheduling")
+            ->critical("job {}: shape {} missing from the service-time table",
+                       job.job_id, shape);
+        std::exit(1);
+    }
+    return it->second * static_cast<Tick>(std::max(1, job.num_iterations));
+}
+
 std::unique_ptr<DurationEstimator> make_duration_estimator(
     const std::string& name,
     double peak_perf,
     double local_mem_bw,
-    double max_link_bw) {
+    double max_link_bw,
+    const std::string& svc_table_path) {
     if (name == "roofline-comm") {
         return std::make_unique<RooflineCommEstimator>(peak_perf, local_mem_bw,
                                                        max_link_bw);
+    }
+    if (name == "svc-table") {
+        return std::make_unique<SvcTableEstimator>(svc_table_path);
     }
     return nullptr;
 }

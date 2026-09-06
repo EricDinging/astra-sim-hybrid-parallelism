@@ -240,6 +240,7 @@ def deploy(
     _rsync(host, [binary], f"{w}/bin/")
     _rsync(host, [lib_bundle(binary, stage_dir) + "/"], f"{w}/lib/")
     _rsync(host, [cluster.path(root)], f"{w}/")
+    _rsync(host, [os.path.join(root, "service_times.csv")], f"{w}/")  # easyshape
     _rsync(host, [os.path.join(root, "configs") + "/"], f"{w}/configs/")
     _rsync(host, [os.path.join(root, "scripts") + "/"], f"{w}/scripts/")
     _rsync(host, [os.path.join(root, "tracelib") + "/"], f"{w}/tracelib/")

@@ -22,9 +22,10 @@ class ClusterView;
 // policies). fifo and size-only policies ignore all of it.
 struct AdmissionConfig {
     std::string estimator_name = "roofline-comm";
-    double peak_perf = 0.0;     // FLOP/s
-    double local_mem_bw = 0.0;  // bytes/s
-    double max_link_bw = 0.0;   // bytes/s
+    double peak_perf = 0.0;      // FLOP/s
+    double local_mem_bw = 0.0;   // bytes/s
+    double max_link_bw = 0.0;    // bytes/s
+    std::string svc_table_path;  // --service-times (svc-table estimator)
 };
 
 // Admission policy: decides WHICH pending job to attempt next. View-aware
@@ -57,6 +58,13 @@ class AdmissionPolicy {
     // every job that fits in the policy's order (finite-bin First-Fit-
     // Decreasing when paired with descending-size ordering). Default: false.
     virtual bool skips_on_defer() const {
+        return false;
+    }
+    // True if the backfilling sweep reserves the pivot's actual placement
+    // (the NPU set the placement policy picks once enough running jobs have
+    // drained) instead of an NPU count (easyshape). Only read when
+    // uses_backfill() is true. Default: false.
+    virtual bool shape_aware_reservation() const {
         return false;
     }
 

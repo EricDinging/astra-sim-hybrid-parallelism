@@ -192,6 +192,8 @@ def experiments(root: str = ROOT) -> dict[str, list[str]]:
         f"fifo-pareto{half}-load-sweep": [*pareto, half],
         f"ljsf-pareto{half}-load-sweep": [*pareto, half],
         f"easy-pareto{quarter}-load-sweep": [*pareto, quarter],
+        # shape-aware EASY (reserves the pivot's placement, not a count)
+        f"easyshape-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"swf-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"fifo-pareto{quarter}-load-sweep": [*pareto, quarter],
         f"ljsf-pareto{quarter}-load-sweep": [*pareto, quarter],
@@ -238,7 +240,12 @@ def placements(exp: str, root: str = ROOT) -> list[str]:
     (see run_combo.policy_settings), doubling from 1x1x1 up to the whole
     torus (folding-only) -- against the firstfit and ideal anchors. The
     <nd>donly experiments drop firstfit: their expanded shape universe
-    contains shapes strict containment cannot place."""
+    contains shapes strict containment cannot place. The easyshape
+    experiments run only the two shape-constrained placements (firstfit,
+    rfold) plus the ideal anchor: the scatter policies defer on count alone,
+    so a shape reservation is just a slower count reservation there."""
+    if exp.startswith("easyshape-"):
+        return ["firstfit", "rfold", "ideal"]
     if "donly-" in exp:
         return [p for p in PLACEMENTS if p != "firstfit"]
     if "-blocksize-" not in exp:

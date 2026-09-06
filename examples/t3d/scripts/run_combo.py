@@ -328,6 +328,16 @@ def main() -> int:
     dims = npus_per_dim(w)
     placement, topo, extra = policy_settings(pol)
     extra += failure_flags(exp, dims)
+    # easyshape's reservation is only as good as its duration estimates: the
+    # roofline estimator underestimates 2.4x median (it prices one iteration,
+    # as a lower bound), which collapses every shadow time to "now". The
+    # measured per-shape table predicts within 10% at p90. Scoped to easyshape
+    # so easy/swf/sjdf/... stay byte-identical to their existing sweeps.
+    if adm == "easyshape":
+        extra += [
+            "--duration-estimator=svc-table",
+            f"--service-times={os.path.join(w, 'service_times.csv')}",
+        ]
     with open(os.path.join(combo_dir, "run.err"), "w") as err:
         proc = subprocess.Popen(
             [

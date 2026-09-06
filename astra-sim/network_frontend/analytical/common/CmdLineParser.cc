@@ -62,10 +62,18 @@ void CmdLineParser::define_options() noexcept {
         "firstfit | random | sfc | l1clustering | topomatch | rfold",
         cxxopts::value<std::string>()->default_value("firstfit"))(
         "admission-policy",
-        "fifo | sjdf | sjsf | swf | easy | ljdf | ljsf | ljsfpack | lwf",
+        "fifo | sjdf | sjsf | swf | easy | easyshape | ljdf | ljsf | ljsfpack "
+        "| "
+        "lwf",
         cxxopts::value<std::string>()->default_value("fifo"))(
-        "duration-estimator", "roofline-comm",
+        "duration-estimator",
+        "roofline-comm | svc-table (measured per-shape table, needs "
+        "--service-times)",
         cxxopts::value<std::string>()->default_value("roofline-comm"))(
+        "service-times",
+        "CSV with shape,svc_per_iter_ns columns for --duration-estimator="
+        "svc-table (examples/t3d/service_times.csv)",
+        cxxopts::value<std::string>()->default_value(""))(
         "defrag-metric", "fewest-blocks | compactness",
         cxxopts::value<std::string>()->default_value("fewest-blocks"))(
         "block-size",

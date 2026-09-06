@@ -8,6 +8,7 @@ LICENSE file in the root directory of this source tree.
 
 #include "astra-sim/common/Common.hh"
 
+#include <functional>
 #include <vector>
 
 namespace AstraSim {
@@ -58,6 +59,21 @@ bool backfill_safe(const Reservation& res,
                    Tick cand_end,
                    int cand_ranks,
                    int extra);
+
+// The pivot's shape-aware reservation (easyshape): the NPUs of the placement
+// the policy picked on the probed future free set, usable from shadow_time.
+struct ShapeReservation {
+    Tick shadow_time;
+    std::vector<int> npus;
+};
+
+// Shape-aware reservation search (easyshape). `places(k)` answers whether the
+// pivot places once the k earliest-ending running jobs (k in [0, n]) have
+// drained on top of the current free set. Returns the smallest such k, or -1
+// when even k == n cannot place. Binary search: a placement outcome is
+// monotone in the free set for shape-constrained policies (more free NPUs
+// never turn PLACED into DEFER), so log2(n) probes replace n.
+int first_placeable_prefix(int n, const std::function<bool(int)>& places);
 
 }  // namespace Scheduling
 }  // namespace AstraSim

@@ -14,6 +14,7 @@ namespace {
 using AstraSim::Tick;
 using AstraSim::Scheduling::backfill_safe;
 using AstraSim::Scheduling::compute_reservation;
+using AstraSim::Scheduling::first_placeable_prefix;
 using AstraSim::Scheduling::Reservation;
 using AstraSim::Scheduling::RunningJob;
 
@@ -121,6 +122,28 @@ TEST(Backfill, NotExistsRejectsAll) {
     Reservation res{false, 0, 0};
     EXPECT_FALSE(
         backfill_safe(res, /*cand_end=*/5, /*ranks=*/1, /*extra=*/100));
+}
+
+// --- first_placeable_prefix ------------------------------------------------
+
+TEST(Backfill, FirstPlaceablePrefixFindsSmallestK) {
+    // Monotone predicate: places once >= 5 of 12 running jobs have drained.
+    int probes = 0;
+    const auto places = [&](int k) {
+        ++probes;
+        return k >= 5;
+    };
+    EXPECT_EQ(first_placeable_prefix(12, places), 5);
+    EXPECT_LE(probes, 6);  // binary search, not a linear scan
+}
+
+TEST(Backfill, FirstPlaceablePrefixZeroWhenFreeNowSuffices) {
+    EXPECT_EQ(first_placeable_prefix(3, [](int) { return true; }), 0);
+}
+
+TEST(Backfill, FirstPlaceablePrefixNoneWhenEvenIdleFails) {
+    EXPECT_EQ(first_placeable_prefix(4, [](int) { return false; }), -1);
+    EXPECT_EQ(first_placeable_prefix(0, [](int) { return false; }), -1);
 }
 
 }  // namespace

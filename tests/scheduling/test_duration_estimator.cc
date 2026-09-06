@@ -21,6 +21,7 @@ namespace {
 using AstraSim::Scheduling::JobArrival;
 using AstraSim::Scheduling::JobInstance;
 using AstraSim::Scheduling::RooflineCommEstimator;
+using AstraSim::Scheduling::SvcTableEstimator;
 
 void write_varint32(std::ostream& f, uint32_t value) {
     uint8_t byte;
@@ -135,6 +136,24 @@ TEST(RooflineCommEstimatorDeath, HardFailsWhenTraceMissing) {
     JobInstance job(a, /*trace_dir=*/"/no/such/dir", /*runtime=*/nullptr);
     RooflineCommEstimator est(kPeak, kMemBw, kLinkBw);
     EXPECT_EXIT(est.estimate(job), ::testing::ExitedWithCode(1), "");
+}
+
+TEST(SvcTableEstimator, ShapeTimesIterations) {
+    const auto csv =
+        std::filesystem::temp_directory_path() / "svc_table_test.csv";
+    {
+        std::ofstream f(csv);
+        f << "shape,size,svc_per_iter_ns\n2x2x1,4,1500\n8x8x6,384,200\n";
+    }
+    SvcTableEstimator est(csv.string());
+    EXPECT_EQ(est.name(), "svc-table");
+    JobArrival a{7, 0, 4, {2, 2, 1}, /*num_iterations=*/3};
+    JobInstance job(a, "", nullptr);
+    EXPECT_EQ(est.estimate(job), 4500ULL);
+    JobArrival b{8, 0, 384, {8, 8, 6}, 1};
+    JobInstance job2(b, "", nullptr);
+    EXPECT_EQ(est.estimate(job2), 200ULL);
+    std::filesystem::remove(csv);
 }
 
 }  // namespace

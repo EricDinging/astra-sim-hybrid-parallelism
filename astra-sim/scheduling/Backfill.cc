@@ -59,5 +59,21 @@ bool backfill_safe(const Reservation& res,
     return cand_ranks <= extra;  // (b) fits in nodes the pivot will not need
 }
 
+int first_placeable_prefix(int n, const std::function<bool(int)>& places) {
+    if (n < 0 || !places(n)) {
+        return -1;
+    }
+    int lo = 0, hi = n;  // invariant: places(hi) is true
+    while (lo < hi) {
+        const int mid = lo + (hi - lo) / 2;
+        if (places(mid)) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+    return hi;
+}
+
 }  // namespace Scheduling
 }  // namespace AstraSim

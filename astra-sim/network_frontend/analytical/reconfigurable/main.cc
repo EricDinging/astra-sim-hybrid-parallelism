@@ -265,6 +265,8 @@ int main(int argc, char* argv[]) {
         cmd_line_parser.get<std::string>("admission-policy");
     const auto duration_estimator =
         cmd_line_parser.get<std::string>("duration-estimator");
+    const auto service_times =
+        cmd_line_parser.get<std::string>("service-times");
     const auto failure_prob = cmd_line_parser.get<double>("failure-prob");
     const auto route_cache_budget_gb =
         cmd_line_parser.get<double>("route-cache-budget-gb");
@@ -511,10 +513,11 @@ int main(int argc, char* argv[]) {
     AstraSim::Scheduling::JobStatsWriter writer(logging_folder);
     writer.emit_failed_nodes(failed_npus_vec);
 
-    // Build the admission config (used by sjdf/ljdf/swf/easy/lwf; fifo, sjsf,
-    // and ljsf ignore it).
+    // Build the admission config (used by sjdf/ljdf/swf/easy/easyshape/lwf;
+    // fifo, sjsf, and ljsf ignore it).
     AstraSim::Scheduling::AdmissionConfig admission_cfg;
     admission_cfg.estimator_name = duration_estimator;
+    admission_cfg.svc_table_path = service_times;
     admission_cfg.max_link_bw = max_link_bw_bytes_per_s;
     // Peak compute + local memory bandwidth from the system config, matching
     // Sys.cc unit conventions (TFLOP/s -> FLOP/s, GB/s -> bytes/s).
@@ -533,18 +536,28 @@ int main(int argc, char* argv[]) {
             }
         }
     }
-    // Duration-based admission builds a roofline estimator, which needs
-    // positive rates (a zero peak-perf would make the estimator divide by
-    // zero).
+    // Duration-based admission with the roofline estimator needs positive
+    // rates (a zero peak-perf would make the estimator divide by zero).
     if ((admission_policy == "sjdf" || admission_policy == "ljdf" ||
          admission_policy == "swf" || admission_policy == "easy" ||
-         admission_policy == "lwf") &&
+         admission_policy == "easyshape" || admission_policy == "lwf") &&
+        duration_estimator == "roofline-comm" &&
         (admission_cfg.peak_perf <= 0.0 || admission_cfg.local_mem_bw <= 0.0 ||
          admission_cfg.max_link_bw <= 0.0)) {
         logger->critical(
             "--admission-policy={} requires peak-perf and local-mem-bw in "
             "--system-configuration and a positive bandwidth schedule",
             admission_policy);
+        std::exit(1);
+    }
+    // easyshape's region choice is only as good as its duration estimates
+    // (roofline-comm underestimates 2.4x median, collapsing every shadow time
+    // to "now"), so it requires the measured table. Other policies keep their
+    // default.
+    if (admission_policy == "easyshape" &&
+        (duration_estimator != "svc-table" || service_times.empty())) {
+        logger->critical("--admission-policy=easyshape requires "
+                         "--duration-estimator=svc-table and --service-times");
         std::exit(1);
     }
     auto admission = AstraSim::Scheduling::make_admission_policy(
